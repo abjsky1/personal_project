@@ -1,0 +1,16 @@
+services:
+  mysql:
+    image: mysql:8.4
+    # Docker가 켜질 때 자동으로 같이 켜짐 (docker compose stop으로 직접 멈춘 경우는 제외)
+    restart: unless-stopped
+    # PC에 설치된 MySQL80 서비스가 3306을 쓰고 있어서 3311로 연결
+    ports: ["3311:3306"]
+    environment:
+      MYSQL_DATABASE: macros
+      MYSQL_USER: macros
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+volumes:
+  mysql-data:
