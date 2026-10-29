@@ -1,9 +1,12 @@
-package backend.post;
+package backend.post.model.repository;
 
 import java.util.List;
 
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
+
+import backend.post.model.entity.Post;
+import backend.post.model.entity.PostStatus;
 
 // 게시글을 DB에서 읽고 쓰는 Repository
 // JpaRepository<엔티티, 기본 키 타입>를 상속하면 save(), findById() 같은 기본 메서드를 Spring이 자동으로 만들어 준다.

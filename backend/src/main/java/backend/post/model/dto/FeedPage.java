@@ -1,4 +1,4 @@
-package backend.post;
+package backend.post.model.dto;
 
 import java.util.List;
 

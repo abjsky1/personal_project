@@ -1,4 +1,4 @@
-package backend.post;
+package backend.post.controller;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 
 import backend.image.LocalImageStorage;
+import backend.post.model.dto.PostCreateForm;
+import backend.post.service.PostService;
 import jakarta.validation.Valid;
 
 // 게시글 화면을 담당하는 Controller

@@ -1,5 +1,5 @@
-// 게시글 기능을 모아 두는 패키지
-package backend.post;
+// 게시글 도메인의 엔티티(DB 테이블과 짝을 이루는 클래스)와 그 상태값을 두는 패키지
+package backend.post.model.entity;
 
 // 게시글 상태. 삭제해도 DB에서 지우지 않고 상태만 바꾼다. (기획서 5.1절)
 // 목록·상세 화면에는 ACTIVE인 글만 보여 준다.

@@ -1,4 +1,4 @@
-package backend.post;
+package backend.post.model.entity;
 
 import java.time.Instant;
 

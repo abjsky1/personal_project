@@ -229,22 +229,29 @@ HTTP 요청
   → MySQL
 ```
 
-패키지는 도메인별로 나눈다.
+패키지는 도메인별로 먼저 나누고, 도메인 안은 `controller / service / model(entity, dto, repository)`로 같은 모양을 쓴다.
 
 ```
-com.<project>
-├─ post/        PostController, PostService, PostRepository, Post, PostStatus, dto/
-├─ comment/     CommentController, CommentService, CommentRepository, Comment, dto/
-├─ analysis/    FoodAnalysisService, FoodAnalyzer(인터페이스), <공급자>FoodAnalyzer, FoodAnalysis, AnalysisRetryScheduler
-├─ location/    PostLocation, PostLocationRepository
-├─ image/       ImageProcessor(리사이즈·EXIF), ImageStorage(인터페이스), LocalImageStorage, S3ImageStorage
-├─ feedback/    FeedbackController, FeedbackService, FeedbackRepository, Feedback, dto/
-├─ admin/       AdminController (게시글·댓글·피드백 상태 변경, 피드백 처리 상태·답변)
-└─ common/      @RestControllerAdvice 예외 처리, 에러 응답, rate limit, 로깅(traceId)
+backend
+├─ post/              게시글 (S1)
+│  ├─ controller/       PostController
+│  ├─ service/          PostService
+│  └─ model/
+│     ├─ entity/          Post, PostStatus
+│     ├─ dto/             PostCreateForm, PostSummary, FeedPage
+│     └─ repository/      PostRepository
+├─ location/          위치 (S1-4): PostLocation 엔티티, GeoPoint(VO) — 같은 모양
+├─ analysis/          AI 분석 (S2): FoodAnalyzer(인터페이스)·공급자 구현체·재시도 스케줄러 — 같은 모양
+├─ comment/           댓글 (S3) — 같은 모양
+├─ feedback/          피드백 게시판 (S3) — 같은 모양
+├─ admin/             운영자 API (S3)
+├─ image/             도메인이 아닌 도구: 사진 저장(LocalImageStorage → S4에서 S3), 사진 처리(S1-3)
+└─ common/            예외 처리·에러 응답, traceId 로그, 비밀번호 해시 설정, (S2) rate limit
 ```
 
 **계층 규칙**
 - 엔티티를 응답으로 그대로 내보내지 않고 DTO로 변환한다 — `password_hash`, 위치 좌표가 실수로 노출되는 것을 막는다.
+- **DTO와 VO**: 데이터를 나르는 객체는 DTO(`dto/`)로 부르고, 화면으로만 보내는 DTO는 `record`로 만들어 바뀌지 않게 한다. VO(값 객체)는 값 자체에 규칙이 있는 묶음에만 쓴다 (예: 위치 좌표 `GeoPoint` — 범위 검사·정밀도 규칙).
 - 트랜잭션 경계는 Service에 둔다.
 - **LLM 호출은 트랜잭션 밖에서** 한다. 트랜잭션 안에서 10초 넘게 외부 API를 기다리면 DB 커넥션 풀이 고갈된다 (운영에서 자주 터지는 장애).
 - 조회 쿼리에서 `status = 'ACTIVE'` 조건을 빠뜨리지 않는다 (삭제 글 노출 버그의 단골 원인). Repository 메서드 이름이나 공통 조건으로 강제한다.
@@ -486,6 +493,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-10-29 — 패키지 구조를 도메인별 `controller / service / model(entity, dto, repository)`로 정리, DTO·VO 구분 규칙 추가
 - 2026-10-29 — S1을 JSP 기준 4조각으로 다시 나눔, 13절을 화면 주소 중심으로 정리. S1-1(글쓰기 + 목록) 완료
 - 2026-10-29 — 배포 전까지는 PR 없이 main에 직접 push, PR은 S4부터
 - 2026-10-29 — 화면을 React에서 JSP로 변경 (war 패키징, frontend 폴더와 CI frontend 검사 제거)

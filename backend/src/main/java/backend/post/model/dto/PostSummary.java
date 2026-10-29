@@ -1,7 +1,9 @@
-package backend.post;
+package backend.post.model.dto;
 
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+
+import backend.post.model.entity.Post;
 
 // 목록 화면에 글 하나를 보여 줄 때 필요한 값만 담는 객체 (DTO)
 // 엔티티(Post)를 화면에 그대로 넘기지 않는 이유: 비밀번호 해시처럼 화면에 나가면 안 되는 값이 실수로 노출될 수 있다.

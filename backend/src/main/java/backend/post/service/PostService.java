@@ -1,4 +1,4 @@
-package backend.post;
+package backend.post.service;
 
 import java.util.List;
 
@@ -8,6 +8,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import backend.image.LocalImageStorage;
+import backend.post.model.dto.FeedPage;
+import backend.post.model.dto.PostCreateForm;
+import backend.post.model.dto.PostSummary;
+import backend.post.model.entity.Post;
+import backend.post.model.entity.PostStatus;
+import backend.post.model.repository.PostRepository;
 
 // 게시글 기능의 실제 처리(비즈니스 로직)를 맡는 클래스
 // Controller는 요청을 받고 화면을 고르는 일만 하고, 저장·조회 같은 실제 일은 여기서 한다.
