@@ -14,12 +14,16 @@ import backend.post.model.dto.PostSummary;
 import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
 import backend.post.model.repository.PostRepository;
+import lombok.RequiredArgsConstructor;
 
 // 게시글 기능의 실제 처리(비즈니스 로직)를 맡는 클래스
 // Controller는 요청을 받고 화면을 고르는 일만 하고, 저장·조회 같은 실제 일은 여기서 한다.
 //
 // @Service: Spring이 이 객체를 만들어 관리한다 (@Component와 같고, 역할을 이름으로 드러낸다)
+// @RequiredArgsConstructor(Lombok): final 필드를 모두 받는 생성자를 컴파일할 때 자동으로 만들어 준다.
+// → Spring이 그 생성자로 아래 세 객체를 넣어 준다 (생성자 주입). 코드에 생성자가 안 보여도 실제로는 있다.
 @Service
+@RequiredArgsConstructor
 public class PostService {
 
 	// 목록 한 번에 보여 줄 글 수
@@ -28,13 +32,6 @@ public class PostService {
 	private final PostRepository postRepository;
 	private final LocalImageStorage imageStorage;
 	private final PasswordEncoder passwordEncoder;
-
-	// 생성자 주입: 필요한 객체 세 개를 Spring이 만들어서 넣어 준다.
-	public PostService(PostRepository postRepository, LocalImageStorage imageStorage, PasswordEncoder passwordEncoder) {
-		this.postRepository = postRepository;
-		this.imageStorage = imageStorage;
-		this.passwordEncoder = passwordEncoder;
-	}
 
 	// 글 저장. 저장된 글 번호를 돌려준다.
 	// @Transactional: 이 메서드 안의 DB 작업을 하나로 묶는다. 중간에 예외가 나면 DB 변경을 모두 되돌린다.

@@ -13,18 +13,17 @@ import backend.image.LocalImageStorage;
 import backend.post.model.dto.PostCreateForm;
 import backend.post.service.PostService;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
 // 게시글 화면을 담당하는 Controller
 // @Controller: 메서드가 돌려준 문자열을 JSP 이름으로 보고 그 화면을 보여 준다.
 // (앞뒤에 prefix·suffix가 붙는다: "posts/list" → /WEB-INF/views/posts/list.jsp)
+// @RequiredArgsConstructor(Lombok): final 필드(postService)를 받는 생성자를 자동으로 만들어, Spring이 PostService를 넣어 준다.
 @Controller
+@RequiredArgsConstructor
 public class PostController {
 
 	private final PostService postService;
-
-	public PostController(PostService postService) {
-		this.postService = postService;
-	}
 
 	// 첫 화면 = 게시글 목록
 	// @RequestParam(required = false): 주소의 ?cursor=값 을 받는다. 없으면 null (첫 화면)

@@ -34,6 +34,10 @@ dependencies {
 	// JSTL: JSP에서 <c:forEach>, <c:if> 같은 태그를 쓰게 해 준다 (규격 + 실제 구현 두 개가 한 쌍)
 	implementation 'jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api'
 	implementation 'org.glassfish.web:jakarta.servlet.jsp.jstl'
+	// Lombok: 생성자·getter 같은 반복 코드를 컴파일할 때 자동으로 만들어 준다.
+	// compileOnly: 컴파일할 때만 쓰고 실행 파일(war)에는 넣지 않는다 / annotationProcessor: 컴파일 중에 코드를 만들어 주는 도구로 등록
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
