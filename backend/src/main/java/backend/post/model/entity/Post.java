@@ -44,8 +44,12 @@ public class Post {
 	private String memo;
 
 	// 저장한 사진 파일의 이름 (사진 파일 자체는 DB가 아니라 uploads 폴더에 있다)
+	// imageKey: 긴 변 1280px 사진 (상세 화면) / thumbnailKey: 600 × 600 썸네일 (목록)
 	@Column(nullable = false)
 	private String imageKey;
+
+	@Column(nullable = false)
+	private String thumbnailKey;
 
 	// @Enumerated(STRING): enum을 숫자(0, 1, 2) 대신 이름("ACTIVE")으로 저장한다.
 	// 숫자로 저장하면 나중에 enum 순서를 바꿨을 때 기존 데이터의 의미가 바뀌어 버린다.
@@ -69,11 +73,12 @@ public class Post {
 	}
 
 	// 새 글을 만들 때 쓰는 생성자. 상태와 작성 시각은 여기서 정해서, 빠뜨릴 수 없게 한다.
-	public Post(String nickname, String passwordHash, String memo, String imageKey) {
+	public Post(String nickname, String passwordHash, String memo, String imageKey, String thumbnailKey) {
 		this.nickname = nickname;
 		this.passwordHash = passwordHash;
 		this.memo = memo;
 		this.imageKey = imageKey;
+		this.thumbnailKey = thumbnailKey;
 		this.status = PostStatus.ACTIVE;
 		this.createdAt = Instant.now();
 	}
@@ -106,6 +111,10 @@ public class Post {
 
 	public String getImageKey() {
 		return imageKey;
+	}
+
+	public String getThumbnailKey() {
+		return thumbnailKey;
 	}
 
 	public PostStatus getStatus() {

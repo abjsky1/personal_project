@@ -9,7 +9,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
+import backend.image.ImageProcessor;
 import backend.image.LocalImageStorage;
+import backend.image.ProcessedImage;
 import backend.post.model.dto.FeedPage;
 import backend.post.model.dto.PostCreateForm;
 import backend.post.model.dto.PostSummary;
@@ -24,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 //
 // @Service: Spring이 이 객체를 만들어 관리한다 (@Component와 같고, 역할을 이름으로 드러낸다)
 // @RequiredArgsConstructor(Lombok): final 필드를 모두 받는 생성자를 컴파일할 때 자동으로 만들어 준다.
-// → Spring이 그 생성자로 아래 세 객체를 넣어 준다 (생성자 주입). 코드에 생성자가 안 보여도 실제로는 있다.
+// → Spring이 그 생성자로 아래 객체들을 넣어 준다 (생성자 주입). 코드에 생성자가 안 보여도 실제로는 있다.
 // @Slf4j(Lombok): 로그를 찍는 log 필드를 자동으로 만들어 준다. (LoggerFactory.getLogger(PostService.class)와 같다)
 @Slf4j
 @Service
@@ -35,16 +37,22 @@ public class PostService {
 	private static final int PAGE_SIZE = 20;
 
 	private final PostRepository postRepository;
+	private final ImageProcessor imageProcessor;
 	private final LocalImageStorage imageStorage;
 	private final PasswordEncoder passwordEncoder;
 
 	// 글 저장. 저장된 글 번호를 돌려준다.
-	// @Transactional: 이 메서드 안의 DB 작업을 하나로 묶는다. 중간에 예외가 나면 DB 변경을 모두 되돌린다.
-	@Transactional
+	// 이 메서드에는 @Transactional을 붙이지 않는다.
+	// 사진 처리는 수백 ms가 걸리는데, 트랜잭션 안에서 하면 그동안 DB 연결을 붙잡고 있게 된다. (기획서 9.2절, LLM 호출과 같은 이유)
+	// DB 작업은 맨 마지막 save() 한 번뿐이고, save()는 그 자체로 트랜잭션 안에서 실행된다.
 	public Long create(PostCreateForm form) {
-		// 사진 파일을 먼저 저장하고, 파일 이름(key)을 받는다.
+		// 사진 검사·회전 보정·EXIF 제거·크기 줄이기. 사진이 아니거나 너무 크면 BusinessException이 난다.
+		ProcessedImage image = imageProcessor.process(form.getImage());
+
+		// 큰 사진과 썸네일을 저장하고, 파일 이름(key)을 받는다.
 		// (DB 저장이 실패하면 파일만 남을 수 있지만, 쓰이지 않는 파일일 뿐이라 MVP에서는 그대로 둔다)
-		String imageKey = imageStorage.save(form.getImage());
+		String imageKey = imageStorage.saveJpeg(image.main());
+		String thumbnailKey = imageStorage.saveJpeg(image.thumbnail());
 
 		// encode(): 비밀번호를 BCrypt 해시로 바꾼다. 같은 비밀번호도 매번 다른 해시가 나온다(salt).
 		// 나중에 삭제할 때는 matches(입력한 비밀번호, 저장된 해시)로 맞는지만 확인한다.
@@ -52,7 +60,8 @@ public class PostService {
 				form.getNickname().strip(),
 				passwordEncoder.encode(form.getPassword()),
 				normalizeMemo(form.getMemo()),
-				imageKey);
+				imageKey,
+				thumbnailKey);
 
 		return postRepository.save(post).getId();
 	}

@@ -26,6 +26,7 @@
 		<%-- accept: 고를 수 있는 파일 형식. 아이폰은 이 설정을 보고 HEIC 사진을 JPEG로 바꿔서 올린다. --%>
 		<label for="image">사진</label>
 		<input type="file" id="image" name="image" accept="image/jpeg,image/png">
+		<p class="hint">JPEG·PNG, 10MB까지. 올린 사진의 위치 정보(EXIF)는 지우고 저장해요.</p>
 		<%-- form:errors: 이 칸에 검사 메시지가 있을 때만 <p class="error">메시지</p>를 만든다. --%>
 		<form:errors path="image" cssClass="error" element="p" />
 

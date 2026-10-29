@@ -9,7 +9,6 @@ import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.multipart.MultipartFile;
 
 // 올린 사진을 내 PC의 폴더(uploads/)에 저장한다. (개발용)
 // 배포(S4)에서는 서버를 다시 올리면 폴더 내용이 사라지므로, 이 클래스 대신 S3에 저장하는 클래스로 바꾼다.
@@ -28,22 +27,15 @@ public class LocalImageStorage {
 		Files.createDirectories(rootDir);
 	}
 
-	// 받을 수 있는 사진 형식인지 확인한다. 지금은 JPEG와 PNG만 받는다.
-	// contentType은 브라우저가 알려 주는 값이라 속일 수 있다 → 3번 조각에서 파일 내용(매직 바이트)으로 다시 검사한다.
-	public static boolean isSupported(String contentType) {
-		return "image/jpeg".equals(contentType) || "image/png".equals(contentType);
-	}
-
-	// 사진 파일을 저장하고, 저장한 파일 이름(key)을 돌려준다.
-	public String save(MultipartFile file) {
+	// ImageProcessor가 만든 JPEG 파일 내용을 저장하고, 저장한 파일 이름(key)을 돌려준다.
+	public String saveJpeg(byte[] jpeg) {
 		// 파일 이름은 사용자가 올린 이름을 쓰지 않고 무작위 이름(UUID)으로 새로 만든다.
 		// → 이름이 겹쳐 덮어쓰거나, "../" 같은 이름으로 다른 폴더에 저장되는 문제를 막는다.
-		String extension = "image/png".equals(file.getContentType()) ? ".png" : ".jpg";
-		String key = UUID.randomUUID() + extension;
+		String key = UUID.randomUUID() + ".jpg";
 
 		try {
-			// transferTo: 업로드된 파일을 지정한 위치에 저장한다.
-			file.transferTo(rootDir.resolve(key));
+			// Files.write: 바이트 배열을 파일로 쓴다.
+			Files.write(rootDir.resolve(key), jpeg);
 		} catch (IOException e) {
 			// 파일 저장 실패는 서버 문제다. 확인 예외(IOException)를 실행 중 예외로 바꿔 던지면
 			// PageExceptionHandler가 500 에러 화면을 보여 주고 원인을 로그에 남긴다.

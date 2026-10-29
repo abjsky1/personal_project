@@ -13,7 +13,6 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
-import backend.image.LocalImageStorage;
 import backend.post.model.dto.PostCreateForm;
 import backend.post.service.PostService;
 import jakarta.validation.Valid;
@@ -60,7 +59,18 @@ public class PostController {
 			return "posts/new";
 		}
 
-		postService.create(form);
+		try {
+			postService.create(form);
+		} catch (BusinessException e) {
+			// 사진 검사에 걸린 경우(진짜 사진이 아님, 해상도가 너무 큼)는 에러 화면 대신 글쓰기 화면의 사진 칸 아래에 메시지를 보여 준다.
+			// 그 밖의 에러는 그대로 던져서 에러 화면으로 보낸다.
+			ErrorCode code = e.getErrorCode();
+			if (code != ErrorCode.INVALID_IMAGE && code != ErrorCode.IMAGE_TOO_LARGE) {
+				throw e;
+			}
+			bindingResult.rejectValue("image", code.name(), code.getMessage());
+			return "posts/new";
+		}
 
 		// redirect: 저장 후 목록 주소로 이동하라고 브라우저에 알린다.
 		// 화면을 바로 보여 주지 않고 이동시키는 이유: 새로고침을 눌렀을 때 같은 글이 한 번 더 저장되는 것을 막는다.
@@ -95,13 +105,12 @@ public class PostController {
 		return "redirect:/";
 	}
 
-	// 사진은 @NotBlank 같은 규칙으로 검사하기 어려워서 직접 검사하고, 어긋나면 BindingResult에 메시지를 추가한다.
+	// 사진을 골랐는지는 @NotBlank 같은 규칙으로 검사하기 어려워서 직접 검사하고, 어긋나면 BindingResult에 메시지를 추가한다.
 	private void validateImage(MultipartFile image, BindingResult bindingResult) {
 		if (image == null || image.isEmpty()) {
 			// rejectValue(칸 이름, 에러 종류, 메시지): 그 칸 아래에 보여 줄 메시지를 추가한다.
 			bindingResult.rejectValue("image", "required", "사진을 골라 주세요.");
-		} else if (!LocalImageStorage.isSupported(image.getContentType())) {
-			bindingResult.rejectValue("image", "type", "JPEG 또는 PNG 사진만 올릴 수 있어요.");
 		}
+		// 사진 형식(진짜 JPEG·PNG인지)은 파일 내용을 봐야 알 수 있어서 ImageProcessor가 검사한다.
 	}
 }

@@ -10,6 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -22,6 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import backend.common.error.ErrorCode;
+import backend.image.TestImages;
 import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
 import backend.post.model.repository.PostRepository;
@@ -46,9 +50,9 @@ class PostControllerTest {
 	@Autowired
 	private PasswordEncoder passwordEncoder;
 
-	// 가짜 사진 파일: (form의 칸 이름, 파일 이름, 형식, 내용)
-	// 1번 조각에서는 사진 내용을 검사하지 않아서 아무 바이트나 넣어도 된다. (3번 조각에서 실제 사진 검사가 추가된다)
-	private final MockMultipartFile photo = new MockMultipartFile("image", "food.jpg", "image/jpeg", new byte[] {1, 2, 3});
+	// 테스트용 사진 파일: (form의 칸 이름, 파일 이름, 형식, 내용)
+	// 서버가 파일 내용을 진짜 사진인지 검사하므로, 코드로 만든 실제 JPEG(300 × 200)를 넣는다.
+	private final MockMultipartFile photo = new MockMultipartFile("image", "food.jpg", "image/jpeg", TestImages.jpeg(300, 200));
 
 	@Test
 	void 글을_올리면_저장되고_목록으로_이동한다() throws Exception {
@@ -67,6 +71,9 @@ class PostControllerTest {
 		assertThat(saved.getStatus()).isEqualTo(PostStatus.ACTIVE);
 		// 비밀번호는 원문 그대로가 아니라 해시로 저장되고, 원문과 맞춰 볼 수는 있어야 한다.
 		assertThat(saved.getPasswordHash()).isNotEqualTo("1234");
+		// 큰 사진과 썸네일 파일이 실제로 저장돼 있어야 한다.
+		assertThat(Files.exists(Path.of("build/test-uploads", saved.getImageKey()))).isTrue();
+		assertThat(Files.exists(Path.of("build/test-uploads", saved.getThumbnailKey()))).isTrue();
 		assertThat(passwordEncoder.matches("1234", saved.getPasswordHash())).isTrue();
 	}
 
@@ -140,17 +147,19 @@ class PostControllerTest {
 
 	// 테스트용 글을 DB에 바로 저장한다. (사진 파일은 만들지 않고 이름만 넣는다)
 	private Post savePost(String password) {
-		return postRepository.save(new Post("테스터", passwordEncoder.encode(password), null, "test.jpg"));
+		return postRepository.save(new Post("테스터", passwordEncoder.encode(password), null, "test.jpg", "test-thumb.jpg"));
 	}
 
 	@Test
-	void JPEG나_PNG가_아닌_파일은_거절한다() throws Exception {
-		MockMultipartFile gif = new MockMultipartFile("image", "food.gif", "image/gif", new byte[] {1, 2, 3});
+	void 사진이_아닌_파일은_글쓰기_화면의_사진_칸에_메시지를_보여준다() throws Exception {
+		// 이름과 형식은 JPEG처럼 꾸몄지만 내용은 사진이 아닌 파일 → 파일 내용 검사(매직 바이트)에서 걸린다.
+		MockMultipartFile fake = new MockMultipartFile("image", "food.jpg", "image/jpeg", "not an image".getBytes());
 
-		mockMvc.perform(multipart("/posts").file(gif)
+		mockMvc.perform(multipart("/posts").file(fake)
 				.param("nickname", "테스터")
 				.param("password", "1234"))
+				.andExpect(status().isOk())
 				.andExpect(view().name("posts/new"))
-				.andExpect(model().attributeHasFieldErrors("form", "image"));
+				.andExpect(model().attributeHasFieldErrorCode("form", "image", ErrorCode.INVALID_IMAGE.name()));
 	}
 }

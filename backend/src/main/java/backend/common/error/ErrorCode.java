@@ -28,7 +28,13 @@ public enum ErrorCode {
 	// 404: 없는 글이거나 삭제된 글
 	POST_NOT_FOUND(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."),
 	// 403: 삭제할 때 입력한 비밀번호가 다름
-	INVALID_PASSWORD(HttpStatus.FORBIDDEN, "비밀번호가 맞지 않습니다.");
+	INVALID_PASSWORD(HttpStatus.FORBIDDEN, "비밀번호가 맞지 않습니다."),
+
+	// ---- 사진 ----
+	// 400: 파일 내용이 JPEG·PNG가 아니거나, 읽을 수 없는 사진 (확장자만 바꾼 파일, 아이폰 HEIC 등)
+	INVALID_IMAGE(HttpStatus.BAD_REQUEST, "JPEG 또는 PNG 사진만 올릴 수 있습니다."),
+	// 400: 화소 수가 너무 많은 사진 (서버 메모리를 지키기 위한 한도)
+	IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "사진 해상도가 너무 큽니다. 5,000만 화소 이하의 사진을 올려 주세요.");
 
 	private final HttpStatus status;
 	private final String message;
