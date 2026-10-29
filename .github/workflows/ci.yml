@@ -55,7 +55,7 @@ jobs:
         run: docker compose up -d --wait mysql
 
       # build = 컴파일 + 테스트 + jar 만들기. 테스트가 하나라도 실패하면 여기서 실패(❌)
-      # 테스트(@SpringBootTest)가 위에서 띄운 MySQL에 실제로 접속하고, Flyway 실행과 JPA 검사까지 거친다.
+      # 테스트(@SpringBootTest)가 위에서 띄운 MySQL에 실제로 접속하고, JPA가 엔티티를 보고 테이블을 만드는 과정까지 거친다.
       - name: 빌드·테스트
         working-directory: backend
         run: ./gradlew build

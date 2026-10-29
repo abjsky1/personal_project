@@ -211,7 +211,7 @@ sequenceDiagram
 | 프론트엔드 | React + TypeScript + Vite, TanStack Query, React Router | 분석 상태 폴링·캐싱을 TanStack Query로 처리 |
 | 백엔드 | Spring Boot 4 (Java 17, Amazon Corretto), Spring Web MVC, Data JPA, Validation, Actuator | 자료 대부분이 Boot 3 기준이라 의존성·설정 이름이 다를 수 있음. 빌드·운영 모두 Corretto 17 (`build.gradle` toolchain에 vendor 고정, 배포 이미지 `amazoncorretto:17`) |
 | DB | **MySQL 8** (확정) | 분석 결과 items는 JSON 타입 |
-| DB 마이그레이션 | Flyway | 운영 중 스키마 변경을 이력으로 관리 |
+| DB 테이블 생성 | JPA `ddl-auto=update` | 엔티티를 보고 테이블을 자동 생성 (로컬·CI). 운영 DB의 스키마 변경 방식은 S4에서 결정 |
 | 로컬 개발 환경 | Docker Compose (MySQL) | 배포 환경과 같은 버전으로 맞춤 |
 | 이미지 처리 | Thumbnailator + metadata-extractor | 리사이즈, 회전 보정, EXIF 읽기 |
 | LLM | 무료 티어 API (6.4) | `FoodAnalyzer` 인터페이스로 추상화 |
@@ -404,7 +404,7 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 
 | 스프린트 | 목표 | 완료 기준 |
 |---|---|---|
-| **S0. 개발 환경** | 모노레포, Spring Boot·React 초기화, Docker Compose(MySQL), Flyway, 비밀값 분리(.env), GitHub Actions CI(빌드·테스트), traceId 로그·공통 에러 포맷 | 로컬에서 React → Spring → MySQL 왕복 확인, PR마다 CI 통과 |
+| **S0. 개발 환경** | 모노레포, Spring Boot·React 초기화, Docker Compose(MySQL), 비밀값 분리(.env), GitHub Actions CI(빌드·테스트), traceId 로그·공통 에러 포맷 | 로컬에서 React → Spring → MySQL 왕복 확인, PR마다 CI 통과 |
 | **S1. 게시판** | 업로드(검증·위치 추출·회전 보정·EXIF 제거·리사이즈), 피드·상세, 작성자 삭제(상태 변경) | 휴대폰 사진을 올리고 지울 수 있고, 동의 시 위치가 저장된다 |
 | **S2. AI 분석** | 무료 LLM 후보 비교·선정, 비동기 분석, 구조화 출력, 폴링 UI, 자동 재시도 스케줄러, 일일 상한, 업로드 rate limit | 사진 올리면 칼로리가 뜨고, 실패·한도 초과 시에도 자동 복구된다 |
 | **S3. 댓글 + 피드백 게시판 + 운영 기능** | 댓글 작성·삭제, 피드백 게시판(작성·삭제·처리 상태·답변), 운영자 API, 정책 페이지 | 기능 기준 MVP 완성 |
@@ -456,6 +456,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | CI | GitHub Actions. 설정 파일은 얇게: 실제 명령은 `gradlew`·`npm` 스크립트에 두고, 테스트용 MySQL은 가능하면 `compose.yaml`을 재사용 → 다른 CI 도구로 옮기기 쉽게. Jenkins 직접 운영은 MVP 이후 학습 과제 | 2026-10-28 |
 | 커밋 메시지 | `feat` / `fix` / `chore` + 한국어 요약, 빈 줄 뒤 세부·이유 (16절) | 2026-10-28 |
 | 로그 형식 | 로컬은 글자 형식 + `[traceId]`, JSON(ECS)은 배포(S4)에서 켬. 로그 검색 도구가 생기는 시점에 맞춤 | 2026-10-29 |
+| DB 테이블 생성 | Flyway를 빼고 JPA `ddl-auto=update`로 자동 생성. 개발 단계에서는 SQL 파일 관리보다 단순함을 우선. 운영 DB 방식은 미정 6번 | 2026-10-29 |
 
 **미정**
 
@@ -466,9 +467,11 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | 3 | 위치 좌표 저장 정밀도 | 소수점 3자리(약 100m) 권장 |
 | 4 | 레포 구조 | 모노레포 권장 (`backend/`, `frontend/`, `infra/`, `docs/`) |
 | 5 | AWS 상세 구성·월 예산 | S4에서 결정 |
+| 6 | 운영 DB의 스키마 변경 방식 | S4에서 결정. 운영에서는 `ddl-auto`를 `validate` 또는 `none`으로 두고, 테이블 변경 SQL을 직접 관리하는 것이 일반적 (Flyway 재도입 포함 검토) |
 
 ## 변경 이력
 
+- 2026-10-29 — Flyway 제거, JPA `ddl-auto=update`로 테이블 자동 생성 (운영 방식은 S4에서 결정)
 - 2026-10-29 — JSON 로그를 S0에서 S4로 옮김 (S0은 traceId + 요청 기록 로그)
 - 2026-10-28 — CI 도구(GitHub Actions, Jenkins는 이후 학습 과제)와 커밋 메시지 규칙 결정
 - 2026-10-28 — Java 21 → Java 17(Amazon Corretto)로 변경
