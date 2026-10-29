@@ -125,6 +125,10 @@ button.danger {
 	padding-top: 80px;
 }
 
+.error-page .button {
+	margin-top: 24px;
+}
+
 .error-page .status {
 	margin: 0;
 	color: #999;

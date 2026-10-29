@@ -3,3 +3,6 @@
 
 # 올린 사진 (로컬 개발용 저장 폴더)
 uploads/
+
+# Claude Code 미리보기 설정 (로컬 전용)
+.claude/
