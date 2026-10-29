@@ -389,7 +389,7 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 | DELETE | `/api/admin/posts/{id}` · `/api/admin/comments/{id}` · `/api/admin/feedbacks/{id}` | 운영자 삭제 (관리자 토큰 헤더) → `DELETED_BY_ADMIN` |
 | PATCH | `/api/admin/feedbacks/{id}` | 처리 상태·답변 등록 `{progress, reply}` (관리자 토큰 헤더) |
 
-에러 응답은 `{ "code": "INVALID_PASSWORD", "message": "..." }` 형식으로 통일.
+에러 응답은 `{ "code": "INVALID_PASSWORD", "message": "...", "traceId": "..." }` 형식으로 통일. 상태 코드는 HTTP 상태로 보내고, `code`는 `ErrorCode`(enum)에 모은다. `traceId`는 응답 헤더 `X-Trace-Id`와 같은 값이라 사용자가 알려 주면 서버 로그를 찾을 수 있다.
 
 ## 14. 화면 구성
 
