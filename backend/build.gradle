@@ -1,5 +1,8 @@
 plugins {
 	id 'java'
+	// war: 빌드 결과를 .jar 대신 .war로 만든다. Spring Boot에서 JSP는 war로 실행할 때만 동작한다.
+	// (실행 방법은 같다: java -jar backend.war)
+	id 'war'
 	id 'org.springframework.boot' version '4.1.2'
 	id 'io.spring.dependency-management' version '1.1.7'
 }
@@ -24,6 +27,11 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	// JSP를 실행 가능한 코드로 바꿔 주는 엔진 (내장 Tomcat용)
+	implementation 'org.apache.tomcat.embed:tomcat-embed-jasper'
+	// JSTL: JSP에서 <c:forEach>, <c:if> 같은 태그를 쓰게 해 준다 (규격 + 실제 구현 두 개가 한 쌍)
+	implementation 'jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api'
+	implementation 'org.glassfish.web:jakarta.servlet.jsp.jstl'
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'

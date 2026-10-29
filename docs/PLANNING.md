@@ -208,7 +208,7 @@ sequenceDiagram
 
 | 영역 | 선택 | 비고 |
 |---|---|---|
-| 프론트엔드 | React + TypeScript + Vite, TanStack Query, React Router | 분석 상태 폴링·캐싱을 TanStack Query로 처리 |
+| 화면 | JSP + JSTL (war 패키징) | Spring이 HTML을 만들어 보낸다. 분석 상태 폴링 등 필요한 곳만 JavaScript(fetch) |
 | 백엔드 | Spring Boot 4 (Java 17, Amazon Corretto), Spring Web MVC, Data JPA, Validation, Actuator | 자료 대부분이 Boot 3 기준이라 의존성·설정 이름이 다를 수 있음. 빌드·운영 모두 Corretto 17 (`build.gradle` toolchain에 vendor 고정, 배포 이미지 `amazoncorretto:17`) |
 | DB | **MySQL 8** (확정) | 분석 결과 items는 JSON 타입 |
 | DB 테이블 생성 | JPA `ddl-auto=update` | 엔티티를 보고 테이블을 자동 생성 (로컬·CI). 운영 DB의 스키마 변경 방식은 S4에서 결정 |
@@ -219,11 +219,11 @@ sequenceDiagram
 
 ### 9.2 백엔드 구조 (Spring MVC 계층형)
 
-React가 View를 맡고, Spring은 JSON을 주고받는 REST API 서버로서 Controller·Service·Repository(Model) 계층을 맡는다.
+Spring이 Controller·Service·Repository(Model) 계층과 화면(JSP, View)까지 맡는다. 화면은 `@Controller`가 JSP 이름을 돌려줘서 만들고, 화면 이동 없이 값만 필요한 곳(분석 상태 폴링)만 `@RestController`로 JSON을 준다.
 
 ```
 HTTP 요청
-  → Controller  (@RestController) 요청 검증, DTO ↔ 응답 변환
+  → Controller  (@Controller / @RestController) 요청 검증, DTO → 화면(JSP) 또는 JSON
   → Service     (@Service)        비즈니스 로직, 트랜잭션, 비밀번호 확인, 상태 변경
   → Repository  (Spring Data JPA) 엔티티 조회·저장
   → MySQL
@@ -262,9 +262,8 @@ com.<project>
 - **배포 단계 (S4)**: **AWS**로 배포한다. 상세 구성과 예산은 그 시점에 확정한다. 현재 예상 구성:
 
 ```
-[사용자] ─ HTTPS ─ CloudFront ─┬─ S3 (React 정적 파일)
-                              └─ S3 (음식 이미지)
-         └ HTTPS ─ EC2 [Nginx → Spring Boot (Docker)] ─ RDS MySQL
+[사용자] ─ HTTPS ─ EC2 [Nginx → Spring Boot war (Docker), 화면(JSP) 포함] ─ RDS MySQL
+         └ HTTPS ─ CloudFront ─ S3 (음식 이미지)
                                                     └─ LLM API
 GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스트리 → EC2에서 pull & 재시작
 ```
@@ -279,7 +278,6 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 - [ ] 비밀값: 환경 변수 주입, 레포·이미지에 포함되지 않았는지 확인
 - [ ] 시간대: JVM·MySQL 시간대 설정, 화면 표시 KST 확인
 - [ ] Docker 로그 로테이션 (안 하면 디스크가 가득 차서 서버가 멈춘다)
-- [ ] CORS 또는 같은 도메인 경로 라우팅 (`/api` → Spring)
 - [ ] DB 자동 백업 켜기 + 복구 1회 해보기
 
 ## 11. 운영·관측 (MVP 최소)
@@ -389,6 +387,8 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 | DELETE | `/api/admin/posts/{id}` · `/api/admin/comments/{id}` · `/api/admin/feedbacks/{id}` | 운영자 삭제 (관리자 토큰 헤더) → `DELETED_BY_ADMIN` |
 | PATCH | `/api/admin/feedbacks/{id}` | 처리 상태·답변 등록 `{progress, reply}` (관리자 토큰 헤더) |
 
+> JSP로 바꾸면서(2026-10-29) 위 표는 React용 JSON API 초안으로 남아 있다. S1 시작 때 화면 주소(JSP)와 JSON API로 나눠 다시 정리한다.
+
 에러 응답은 `{ "code": "INVALID_PASSWORD", "message": "...", "traceId": "..." }` 형식으로 통일. 상태 코드는 HTTP 상태로 보내고, `code`는 `ErrorCode`(enum)에 모은다. `traceId`는 응답 헤더 `X-Trace-Id`와 같은 값이라 사용자가 알려 주면 서버 로그를 찾을 수 있다.
 
 ## 14. 화면 구성
@@ -404,7 +404,7 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 
 | 스프린트 | 목표 | 완료 기준 |
 |---|---|---|
-| **S0. 개발 환경** | 모노레포, Spring Boot·React 초기화, Docker Compose(MySQL), 비밀값 분리(.env), GitHub Actions CI(빌드·테스트), traceId 로그·공통 에러 포맷 | 로컬에서 React → Spring → MySQL 왕복 확인, PR마다 CI 통과 |
+| **S0. 개발 환경** | 모노레포, Spring Boot(JSP) 초기화, Docker Compose(MySQL), 비밀값 분리(.env), GitHub Actions CI(빌드·테스트), traceId 로그·공통 에러 포맷 | 로컬에서 화면(JSP) → Spring → MySQL 왕복 확인, PR마다 CI 통과 |
 | **S1. 게시판** | 업로드(검증·위치 추출·회전 보정·EXIF 제거·리사이즈), 피드·상세, 작성자 삭제(상태 변경) | 휴대폰 사진을 올리고 지울 수 있고, 동의 시 위치가 저장된다 |
 | **S2. AI 분석** | 무료 LLM 후보 비교·선정, 비동기 분석, 구조화 출력, 폴링 UI, 자동 재시도 스케줄러, 일일 상한, 업로드 rate limit | 사진 올리면 칼로리가 뜨고, 실패·한도 초과 시에도 자동 복구된다 |
 | **S3. 댓글 + 피드백 게시판 + 운영 기능** | 댓글 작성·삭제, 피드백 게시판(작성·삭제·처리 상태·답변), 운영자 API, 정책 페이지 | 기능 기준 MVP 완성 |
@@ -456,6 +456,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | CI | GitHub Actions. 설정 파일은 얇게: 실제 명령은 `gradlew`·`npm` 스크립트에 두고, 테스트용 MySQL은 가능하면 `compose.yaml`을 재사용 → 다른 CI 도구로 옮기기 쉽게. Jenkins 직접 운영은 MVP 이후 학습 과제 | 2026-10-28 |
 | 커밋 메시지 | `feat` / `fix` / `chore` + 한국어 요약, 빈 줄 뒤 세부·이유 (16절) | 2026-10-28 |
 | 로그 형식 | 로컬은 글자 형식 + `[traceId]`, JSON(ECS)은 배포(S4)에서 켬. 로그 검색 도구가 생기는 시점에 맞춤 | 2026-10-29 |
+| 화면 | React를 빼고 JSP + JSTL로 Spring이 화면까지 만든다 (war 패키징). 서버 하나로 배포가 단순해지고, 최소 구성으로 시작 | 2026-10-29 |
 | DB 테이블 생성 | Flyway를 빼고 JPA `ddl-auto=update`로 자동 생성. 개발 단계에서는 SQL 파일 관리보다 단순함을 우선. 운영 DB 방식은 미정 6번 | 2026-10-29 |
 
 **미정**
@@ -465,12 +466,13 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | 1 | 서비스 이름 / 도메인 | S4 전까지 |
 | 2 | 무료 LLM 공급자 | S2에서 샘플 비교 후 결정 |
 | 3 | 위치 좌표 저장 정밀도 | 소수점 3자리(약 100m) 권장 |
-| 4 | 레포 구조 | 모노레포 권장 (`backend/`, `frontend/`, `infra/`, `docs/`) |
+| 4 | 레포 구조 | 모노레포 권장 (`backend/`, `infra/`, `docs/`) — 화면은 JSP라 `backend/` 안에 있음 |
 | 5 | AWS 상세 구성·월 예산 | S4에서 결정 |
 | 6 | 운영 DB의 스키마 변경 방식 | S4에서 결정. 운영에서는 `ddl-auto`를 `validate` 또는 `none`으로 두고, 테이블 변경 SQL을 직접 관리하는 것이 일반적 (Flyway 재도입 포함 검토) |
 
 ## 변경 이력
 
+- 2026-10-29 — 화면을 React에서 JSP로 변경 (war 패키징, frontend 폴더와 CI frontend 검사 제거)
 - 2026-10-29 — Flyway 제거, JPA `ddl-auto=update`로 테이블 자동 생성 (운영 방식은 S4에서 결정)
 - 2026-10-29 — JSON 로그를 S0에서 S4로 옮김 (S0은 traceId + 요청 기록 로그)
 - 2026-10-28 — CI 도구(GitHub Actions, Jenkins는 이후 학습 과제)와 커밋 메시지 규칙 결정

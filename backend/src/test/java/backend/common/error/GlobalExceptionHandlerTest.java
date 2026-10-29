@@ -45,8 +45,8 @@ class GlobalExceptionHandlerTest {
 
 	@Test
 	void 지원하지_않는_방식은_405와_METHOD_NOT_ALLOWED로_응답한다() throws Exception {
-		// /api/ping은 GET만 있는데 POST로 보낸다.
-		mockMvc.perform(post("/api/ping"))
+		// 첫 화면(/)은 GET만 있는데 POST로 보낸다.
+		mockMvc.perform(post("/"))
 				.andExpect(status().isMethodNotAllowed())
 				.andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
 	}
