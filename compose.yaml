@@ -12,5 +12,15 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     volumes:
       - mysql-data:/var/lib/mysql
+    # 상태 검사: MySQL이 접속을 받을 준비가 됐는지 5초마다 확인한다. (docker ps의 STATUS에 healthy로 표시)
+    # docker compose up --wait는 이 검사가 통과할 때까지 기다린다 → CI에서 MySQL 준비 전에 테스트가 시작되지 않게 한다.
+    # 127.0.0.1(TCP)로 확인하는 이유: 처음 켤 때 MySQL은 초기 설정을 위해 외부 접속을 막은 채 잠깐 켜졌다가 다시 켜지는데,
+    # 그 사이를 준비 완료로 잘못 판단하지 않게 하려고
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 5s
+      timeout: 3s
+      # 30번(약 2분 30초) 연속 실패하면 unhealthy로 판단한다
+      retries: 30
 volumes:
   mysql-data:
