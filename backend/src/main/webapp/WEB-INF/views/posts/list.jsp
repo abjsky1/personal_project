@@ -7,7 +7,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>음식 칼로리 게시판</title>
-<%-- 모든 화면이 함께 쓰는 스타일 (src/main/resources/static/css/app.css) --%>
+<%-- 모든 화면이 함께 쓰는 스타일 (src/main/webapp/css/app.css) --%>
 <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
@@ -22,20 +22,23 @@
 		<p class="empty">아직 올라온 사진이 없어요.</p>
 	</c:if>
 
-	<%-- c:forEach: feed.posts의 글을 하나씩 post라는 이름으로 꺼내 반복한다. --%>
-	<c:forEach var="post" items="${feed.posts}">
-		<article class="post">
-			<%-- 사진을 누르면 상세 화면(/posts/글번호)으로 간다. --%>
-			<%-- 사진 주소와 글 번호는 서버가 만든 값이라 그대로 출력해도 안전하다. --%>
-			<%-- loading="lazy": 화면에 가까워졌을 때 사진을 불러온다 (휴대폰 데이터 절약) --%>
-			<a href="/posts/${post.id}"><img src="${post.imageUrl}" alt="음식 사진" loading="lazy"></a>
-			<%-- 닉네임·메모는 사용자가 쓴 값이라 반드시 c:out으로 출력한다 (XSS 방지) --%>
-			<p class="meta"><strong><c:out value="${post.nickname}" /></strong> · <c:out value="${post.createdAt}" /></p>
-			<c:if test="${not empty post.memo}">
-				<p class="memo"><c:out value="${post.memo}" /></p>
-			</c:if>
-		</article>
-	</c:forEach>
+	<%-- 카드 격자: PC에서는 한 줄에 여러 장, 휴대폰에서는 한 줄에 한 장 (칸 수는 app.css의 .feed가 화면 폭을 보고 정한다) --%>
+	<div class="feed">
+		<%-- c:forEach: feed.posts의 글을 하나씩 post라는 이름으로 꺼내 반복한다. --%>
+		<c:forEach var="post" items="${feed.posts}">
+			<%-- 카드 전체가 링크라서 사진이나 글씨 아무 곳을 눌러도 상세 화면(/posts/글번호)으로 간다. --%>
+			<%-- 글 번호와 사진 주소는 서버가 만든 값이라 그대로 출력해도 안전하다. --%>
+			<a class="card" href="/posts/${post.id}">
+				<%-- loading="lazy": 화면에 가까워졌을 때 사진을 불러온다 (휴대폰 데이터 절약) --%>
+				<img src="${post.imageUrl}" alt="음식 사진" loading="lazy">
+				<%-- 닉네임·메모는 사용자가 쓴 값이라 반드시 c:out으로 출력한다 (XSS 방지) --%>
+				<p class="meta"><strong><c:out value="${post.nickname}" /></strong> · <c:out value="${post.createdAt}" /></p>
+				<c:if test="${not empty post.memo}">
+					<p class="memo"><c:out value="${post.memo}" /></p>
+				</c:if>
+			</a>
+		</c:forEach>
+	</div>
 
 	<%-- 더 볼 글이 있을 때만 "더 보기" 링크를 보여 준다. 누르면 마지막 글 번호(cursor) 다음부터 이어서 보여 준다. --%>
 	<c:if test="${feed.nextCursor != null}">

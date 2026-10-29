@@ -19,7 +19,8 @@
 
 	<%-- modelAttribute="form": Controller가 Model에 넣은 "form" 객체와 이 form을 연결한다. --%>
 	<%-- enctype="multipart/form-data": 파일을 보낼 때 꼭 필요한 전송 방식 (없으면 파일 이름만 가고 내용은 안 간다) --%>
-	<form:form modelAttribute="form" action="/posts" method="post" enctype="multipart/form-data">
+	<%-- cssClass="narrow": 입력칸이 너무 길어지지 않게 글쓰기 영역만 가운데 560px로 좁힌다. --%>
+	<form:form modelAttribute="form" action="/posts" method="post" enctype="multipart/form-data" cssClass="narrow">
 
 		<%-- 휴대폰에서 누르면 "사진 찍기 / 앨범에서 고르기"를 고를 수 있다. --%>
 		<%-- accept: 고를 수 있는 파일 형식. 아이폰은 이 설정을 보고 HEIC 사진을 JPEG로 바꿔서 올린다. --%>

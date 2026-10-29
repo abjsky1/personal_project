@@ -1,0 +1,217 @@
+/* 모든 화면이 함께 쓰는 스타일 */
+/* 넓은 화면(PC)에서는 가운데 1280px 안에 웹 형태로, 좁은 화면(휴대폰)에서는 화면 가로폭에 맞춰서 보여 준다. */
+/* src/main/webapp 안의 파일은 주소 그대로 열린다 → /css/app.css (bootRun 중에 고치면 새로고침만으로 반영된다) */
+
+/* 칸의 너비에 테두리·안쪽 여백까지 포함해서 계산한다 (width: 100%가 화면 밖으로 넘치지 않게) */
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	font-family: system-ui, sans-serif;
+	background: #f5f5f5;
+	color: #222;
+}
+
+/* 페이지 전체 틀: 최대 1280px, 그보다 좁으면 화면 폭에 맞춰 줄어든다 */
+main {
+	max-width: 1280px;
+	min-height: 100vh;
+	margin: 0 auto;
+	padding: 16px 32px 48px;
+	background: #fff;
+}
+
+/* 화면 맨 위: 왼쪽에 제목(또는 목록 링크), 오른쪽에 버튼 */
+.top {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding-bottom: 16px;
+	margin-bottom: 24px;
+	border-bottom: 1px solid #eee;
+}
+
+h1 {
+	margin: 0;
+	font-size: 1.4rem;
+}
+
+a {
+	color: #2f7d32;
+}
+
+.button,
+button {
+	display: inline-block;
+	padding: 10px 18px;
+	border: 0;
+	border-radius: 8px;
+	background: #2f7d32;
+	color: #fff;
+	font-size: 1rem;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+/* ---- 목록: 카드 격자 ---- */
+/* grid: 칸을 바둑판처럼 나눈다. */
+/* repeat(auto-fill, minmax(260px, 1fr)): 한 칸을 최소 260px로 잡고, 화면 폭에 들어가는 만큼 칸 수를 자동으로 정한다. */
+/* → PC(1280px)는 4칸, 태블릿은 2~3칸, 휴대폰은 1칸이 된다. 칸 수를 따로 정하지 않아도 된다. */
+.feed {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+	gap: 24px;
+}
+
+.card {
+	display: block;
+	color: inherit;
+	text-decoration: none;
+}
+
+/* 사진을 정사각형으로 맞춘다. 비율이 다른 사진은 가운데를 기준으로 잘라서 채운다(cover). */
+/* → 세로 사진·가로 사진이 섞여도 카드 높이가 같아서 격자가 가지런해진다. */
+.card img {
+	display: block;
+	width: 100%;
+	aspect-ratio: 1 / 1;
+	object-fit: cover;
+	border-radius: 8px;
+	background: #eee;
+}
+
+.meta {
+	margin: 8px 0 0;
+	color: #666;
+	font-size: 0.9rem;
+}
+
+.memo {
+	margin: 4px 0 0;
+	white-space: pre-wrap;
+}
+
+/* 목록에서는 메모를 두 줄까지만 보여 주고 나머지는 …으로 줄인다 (전체는 상세 화면에서) */
+.card .memo {
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.empty,
+.more {
+	display: block;
+	padding: 48px 0;
+	text-align: center;
+}
+
+/* ---- 상세: PC에서는 사진 | 내용 두 칸, 휴대폰에서는 위아래 ---- */
+/* 3fr / 2fr: 남는 폭을 3:2로 나눈다. minmax(0, ...)는 긴 내용 때문에 칸이 넘치지 않게 하는 관용구 */
+.detail {
+	display: grid;
+	grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
+	gap: 32px;
+	align-items: start;
+}
+
+/* 상세 사진은 자르지 않고 전체를 보여 준다(contain). 화면보다 길지 않게 높이를 제한한다. */
+.detail img {
+	display: block;
+	width: 100%;
+	max-height: 80vh;
+	object-fit: contain;
+	border-radius: 8px;
+	background: #f0f0f0;
+}
+
+.delete-form {
+	margin-top: 24px;
+	padding-top: 16px;
+	border-top: 1px solid #eee;
+}
+
+/* 지우기처럼 되돌리기 어려운 버튼은 빨간색 */
+button.danger {
+	background: #c62828;
+}
+
+/* ---- 글쓰기 ---- */
+/* 입력칸이 1280px까지 길어지면 쓰기 불편해서, 글쓰기 영역만 가운데 560px로 좁힌다. */
+.narrow {
+	max-width: 560px;
+	margin: 0 auto;
+}
+
+label {
+	display: block;
+	margin-top: 16px;
+	font-weight: 600;
+}
+
+/* 아이폰은 글자가 16px보다 작은 입력칸을 누르면 화면을 확대해 버려서 1rem(16px)로 둔다 */
+input[type="text"],
+input[type="password"],
+textarea {
+	width: 100%;
+	padding: 8px;
+	font-size: 1rem;
+}
+
+form button {
+	width: 100%;
+	margin-top: 24px;
+}
+
+.hint {
+	margin: 4px 0 0;
+	color: #888;
+	font-size: 0.85rem;
+}
+
+.error {
+	margin: 4px 0 0;
+	color: #c62828;
+}
+
+/* ---- 에러 화면 ---- */
+.error-page {
+	text-align: center;
+	padding-top: 80px;
+}
+
+.error-page .button {
+	margin-top: 24px;
+}
+
+.error-page .status {
+	margin: 0;
+	color: #999;
+	font-size: 3rem;
+	font-weight: 700;
+}
+
+/* ---- 좁은 화면(휴대폰·작은 태블릿) ---- */
+/* @media (max-width: 768px): 화면 폭이 768px 이하일 때만 아래 규칙을 덧씌운다. */
+@media (max-width: 768px) {
+	main {
+		padding: 12px 16px 32px;
+	}
+
+	h1 {
+		font-size: 1.2rem;
+	}
+
+	.feed {
+		gap: 20px;
+	}
+
+	/* 상세를 두 칸에서 한 칸(위: 사진, 아래: 내용)으로 바꾼다 */
+	.detail {
+		grid-template-columns: 1fr;
+		gap: 16px;
+	}
+}

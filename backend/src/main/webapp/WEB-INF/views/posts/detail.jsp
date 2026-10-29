@@ -15,26 +15,30 @@
 		<a href="/">← 목록</a>
 	</header>
 
-	<%-- ${post}: Controller가 Model에 넣은 글 하나 --%>
-	<article class="post">
+	<%-- PC에서는 왼쪽 사진 | 오른쪽 내용, 휴대폰에서는 사진 아래에 내용 (app.css의 .detail) --%>
+	<div class="detail">
+		<%-- ${post}: Controller가 Model에 넣은 글 하나 --%>
 		<img src="${post.imageUrl}" alt="음식 사진">
-		<p class="meta"><strong><c:out value="${post.nickname}" /></strong> · <c:out value="${post.createdAt}" /></p>
-		<c:if test="${not empty post.memo}">
-			<p class="memo"><c:out value="${post.memo}" /></p>
-		</c:if>
-	</article>
 
-	<%-- 삭제: 작성할 때 입력한 비밀번호가 맞아야 지워진다. --%>
-	<%-- onsubmit의 confirm(): "정말 삭제할까요?" 창에서 취소를 누르면 false가 되어 전송하지 않는다. --%>
-	<form class="delete-form" action="/posts/${post.id}/delete" method="post" onsubmit="return confirm('정말 삭제할까요?');">
-		<label for="password">비밀번호</label>
-		<input type="password" id="password" name="password" maxlength="20" required>
-		<%-- deleteError: 비밀번호가 틀렸을 때 Controller가 redirect하면서 넘긴 메시지 (한 번만 보인다) --%>
-		<c:if test="${not empty deleteError}">
-			<p class="error"><c:out value="${deleteError}" /></p>
-		</c:if>
-		<button type="submit" class="danger">삭제</button>
-	</form>
+		<div>
+			<p class="meta"><strong><c:out value="${post.nickname}" /></strong> · <c:out value="${post.createdAt}" /></p>
+			<c:if test="${not empty post.memo}">
+				<p class="memo"><c:out value="${post.memo}" /></p>
+			</c:if>
+
+			<%-- 삭제: 작성할 때 입력한 비밀번호가 맞아야 지워진다. --%>
+			<%-- onsubmit의 confirm(): "정말 삭제할까요?" 창에서 취소를 누르면 false가 되어 전송하지 않는다. --%>
+			<form class="delete-form" action="/posts/${post.id}/delete" method="post" onsubmit="return confirm('정말 삭제할까요?');">
+				<label for="password">비밀번호</label>
+				<input type="password" id="password" name="password" maxlength="20" required>
+				<%-- deleteError: 비밀번호가 틀렸을 때 Controller가 redirect하면서 넘긴 메시지 (한 번만 보인다) --%>
+				<c:if test="${not empty deleteError}">
+					<p class="error"><c:out value="${deleteError}" /></p>
+				</c:if>
+				<button type="submit" class="danger">삭제</button>
+			</form>
+		</div>
+	</div>
 </main>
 </body>
 </html>

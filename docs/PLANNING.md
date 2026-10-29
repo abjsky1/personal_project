@@ -286,6 +286,8 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 - [ ] 시간대: JVM·MySQL 시간대 설정, 화면 표시 KST 확인
 - [ ] Docker 로그 로테이션 (안 하면 디스크가 가득 차서 서버가 멈춘다)
 - [ ] DB 자동 백업 켜기 + 복구 1회 해보기
+- [ ] JSP 개발 모드 끄기 (`server.servlet.jsp.init-parameters.development=false`)
+- [ ] CSS 같은 정적 파일 주소에 버전 붙이기 (배포 후에도 브라우저가 예전 CSS를 쓰는 문제 방지)
 
 ## 11. 운영·관측 (MVP 최소)
 
