@@ -368,26 +368,28 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 | ip_hash | VARCHAR(64) | 30일 후 NULL |
 | created_at / deleted_at | DATETIME(6) | |
 
-## 13. API 초안
+## 13. 화면 주소·API
+
+화면은 JSP로 만들고, HTML form은 GET·POST만 보낼 수 있으므로 삭제도 POST로 받는다. 저장·삭제 후에는 목록으로 redirect한다 (새로고침 시 중복 저장 방지).
+
+**게시글 (S1)**
 
 | Method | Path | 설명 |
 |---|---|---|
-| POST | `/api/posts` | multipart(image, nickname, password, memo, locationConsent) → 201 `{id, analysisStatus}` |
-| GET | `/api/posts?cursor={id}&size=20` | 피드 (커서 기반 페이징, ACTIVE만) |
-| GET | `/api/posts/{id}` | 상세 + 분석 결과 |
-| GET | `/api/posts/{id}/analysis` | 분석 상태 폴링 |
-| DELETE | `/api/posts/{id}` | 작성자 삭제 `{password}` → `DELETED_BY_AUTHOR` |
-| GET | `/api/posts/{id}/comments?cursor={id}&size=20` | 댓글 목록 (오래된 순, ACTIVE만) |
-| POST | `/api/posts/{id}/comments` | 댓글 작성 `{nickname, password, content}` |
-| DELETE | `/api/comments/{id}` | 작성자 삭제 `{password}` → `DELETED_BY_AUTHOR` |
-| GET | `/api/feedbacks?cursor={id}&size=20` | 피드백 목록 (최신순, ACTIVE만) |
-| GET | `/api/feedbacks/{id}` | 피드백 상세 + 운영자 답변 |
-| POST | `/api/feedbacks` | 피드백 작성 `{nickname, password, title, content}` |
-| DELETE | `/api/feedbacks/{id}` | 작성자 삭제 `{password}` → `DELETED_BY_AUTHOR` |
-| DELETE | `/api/admin/posts/{id}` · `/api/admin/comments/{id}` · `/api/admin/feedbacks/{id}` | 운영자 삭제 (관리자 토큰 헤더) → `DELETED_BY_ADMIN` |
-| PATCH | `/api/admin/feedbacks/{id}` | 처리 상태·답변 등록 `{progress, reply}` (관리자 토큰 헤더) |
+| GET | `/` | 목록 (최신순 20개, ACTIVE만). "더 보기" = `/?cursor={마지막 글 id}` |
+| GET | `/posts/new` | 글쓰기 화면 |
+| POST | `/posts` | multipart(image, nickname, password, memo) 저장 → `/`로 이동. 검사에 걸리면 글쓰기 화면에 칸별 메시지 |
+| GET | `/posts/{id}` | 상세 화면 (S1-2) |
+| POST | `/posts/{id}/delete` | 비밀번호 확인 → `DELETED_BY_AUTHOR` → `/`로 이동 (S1-2) |
+| GET | `/images/{파일이름}` | 저장한 사진 (개발: `uploads/` 폴더, 배포: S3) |
 
-> JSP로 바꾸면서(2026-10-29) 위 표는 React용 JSON API 초안으로 남아 있다. S1 시작 때 화면 주소(JSP)와 JSON API로 나눠 다시 정리한다.
+**JSON API (화면 이동 없이 값만 필요한 곳)**
+
+| Method | Path | 설명 |
+|---|---|---|
+| GET | `/api/posts/{id}/analysis` | 분석 상태 (S2, 상세 화면의 JavaScript가 2초마다 확인) |
+
+**S3에서 같은 방식으로 정리**: 댓글(작성·삭제), 피드백 게시판(목록·상세·작성·삭제), 운영자 API(관리자 토큰, 상태 변경·피드백 답변)
 
 에러 응답은 `{ "code": "INVALID_PASSWORD", "message": "...", "traceId": "..." }` 형식으로 통일. 상태 코드는 HTTP 상태로 보내고, `code`는 `ErrorCode`(enum)에 모은다. `traceId`는 응답 헤더 `X-Trace-Id`와 같은 값이라 사용자가 알려 주면 서버 로그를 찾을 수 있다.
 
@@ -410,6 +412,17 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 | **S3. 댓글 + 피드백 게시판 + 운영 기능** | 댓글 작성·삭제, 피드백 게시판(작성·삭제·처리 상태·답변), 운영자 API, 정책 페이지 | 기능 기준 MVP 완성 |
 | **S4. AWS 배포 + 관측** | EC2·RDS·S3/CloudFront, CI/CD 자동 배포, 도메인·HTTPS, JSON 로그, Sentry·업타임 모니터·백업, 배포 체크리스트(10절) | main에 push하면 자동 배포되고, 장애 시 알림이 온다 → 지인 5~10명 베타 |
 | **이후** | 공개 + 운영 사이클 | 피드백 → 이슈 → 우선순위 → 스프린트 → 배포 → 회고 |
+
+**S1 조각** (조각마다 DB부터 화면까지 한 번에 만들고 바로 확인)
+
+| # | 조각 | 끝나면 되는 것 | 상태 |
+|---|---|---|---|
+| 1 | 글쓰기 + 목록 | 사진·닉네임·비밀번호·메모를 올리면 목록에 보인다 (사진은 받은 그대로 저장) | 완료 |
+| 2 | 상세 + 삭제 | 상세 화면, 비밀번호 확인 후 상태 변경, 없는 글은 에러 화면 | |
+| 3 | 사진 처리 | 매직 바이트 검사(JPEG·PNG), 회전 보정, EXIF 제거, 리사이즈·썸네일 | |
+| 4 | 위치·촬영 시각 | 동의 시 GPS → `post_locations`, 삭제 시 위치 완전 삭제 | |
+
+단순하게 시작하기 위해: 무한 스크롤 대신 "더 보기" 링크, 사진은 JPEG·PNG만 (WebP는 추가 라이브러리 필요), IP 해시는 S2 rate limit과 함께.
 
 ## 16. 운영 프로세스
 
@@ -473,6 +486,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-10-29 — S1을 JSP 기준 4조각으로 다시 나눔, 13절을 화면 주소 중심으로 정리. S1-1(글쓰기 + 목록) 완료
 - 2026-10-29 — 배포 전까지는 PR 없이 main에 직접 push, PR은 S4부터
 - 2026-10-29 — 화면을 React에서 JSP로 변경 (war 패키징, frontend 폴더와 CI frontend 검사 제거)
 - 2026-10-29 — Flyway 제거, JPA `ddl-auto=update`로 테이블 자동 생성 (운영 방식은 S4에서 결정)

@@ -1,2 +1,5 @@
 .env
 !.env.example
+
+# 올린 사진 (로컬 개발용 저장 폴더)
+uploads/

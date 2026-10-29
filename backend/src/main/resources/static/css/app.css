@@ -1,0 +1,108 @@
+/* 모든 화면이 함께 쓰는 스타일. 휴대폰 화면을 기준으로 만들고, 넓은 화면에서는 가운데 480px만 쓴다. */
+/* src/main/resources/static 안의 파일은 주소 그대로 열린다 → /css/app.css */
+
+/* 칸의 너비에 테두리·안쪽 여백까지 포함해서 계산한다 (width: 100%가 화면 밖으로 넘치지 않게) */
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	font-family: system-ui, sans-serif;
+	background: #f5f5f5;
+	color: #222;
+}
+
+main {
+	max-width: 480px;
+	margin: 0 auto;
+	padding: 16px;
+	min-height: 100vh;
+	background: #fff;
+}
+
+/* 화면 맨 위: 제목과 버튼을 양 끝에 놓는다 */
+.top {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+h1 {
+	margin: 0;
+	font-size: 1.2rem;
+}
+
+.button,
+button {
+	display: inline-block;
+	padding: 8px 14px;
+	border: 0;
+	border-radius: 8px;
+	background: #2f7d32;
+	color: #fff;
+	font-size: 1rem;
+	text-decoration: none;
+}
+
+/* 목록의 글 하나 */
+.post {
+	margin: 20px 0;
+}
+
+.post img {
+	display: block;
+	width: 100%;
+	border-radius: 8px;
+}
+
+.meta {
+	margin: 8px 0 0;
+	color: #666;
+	font-size: 0.9rem;
+}
+
+.memo {
+	margin: 4px 0 0;
+	white-space: pre-wrap;
+}
+
+.empty,
+.more {
+	display: block;
+	padding: 24px 0;
+	text-align: center;
+}
+
+/* 글쓰기 화면 */
+label {
+	display: block;
+	margin-top: 16px;
+	font-weight: 600;
+}
+
+/* 아이폰은 글자가 16px보다 작은 입력칸을 누르면 화면을 확대해 버려서 1rem(16px)로 둔다 */
+input[type="text"],
+input[type="password"],
+textarea {
+	width: 100%;
+	padding: 8px;
+	font-size: 1rem;
+}
+
+form button {
+	width: 100%;
+	margin-top: 24px;
+}
+
+.hint {
+	margin: 4px 0 0;
+	color: #888;
+	font-size: 0.85rem;
+}
+
+.error {
+	margin: 4px 0 0;
+	color: #c62828;
+}
