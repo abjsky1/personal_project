@@ -25,9 +25,10 @@
 	<%-- c:forEach: feed.posts의 글을 하나씩 post라는 이름으로 꺼내 반복한다. --%>
 	<c:forEach var="post" items="${feed.posts}">
 		<article class="post">
-			<%-- 사진 주소는 서버가 만든 값(/images/무작위이름.jpg)이라 그대로 출력해도 안전하다. --%>
+			<%-- 사진을 누르면 상세 화면(/posts/글번호)으로 간다. --%>
+			<%-- 사진 주소와 글 번호는 서버가 만든 값이라 그대로 출력해도 안전하다. --%>
 			<%-- loading="lazy": 화면에 가까워졌을 때 사진을 불러온다 (휴대폰 데이터 절약) --%>
-			<img src="${post.imageUrl}" alt="음식 사진" loading="lazy">
+			<a href="/posts/${post.id}"><img src="${post.imageUrl}" alt="음식 사진" loading="lazy"></a>
 			<%-- 닉네임·메모는 사용자가 쓴 값이라 반드시 c:out으로 출력한다 (XSS 방지) --%>
 			<p class="meta"><strong><c:out value="${post.nickname}" /></strong> · <c:out value="${post.createdAt}" /></p>
 			<c:if test="${not empty post.memo}">

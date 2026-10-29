@@ -3,20 +3,26 @@ package backend.common.error;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
-// 모든 Controller에서 난 예외를 한곳에서 받아, ErrorResponse 모양의 JSON으로 바꿔 응답한다.
+// JSON API(@RestController)에서 난 예외를 한곳에서 받아, ErrorResponse 모양의 JSON으로 바꿔 응답한다.
 // → Controller·Service마다 try-catch로 에러 응답을 만들 필요가 없다.
+// (JSP 화면을 만드는 @Controller의 예외는 PageExceptionHandler가 에러 화면으로 보여 준다)
 //
-// @RestControllerAdvice: 모든 Controller에 공통으로 적용되는 클래스라는 표시.
+// @RestControllerAdvice(annotations = RestController.class): @RestController가 붙은 Controller에만 적용한다.
 // 안에 있는 @ExceptionHandler 메서드가 "이 종류의 예외가 나면 이렇게 응답한다"를 정한다.
 // 예외 하나에 맞는 메서드가 여러 개면, 예외 종류가 가장 가깝게 맞는 메서드가 선택된다.
+// @Order(가장 먼저): @RestController도 넓게 보면 @Controller라서 PageExceptionHandler에도 해당된다.
+// 그래서 이 클래스를 먼저 확인하게 해서, API 예외는 화면이 아니라 JSON으로 나가게 한다.
 //
 // 이 클래스가 받는 예외는 세 갈래다.
 // 1. BusinessException: 우리 코드가 직접 던진 "예상한 실패" → ErrorCode에 적힌 상태로 응답
@@ -27,10 +33,11 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 // Exception 전체를 받는 3번만 있으면, Spring의 기본 예외까지 3번이 먼저 가로채서 404·405가 전부 500으로 바뀐다.
 // 이 부모 클래스에는 Spring 기본 예외마다 알맞은 상태를 정해 둔 처리 메서드가 이미 들어 있다.
 // 그 메서드들이 마지막에 공통으로 부르는 handleExceptionInternal()만 바꿔서, 응답 모양만 우리 형식으로 맞춘다.
-@RestControllerAdvice
-public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+@RestControllerAdvice(annotations = RestController.class)
+@Order(Ordered.HIGHEST_PRECEDENCE)
+public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
-	private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+	private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
 	// 1. 우리 코드가 던진 BusinessException
 	// 예상한 실패(게시글 없음, 비밀번호 틀림 등)라서 어디서 났는지(스택 트레이스)는 남기지 않고 한 줄만 남긴다.
@@ -50,14 +57,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	@Override
 	protected ResponseEntity<Object> handleExceptionInternal(Exception ex, @Nullable Object body, HttpHeaders headers,
 			HttpStatusCode statusCode, WebRequest request) {
-		// 상태 숫자에 맞는 ErrorCode를 고른다.
-		// switch 식(Java 14+): case 값 -> 결과. 어느 case에도 맞지 않으면 default의 결과를 쓴다.
-		ErrorCode errorCode = switch (statusCode.value()) {
-			case 404 -> ErrorCode.NOT_FOUND;
-			case 405 -> ErrorCode.METHOD_NOT_ALLOWED;
-			// 나머지 400번대(400, 415 등)는 "요청이 잘못됨", 500번대는 "서버 오류"로 묶는다.
-			default -> statusCode.is4xxClientError() ? ErrorCode.INVALID_REQUEST : ErrorCode.INTERNAL_ERROR;
-		};
+		// 상태 숫자(404, 405 등)에 맞는 ErrorCode를 고른다.
+		ErrorCode errorCode = ErrorCode.fromStatus(statusCode);
 
 		// 500번대는 서버 쪽 문제이므로 3번과 같이 원인을 로그에 남긴다.
 		if (statusCode.is5xxServerError()) {

@@ -106,3 +106,28 @@ form button {
 	margin: 4px 0 0;
 	color: #c62828;
 }
+
+/* 상세 화면의 삭제 칸: 글과 구분되게 위에 선을 긋는다 */
+.delete-form {
+	margin-top: 24px;
+	padding-top: 8px;
+	border-top: 1px solid #eee;
+}
+
+/* 지우기처럼 되돌리기 어려운 버튼은 빨간색 */
+button.danger {
+	background: #c62828;
+}
+
+/* 에러 화면 */
+.error-page {
+	text-align: center;
+	padding-top: 80px;
+}
+
+.error-page .status {
+	margin: 0;
+	color: #999;
+	font-size: 3rem;
+	font-weight: 700;
+}

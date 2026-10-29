@@ -398,7 +398,10 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 
 **S3에서 같은 방식으로 정리**: 댓글(작성·삭제), 피드백 게시판(목록·상세·작성·삭제), 운영자 API(관리자 토큰, 상태 변경·피드백 답변)
 
-에러 응답은 `{ "code": "INVALID_PASSWORD", "message": "...", "traceId": "..." }` 형식으로 통일. 상태 코드는 HTTP 상태로 보내고, `code`는 `ErrorCode`(enum)에 모은다. `traceId`는 응답 헤더 `X-Trace-Id`와 같은 값이라 사용자가 알려 주면 서버 로그를 찾을 수 있다.
+에러는 `ErrorCode`(enum)에 모으고, 요청 종류에 따라 두 곳에서 응답한다. 둘 다 HTTP 상태를 그대로 보내고, `traceId`(응답 헤더 `X-Trace-Id`와 같은 값)를 함께 보여 줘서 사용자가 알려 주면 서버 로그를 찾을 수 있다.
+- **화면 요청** (`PageExceptionHandler`): 에러 화면 `common/error.jsp` (상태, 메시지, traceId). 없는 주소·잘못된 방식·너무 큰 사진도 여기로 온다.
+- **JSON API** (`@RestController`, `ApiExceptionHandler`): `{ "code": "INVALID_PASSWORD", "message": "...", "traceId": "..." }`
+- 예외: 삭제 비밀번호가 틀리면 에러 화면 대신 상세 화면으로 돌아가 메시지를 보여 준다 (flash).
 
 ## 14. 화면 구성
 
@@ -425,7 +428,7 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 | # | 조각 | 끝나면 되는 것 | 상태 |
 |---|---|---|---|
 | 1 | 글쓰기 + 목록 | 사진·닉네임·비밀번호·메모를 올리면 목록에 보인다 (사진은 받은 그대로 저장) | 완료 |
-| 2 | 상세 + 삭제 | 상세 화면, 비밀번호 확인 후 상태 변경, 없는 글은 에러 화면 | |
+| 2 | 상세 + 삭제 | 상세 화면, 비밀번호 확인 후 상태 변경, 없는 글은 에러 화면 | 완료 |
 | 3 | 사진 처리 | 매직 바이트 검사(JPEG·PNG), 회전 보정, EXIF 제거, 리사이즈·썸네일 | |
 | 4 | 위치·촬영 시각 | 동의 시 GPS → `post_locations`, 삭제 시 위치 완전 삭제 | |
 
@@ -493,6 +496,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-10-29 — S1-2(상세 + 삭제) 완료. 에러 처리를 화면(에러 화면)과 JSON API로 나눔
 - 2026-10-29 — 패키지 구조를 도메인별 `controller / service / model(entity, dto, repository)`로 정리, DTO·VO 구분 규칙 추가
 - 2026-10-29 — S1을 JSP 기준 4조각으로 다시 나눔, 13절을 화면 주소 중심으로 정리. S1-1(글쓰기 + 목록) 완료
 - 2026-10-29 — 배포 전까지는 PR 없이 main에 직접 push, PR은 S4부터

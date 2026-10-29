@@ -5,10 +5,14 @@ import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import backend.common.error.BusinessException;
+import backend.common.error.ErrorCode;
 import backend.image.LocalImageStorage;
 import backend.post.model.dto.PostCreateForm;
 import backend.post.service.PostService;
@@ -60,6 +64,34 @@ public class PostController {
 
 		// redirect: 저장 후 목록 주소로 이동하라고 브라우저에 알린다.
 		// 화면을 바로 보여 주지 않고 이동시키는 이유: 새로고침을 눌렀을 때 같은 글이 한 번 더 저장되는 것을 막는다.
+		return "redirect:/";
+	}
+
+	// 상세 화면
+	// @PathVariable: 주소 안의 {id} 자리 값을 받는다. (/posts/3 → id = 3)
+	// 없거나 삭제된 글이면 Service가 POST_NOT_FOUND 예외를 던지고, PageExceptionHandler가 에러 화면(404)을 보여 준다.
+	@GetMapping("/posts/{id}")
+	public String detail(@PathVariable Long id, Model model) {
+		model.addAttribute("post", postService.getDetail(id));
+		return "posts/detail";
+	}
+
+	// 삭제 (HTML form은 GET·POST만 보낼 수 있어서 DELETE 대신 POST로 받는다)
+	// @RequestParam: form의 name="password" 값을 받는다.
+	// RedirectAttributes: redirect한 다음 화면에 한 번만 보여 줄 값(flash)을 넘길 때 쓴다.
+	@PostMapping("/posts/{id}/delete")
+	public String delete(@PathVariable Long id, @RequestParam String password, RedirectAttributes redirectAttributes) {
+		try {
+			postService.deleteByAuthor(id, password);
+		} catch (BusinessException e) {
+			// 비밀번호가 틀린 경우만 여기서 처리하고, 다른 에러(글 없음 등)는 그대로 던져서 에러 화면으로 보낸다.
+			if (e.getErrorCode() != ErrorCode.INVALID_PASSWORD) {
+				throw e;
+			}
+			// 상세 화면으로 돌아가서 삭제 칸 아래에 메시지를 보여 준다. (새로고침해도 메시지는 다시 나오지 않는다)
+			redirectAttributes.addFlashAttribute("deleteError", e.getErrorCode().getMessage());
+			return "redirect:/posts/" + id;
+		}
 		return "redirect:/";
 	}
 

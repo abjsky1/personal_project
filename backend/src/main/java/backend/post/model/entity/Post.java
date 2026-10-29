@@ -60,6 +60,9 @@ public class Post {
 	@Column(nullable = false)
 	private Instant createdAt;
 
+	// 삭제(상태 변경)된 시각. 삭제 전에는 비어 있다(null).
+	private Instant deletedAt;
+
 	// JPA는 DB에서 읽은 값을 채울 때 빈 객체부터 만들기 때문에, 매개변수 없는 생성자가 꼭 있어야 한다.
 	// protected: 우리 코드에서는 실수로 빈 게시글을 만들지 못하게 막는다.
 	protected Post() {
@@ -75,8 +78,16 @@ public class Post {
 		this.createdAt = Instant.now();
 	}
 
+	// 작성자 삭제: DB에서 지우지 않고 상태만 바꾼다. (기획서 5.1절)
+	// 엔티티의 값만 바꾸면, @Transactional이 끝날 때 JPA가 바뀐 것을 알아채고 UPDATE를 실행한다 (변경 감지).
+	// → save()를 따로 부르지 않아도 된다.
+	public void deleteByAuthor() {
+		this.status = PostStatus.DELETED_BY_AUTHOR;
+		this.deletedAt = Instant.now();
+	}
+
 	// 값을 꺼내는 메서드(getter)만 두고 값을 바꾸는 메서드(setter)는 두지 않는다.
-	// → 상태 변경 같은 일은 나중에 delete()처럼 이름이 분명한 메서드로만 하게 한다.
+	// → 상태 변경은 위의 deleteByAuthor()처럼 이름이 분명한 메서드로만 하게 한다.
 	public Long getId() {
 		return id;
 	}
@@ -103,5 +114,9 @@ public class Post {
 
 	public Instant getCreatedAt() {
 		return createdAt;
+	}
+
+	public Instant getDeletedAt() {
+		return deletedAt;
 	}
 }

@@ -46,7 +46,7 @@ public class LocalImageStorage {
 			file.transferTo(rootDir.resolve(key));
 		} catch (IOException e) {
 			// 파일 저장 실패는 서버 문제다. 확인 예외(IOException)를 실행 중 예외로 바꿔 던지면
-			// GlobalExceptionHandler가 500으로 처리하고 원인을 로그에 남긴다.
+			// PageExceptionHandler가 500 에러 화면을 보여 주고 원인을 로그에 남긴다.
 			throw new UncheckedIOException("사진 파일 저장 실패: " + key, e);
 		}
 		return key;

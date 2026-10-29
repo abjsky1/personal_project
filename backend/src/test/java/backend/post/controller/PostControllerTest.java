@@ -1,7 +1,10 @@
 package backend.post.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -18,6 +21,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import backend.common.error.ErrorCode;
 import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
 import backend.post.model.repository.PostRepository;
@@ -84,6 +88,59 @@ class PostControllerTest {
 				.param("password", "123"))
 				.andExpect(view().name("posts/new"))
 				.andExpect(model().attributeHasFieldErrors("form", "password"));
+	}
+
+	@Test
+	void 상세_화면은_글을_보여준다() throws Exception {
+		Post post = savePost("1234");
+
+		mockMvc.perform(get("/posts/" + post.getId()))
+				.andExpect(status().isOk())
+				.andExpect(view().name("posts/detail"))
+				.andExpect(model().attributeExists("post"));
+	}
+
+	@Test
+	void 없는_글의_상세는_404_에러_화면을_보여준다() throws Exception {
+		mockMvc.perform(get("/posts/999999999"))
+				.andExpect(status().isNotFound())
+				.andExpect(view().name("common/error"));
+	}
+
+	@Test
+	void 비밀번호가_맞으면_상태만_바꿔_삭제하고_그_글은_더_볼_수_없다() throws Exception {
+		Post post = savePost("1234");
+
+		mockMvc.perform(post("/posts/" + post.getId() + "/delete").param("password", "1234"))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/"));
+
+		// DB에서 지워지지 않고, 상태와 삭제 시각만 바뀌어 있어야 한다.
+		Post deleted = postRepository.findById(post.getId()).orElseThrow();
+		assertThat(deleted.getStatus()).isEqualTo(PostStatus.DELETED_BY_AUTHOR);
+		assertThat(deleted.getDeletedAt()).isNotNull();
+
+		// 삭제된 글의 상세는 404
+		mockMvc.perform(get("/posts/" + post.getId()))
+				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void 비밀번호가_틀리면_삭제하지_않고_상세_화면으로_돌아가_메시지를_보여준다() throws Exception {
+		Post post = savePost("1234");
+
+		mockMvc.perform(post("/posts/" + post.getId() + "/delete").param("password", "0000"))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/posts/" + post.getId()))
+				// flash: redirect한 다음 화면에 한 번만 넘어가는 값
+				.andExpect(flash().attribute("deleteError", ErrorCode.INVALID_PASSWORD.getMessage()));
+
+		assertThat(postRepository.findById(post.getId()).orElseThrow().getStatus()).isEqualTo(PostStatus.ACTIVE);
+	}
+
+	// 테스트용 글을 DB에 바로 저장한다. (사진 파일은 만들지 않고 이름만 넣는다)
+	private Post savePost(String password) {
+		return postRepository.save(new Post("테스터", passwordEncoder.encode(password), null, "test.jpg"));
 	}
 
 	@Test

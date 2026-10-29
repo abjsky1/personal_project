@@ -7,6 +7,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import backend.common.error.BusinessException;
+import backend.common.error.ErrorCode;
 import backend.image.LocalImageStorage;
 import backend.post.model.dto.FeedPage;
 import backend.post.model.dto.PostCreateForm;
@@ -15,6 +17,7 @@ import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
 import backend.post.model.repository.PostRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 // 게시글 기능의 실제 처리(비즈니스 로직)를 맡는 클래스
 // Controller는 요청을 받고 화면을 고르는 일만 하고, 저장·조회 같은 실제 일은 여기서 한다.
@@ -22,6 +25,8 @@ import lombok.RequiredArgsConstructor;
 // @Service: Spring이 이 객체를 만들어 관리한다 (@Component와 같고, 역할을 이름으로 드러낸다)
 // @RequiredArgsConstructor(Lombok): final 필드를 모두 받는 생성자를 컴파일할 때 자동으로 만들어 준다.
 // → Spring이 그 생성자로 아래 세 객체를 넣어 준다 (생성자 주입). 코드에 생성자가 안 보여도 실제로는 있다.
+// @Slf4j(Lombok): 로그를 찍는 log 필드를 자동으로 만들어 준다. (LoggerFactory.getLogger(PostService.class)와 같다)
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PostService {
@@ -70,6 +75,37 @@ public class PostService {
 
 		// stream().map(...).toList(): 목록의 Post 하나하나를 PostSummary로 바꿔 새 목록을 만든다.
 		return new FeedPage(pagePosts.stream().map(PostSummary::from).toList(), nextCursor);
+	}
+
+	// 상세 조회. 없거나 삭제된 글이면 POST_NOT_FOUND 예외를 던진다 → 에러 화면(404)이 나온다.
+	// 상세 화면도 지금은 목록과 같은 값만 보여 주므로 PostSummary를 함께 쓴다. (S2에서 분석 결과가 붙으면 상세용 DTO를 따로 만든다)
+	@Transactional(readOnly = true)
+	public PostSummary getDetail(Long id) {
+		return PostSummary.from(findActivePost(id));
+	}
+
+	// 작성자 삭제: 비밀번호가 맞으면 상태를 DELETED_BY_AUTHOR로 바꾼다. (DB에서 지우지 않는다)
+	@Transactional
+	public void deleteByAuthor(Long id, String password) {
+		Post post = findActivePost(id);
+
+		// matches(입력한 비밀번호, 저장된 해시): 입력값을 같은 방식으로 해시해서 저장된 해시와 같은지 비교한다.
+		if (!passwordEncoder.matches(password, post.getPasswordHash())) {
+			// 비밀번호 실패는 로그로 남긴다 (기획서 5절). 입력한 비밀번호 자체는 절대 로그에 남기지 않는다.
+			log.warn("Password mismatch: postId={}", id);
+			throw new BusinessException(ErrorCode.INVALID_PASSWORD);
+		}
+
+		// 상태만 바꾸면 메서드가 끝날 때(트랜잭션 종료) JPA가 UPDATE를 실행한다.
+		post.deleteByAuthor();
+		log.info("Post deleted by author: postId={}", id);
+	}
+
+	// ACTIVE인 글만 찾고, 없으면 POST_NOT_FOUND 예외를 던진다.
+	// orElseThrow: Optional이 비어 있으면 괄호 안에서 만든 예외를 던지고, 있으면 꺼낸 값을 돌려준다.
+	private Post findActivePost(Long id) {
+		return postRepository.findByIdAndStatus(id, PostStatus.ACTIVE)
+				.orElseThrow(() -> new BusinessException(ErrorCode.POST_NOT_FOUND));
 	}
 
 	// 메모가 비어 있거나 공백뿐이면 null로 저장한다 (화면에서 "메모 없음"을 쉽게 구분하려고)

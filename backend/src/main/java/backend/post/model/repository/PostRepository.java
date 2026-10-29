@@ -1,6 +1,7 @@
 package backend.post.model.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -21,4 +22,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	// 페이지 번호(1, 2, 3쪽) 방식과 달리, 그사이 새 글이 올라와도 같은 글이 두 번 보이거나 빠지지 않는다.
 	// Limit: 최대 몇 개를 가져올지
 	List<Post> findByStatusAndIdLessThanOrderByIdDesc(PostStatus status, Long cursor, Limit limit);
+
+	// 번호와 상태가 모두 맞는 글 하나 → SELECT ... FROM posts WHERE id = ? AND status = ?
+	// Optional: 결과가 없을 수도 있다는 표시. 없으면 비어 있는 Optional이 돌아온다 (null 대신)
+	// 삭제된 글을 실수로 보여 주지 않도록, 상세·삭제는 항상 이 메서드로 ACTIVE인 글만 찾는다.
+	Optional<Post> findByIdAndStatus(Long id, PostStatus status);
 }
