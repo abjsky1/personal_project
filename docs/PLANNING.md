@@ -287,12 +287,13 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 트러블슈팅 경험이 목표이므로, **문제가 생겼을 때 원인을 볼 수 있는 장치를 기능보다 먼저** 깐다.
 
 **개발 단계부터 (S0~)**
-- JSON 구조화 로그 + 요청마다 traceId (MDC)
+- 요청마다 traceId (MDC, 응답 헤더 `X-Trace-Id`) + 요청 기록 로그 한 줄 (메서드, 경로, 상태, 걸린 시간)
 - 공통 에러 응답 포맷과 예외 처리
 - 분석 건별로 공급자, 모델, 토큰, 지연시간, 결과 상태 기록
 - 비밀번호 실패, 운영자 상태 변경, rate limit 차단 로그
 
 **배포 단계에서 (S4~)**
+- **JSON 구조화 로그**: 설정 한 줄(`logging.structured.format.console=ecs`)로 켠다. 로컬은 읽기 쉬운 글자 형식 유지
 - **에러 추적 + 알림**: Sentry (프론트 + 백엔드). 새 에러가 나면 메일로 알림
 - **다운 알림**: 외부 업타임 모니터가 `/actuator/health`를 확인, 응답 없으면 알림
 - **백업**: RDS 자동 백업
@@ -403,11 +404,11 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 
 | 스프린트 | 목표 | 완료 기준 |
 |---|---|---|
-| **S0. 개발 환경** | 모노레포, Spring Boot·React 초기화, Docker Compose(MySQL), Flyway, 비밀값 분리(.env), GitHub Actions CI(빌드·테스트), 구조화 로그·공통 에러 포맷 | 로컬에서 React → Spring → MySQL 왕복 확인, PR마다 CI 통과 |
+| **S0. 개발 환경** | 모노레포, Spring Boot·React 초기화, Docker Compose(MySQL), Flyway, 비밀값 분리(.env), GitHub Actions CI(빌드·테스트), traceId 로그·공통 에러 포맷 | 로컬에서 React → Spring → MySQL 왕복 확인, PR마다 CI 통과 |
 | **S1. 게시판** | 업로드(검증·위치 추출·회전 보정·EXIF 제거·리사이즈), 피드·상세, 작성자 삭제(상태 변경) | 휴대폰 사진을 올리고 지울 수 있고, 동의 시 위치가 저장된다 |
 | **S2. AI 분석** | 무료 LLM 후보 비교·선정, 비동기 분석, 구조화 출력, 폴링 UI, 자동 재시도 스케줄러, 일일 상한, 업로드 rate limit | 사진 올리면 칼로리가 뜨고, 실패·한도 초과 시에도 자동 복구된다 |
 | **S3. 댓글 + 피드백 게시판 + 운영 기능** | 댓글 작성·삭제, 피드백 게시판(작성·삭제·처리 상태·답변), 운영자 API, 정책 페이지 | 기능 기준 MVP 완성 |
-| **S4. AWS 배포 + 관측** | EC2·RDS·S3/CloudFront, CI/CD 자동 배포, 도메인·HTTPS, Sentry·업타임 모니터·백업, 배포 체크리스트(10절) | main에 push하면 자동 배포되고, 장애 시 알림이 온다 → 지인 5~10명 베타 |
+| **S4. AWS 배포 + 관측** | EC2·RDS·S3/CloudFront, CI/CD 자동 배포, 도메인·HTTPS, JSON 로그, Sentry·업타임 모니터·백업, 배포 체크리스트(10절) | main에 push하면 자동 배포되고, 장애 시 알림이 온다 → 지인 5~10명 베타 |
 | **이후** | 공개 + 운영 사이클 | 피드백 → 이슈 → 우선순위 → 스프린트 → 배포 → 회고 |
 
 ## 16. 운영 프로세스
@@ -454,6 +455,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | Java | Java 17 + Amazon Corretto (로컬·CI·운영 동일). 21에서 변경 | 2026-10-28 |
 | CI | GitHub Actions. 설정 파일은 얇게: 실제 명령은 `gradlew`·`npm` 스크립트에 두고, 테스트용 MySQL은 가능하면 `compose.yaml`을 재사용 → 다른 CI 도구로 옮기기 쉽게. Jenkins 직접 운영은 MVP 이후 학습 과제 | 2026-10-28 |
 | 커밋 메시지 | `feat` / `fix` / `chore` + 한국어 요약, 빈 줄 뒤 세부·이유 (16절) | 2026-10-28 |
+| 로그 형식 | 로컬은 글자 형식 + `[traceId]`, JSON(ECS)은 배포(S4)에서 켬. 로그 검색 도구가 생기는 시점에 맞춤 | 2026-10-29 |
 
 **미정**
 
@@ -467,6 +469,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-10-29 — JSON 로그를 S0에서 S4로 옮김 (S0은 traceId + 요청 기록 로그)
 - 2026-10-28 — CI 도구(GitHub Actions, Jenkins는 이후 학습 과제)와 커밋 메시지 규칙 결정
 - 2026-10-28 — Java 21 → Java 17(Amazon Corretto)로 변경
 - 2026-10-28 — 실제 생성된 백엔드에 맞춰 Spring Boot 4로 수정
