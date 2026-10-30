@@ -271,14 +271,18 @@ backend
 ## 10. 인프라·배포
 
 - **개발 단계 (S0~S3)**: 로컬에서 Docker Compose로 MySQL을 띄우고, 이미지는 로컬 디스크(`LocalImageStorage`)에 저장한다.
-- **배포 단계 (S4)**: **AWS**로 배포한다. 상세 구성과 예산은 그 시점에 확정한다. 현재 예상 구성:
+- **배포 단계 (S4)**: **AWS**로 배포한다. 첫 배포는 가장 작은 구성으로 시작한다 (2026-10-30 결정):
 
 ```
-[사용자] ─ HTTPS ─ EC2 [Nginx → Spring Boot war (Docker), 화면(JSP) 포함] ─ RDS MySQL
-         └ HTTPS ─ CloudFront ─ S3 (음식 이미지)
-                                                    └─ LLM API
-GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스트리 → EC2에서 pull & 재시작
+[사용자] ─ HTTPS ─ EC2 (Docker Compose: Nginx → Spring war, MySQL) 
+                        ├─ S3 (사진, 비공개 — Spring이 꺼내서 보냄)
+                        └─ S3 (DB 백업, 매일)
+GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 → 레지스트리 → EC2에서 pull & 재시작
 ```
+
+- **AWS 계정**: 새로 만든다 (무료 플랜: 가입 크레딧 + 활동 크레딧, 6개월).
+- **DB는 EC2 안의 Docker MySQL** (RDS 대신, 추가 비용 0). 대신 **서버를 지우면 DB도 사라지므로**: 매일 `mysqldump` → S3 백업, 복구 1회 연습, EC2 종료 방지(termination protection) 켜기. 서버 하나에 Spring·MySQL·Nginx가 함께 돌므로 메모리 2GB 이상(+ swap).
+- CloudFront, RDS는 사용자가 늘거나 운영이 익숙해진 뒤 검토한다.
 
 - 이미지 저장소를 인터페이스로 분리해 두었으므로 로컬 → S3 전환은 구현체 교체와 설정 변경으로 끝난다.
 - 운영 서버의 로컬 디스크에 이미지 저장 금지 — 컨테이너 재배포 시 사라진다.
@@ -293,7 +297,9 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 - [ ] Docker 로그 로테이션 (안 하면 디스크가 가득 차서 서버가 멈춘다). 개인정보처리방침에 "이용 기록 3개월 보관 후 삭제"로 적었으므로 3개월을 넘기지 않게
 - [ ] S3: 버킷(공개 차단 유지) + EC2용 IAM 역할 (`s3:PutObject`, `s3:GetObject`, `s3:ListBucket`). ListBucket이 없으면 없는 사진을 요청할 때 404 대신 403(권한 없음)이 돌아온다
 - [ ] 서버 환경 변수: `APP_IMAGE_STORAGE=s3`, `APP_S3_BUCKET=버킷이름`, DB 접속 정보, `GEMINI_API_KEY`(AI 배포 때)
-- [ ] DB 자동 백업 켜기 + 복구 1회 해보기
+- [ ] DB 백업: 매일 `mysqldump` → S3, 복구 1회 해보기 (DB가 EC2 안에 있으므로 필수)
+- [ ] EC2 종료 방지(termination protection) 켜기 — "중지"와 "종료"를 헷갈려 서버(와 DB)를 날리지 않게
+- [ ] AWS 요금 알림(Budgets) 설정 — 크레딧이 줄거나 예상보다 많이 쓰면 메일로 알림
 - [ ] JSP 개발 모드 끄기 (`server.servlet.jsp.init-parameters.development=false`)
 - [ ] Nginx 뒤에서 실제 사용자 IP 받기 (`server.forward-headers-strategy` + Nginx `X-Forwarded-For`). 안 하면 모든 요청이 Nginx IP 하나로 보여서 업로드 횟수 제한이 전체 사용자를 한꺼번에 막는다
 - [ ] CSS 같은 정적 파일 주소에 버전 붙이기 (배포 후에도 브라우저가 예전 CSS를 쓰는 문제 방지)
@@ -451,6 +457,19 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 
 단순하게 시작하기 위해: 무한 스크롤 대신 "더 보기" 링크, 사진은 JPEG·PNG만 (WebP는 추가 라이브러리 필요), IP 해시는 S2 rate limit과 함께.
 
+**배포 준비** (S4 전): ① 업로드 횟수 제한 ✅ ② 사진 저장소 S3 전환 준비 ✅ ③ 개인정보처리방침 ✅
+
+**S4 조각** (배포, 2026-10-30 계획)
+
+| # | 조각 | 누가 | 끝나면 되는 것 | 상태 |
+|---|---|---|---|---|
+| 1 | Docker 이미지 + 배포용 설정 | Claude | 내 PC에서 배포 서버와 같은 방식(Docker Compose)으로 사이트가 뜸 | |
+| 2 | AWS 계정 준비 | 사용자 (체크리스트) | 요금 알림, 서울 리전, 루트 대신 관리용 IAM 사용자 | |
+| 3 | 서버·S3 만들기 + 첫 배포 | 사용자(AWS 화면) + Claude(명령·설정) | 서버 주소로 접속 가능, 사진이 S3에 저장, DB 매일 백업 | |
+| 4 | 도메인 + HTTPS | 사용자(도메인 구입) + Claude(Nginx 설정) | `https://도메인`으로 접속 | |
+| 5 | 자동 배포 | Claude + 사용자(GitHub 비밀값 등록) | main에 push하면 몇 분 뒤 서버에 반영 | |
+| 6 | 감시·백업 점검 | 함께 | 다운 알림, 백업 복구 연습, 로그 정리 | |
+
 ## 16. 운영 프로세스
 
 - **백로그**: GitHub Projects 칸반 — Backlog / Next / In Progress / Done (4.2절 항목을 이슈로 등록)
@@ -513,11 +532,12 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | 2 | ~~무료 LLM 공급자~~ | 결정됨 → 18절 (`gemini-3.5-flash-lite`) |
 | 3 | ~~위치 좌표 저장 정밀도~~ | 결정됨 → 18절 (원본 6자리) |
 | 4 | 레포 구조 | 모노레포 권장 (`backend/`, `infra/`, `docs/`) — 화면은 JSP라 `backend/` 안에 있음 |
-| 5 | AWS 상세 구성·월 예산 | S4에서 결정 |
+| 5 | AWS 월 예산 | 구성은 결정됨(10절). 무료 플랜 크레딧이 끝난 뒤의 월 예산은 첫 달 요금을 보고 정한다 |
 | 6 | 운영 DB의 스키마 변경 방식 | S4에서 결정. 운영에서는 `ddl-auto`를 `validate` 또는 `none`으로 두고, 테이블 변경 SQL을 직접 관리하는 것이 일반적 (Flyway 재도입 포함 검토) |
 
 ## 변경 이력
 
+- 2026-10-31 — S4 배포 계획: 새 AWS 계정, EC2 한 대(Docker Compose: Nginx·Spring·MySQL) + S3(사진·DB 백업), 6조각
 - 2026-10-31 — 배포 준비 3가지 완료: 사진 저장소 S3 결정(설정 하나로 폴더/S3 전환), 개인정보처리방침 페이지, 업로드 횟수 제한
 - 2026-10-30 — 진행 순서 변경: 배포 준비 3가지 → S4 배포를 S2보다 먼저. Gemini API 유료 등급 전환
 - 2026-10-30 — S2-1 완료: AI 모델을 `gemini-3.5-flash-lite`로 결정 (사진 20장 비교)
