@@ -9,7 +9,9 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.List;
 import java.util.TimeZone;
+import java.util.stream.StreamSupport;
 
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -22,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.drew.imaging.ImageMetadataReader;
 import com.drew.imaging.ImageProcessingException;
 import com.drew.lang.GeoLocation;
+import com.drew.metadata.Directory;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.exif.ExifSubIFDDirectory;
 import com.drew.metadata.exif.GpsDirectory;
@@ -157,6 +160,12 @@ public class ImageProcessor {
 			ExifSubIFDDirectory exif = metadata.getFirstDirectoryOfType(ExifSubIFDDirectory.class);
 			Date takenAt = (exif == null) ? null : exif.getDateOriginal(KOREA);
 
+			// 사진에 어떤 정보가 들어 있었는지 남긴다. 값(좌표·시각)은 남기지 않고, 정보의 종류와 있음/없음만 남긴다.
+			// → 기기·브라우저마다 무엇이 지워진 채로 올라오는지(예: 아이폰 Safari) 로그로 확인하는 운영 지표
+			// directories 예: [JPEG, Exif IFD0, Exif SubIFD, GPS, ...] — 이름만 있는 목록이라 개인정보가 아니다.
+			log.info("Photo metadata: directories={}, gps={}, takenAt={}",
+					directoryNames(metadata), hasLocation, takenAt != null);
+
 			return new PhotoMetadata(
 					hasLocation ? location.getLatitude() : null,
 					hasLocation ? location.getLongitude() : null,
@@ -165,6 +174,14 @@ public class ImageProcessor {
 			log.warn("Unreadable photo metadata: {}", e.getMessage());
 			return PhotoMetadata.EMPTY;
 		}
+	}
+
+	// 사진 안에 들어 있는 정보 칸(디렉터리)의 이름 목록
+	// getDirectories()는 목록(List)이 아니라 반복만 할 수 있는 Iterable이라, stream으로 바꿔서 이름만 모은다.
+	private List<String> directoryNames(Metadata metadata) {
+		return StreamSupport.stream(metadata.getDirectories().spliterator(), false)
+				.map(Directory::getName)
+				.toList();
 	}
 
 	// PNG의 투명한 부분을 흰색으로 채운다. JPEG는 투명을 저장할 수 없어서, 그대로 두면 투명한 곳이 검게 나온다.
