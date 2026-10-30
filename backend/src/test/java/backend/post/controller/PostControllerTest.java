@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import backend.common.error.ErrorCode;
 import backend.image.TestImages;
+import backend.location.model.entity.PostLocation;
+import backend.location.model.repository.PostLocationRepository;
 import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
 import backend.post.model.repository.PostRepository;
@@ -50,9 +53,79 @@ class PostControllerTest {
 	@Autowired
 	private PasswordEncoder passwordEncoder;
 
+	@Autowired
+	private PostLocationRepository postLocationRepository;
+
 	// 테스트용 사진 파일: (form의 칸 이름, 파일 이름, 형식, 내용)
 	// 서버가 파일 내용을 진짜 사진인지 검사하므로, 코드로 만든 실제 JPEG(300 × 200)를 넣는다.
 	private final MockMultipartFile photo = new MockMultipartFile("image", "food.jpg", "image/jpeg", TestImages.jpeg(300, 200));
+
+	// GPS(서울시청 근처)와 촬영 시각(한국 시간 2026-10-29 12:30)이 들어 있는 사진
+	private final MockMultipartFile photoWithGps = new MockMultipartFile("image", "food.jpg", "image/jpeg",
+			TestImages.withGps(TestImages.jpeg(300, 200), 37.566535, 126.977969, "2026:10:29 12:30:00"));
+
+	@Test
+	void 위치_제공에_동의하면_위치와_촬영_시각을_저장한다() throws Exception {
+		mockMvc.perform(multipart("/posts").file(photoWithGps)
+				.param("nickname", "테스터")
+				.param("password", "1234")
+				.param("locationConsent", "true"))
+				.andExpect(status().is3xxRedirection());
+
+		Post saved = latestPost();
+		assertThat(saved.getPhotoTakenAt()).isEqualTo(Instant.parse("2026-10-29T03:30:00Z"));
+
+		PostLocation location = postLocationRepository.findById(saved.getId()).orElseThrow();
+		assertThat(location.getPoint().latitude()).isEqualByComparingTo("37.566535");
+		assertThat(location.getPoint().longitude()).isEqualByComparingTo("126.977969");
+		assertThat(location.getSource()).isEqualTo("EXIF");
+	}
+
+	@Test
+	void 동의하지_않으면_사진에_위치가_있어도_저장하지_않는다() throws Exception {
+		// locationConsent를 보내지 않음 = 체크박스를 체크하지 않음
+		mockMvc.perform(multipart("/posts").file(photoWithGps)
+				.param("nickname", "테스터")
+				.param("password", "1234"))
+				.andExpect(status().is3xxRedirection());
+
+		Post saved = latestPost();
+		assertThat(saved.getPhotoTakenAt()).isNull();
+		assertThat(postLocationRepository.findById(saved.getId())).isEmpty();
+	}
+
+	@Test
+	void 동의했지만_사진에_위치가_없으면_글만_저장한다() throws Exception {
+		mockMvc.perform(multipart("/posts").file(photo)
+				.param("nickname", "테스터")
+				.param("password", "1234")
+				.param("locationConsent", "true"))
+				.andExpect(status().is3xxRedirection());
+
+		assertThat(postLocationRepository.findById(latestPost().getId())).isEmpty();
+	}
+
+	@Test
+	void 글을_삭제하면_위치는_완전히_지운다() throws Exception {
+		mockMvc.perform(multipart("/posts").file(photoWithGps)
+				.param("nickname", "테스터")
+				.param("password", "1234")
+				.param("locationConsent", "true"));
+		Long postId = latestPost().getId();
+		assertThat(postLocationRepository.findById(postId)).isPresent();
+
+		mockMvc.perform(post("/posts/" + postId + "/delete").param("password", "1234"))
+				.andExpect(redirectedUrl("/"));
+
+		// 게시글은 상태만 바뀌어 남아 있지만, 위치 행은 아예 없어야 한다.
+		assertThat(postRepository.findById(postId)).isPresent();
+		assertThat(postLocationRepository.findById(postId)).isEmpty();
+	}
+
+	// 가장 최근에 저장된 글(번호가 가장 큰 글)
+	private Post latestPost() {
+		return postRepository.findAll(Sort.by(Sort.Direction.DESC, "id")).get(0);
+	}
 
 	@Test
 	void 글을_올리면_저장되고_목록으로_이동한다() throws Exception {
@@ -147,7 +220,7 @@ class PostControllerTest {
 
 	// 테스트용 글을 DB에 바로 저장한다. (사진 파일은 만들지 않고 이름만 넣는다)
 	private Post savePost(String password) {
-		return postRepository.save(new Post("테스터", passwordEncoder.encode(password), null, "test.jpg", "test-thumb.jpg"));
+		return postRepository.save(new Post("테스터", passwordEncoder.encode(password), null, "test.jpg", "test-thumb.jpg", null));
 	}
 
 	@Test

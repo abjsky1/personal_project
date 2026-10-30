@@ -2,10 +2,12 @@ package backend.image;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.time.Instant;
 
 import javax.imageio.ImageIO;
 
@@ -60,6 +62,41 @@ class ImageProcessorTest {
 		// 큰 사진과 썸네일 모두 EXIF가 없어야 한다 → 위치 정보 등이 공개되지 않는다.
 		assertThat(TestImages.containsExif(result.main())).isFalse();
 		assertThat(TestImages.containsExif(result.thumbnail())).isFalse();
+	}
+
+	@Test
+	void 원본의_EXIF에서_GPS_위치와_촬영_시각을_읽는다() {
+		// 서울시청 근처 좌표, 한국 시간 2026-10-29 12:30에 찍은 사진
+		byte[] photo = TestImages.withGps(TestImages.jpeg(200, 100), 37.566535, 126.977969, "2026:10:29 12:30:00");
+
+		PhotoMetadata metadata = processor.process(upload(photo)).metadata();
+
+		// isCloseTo: 도·분·초로 바꿨다가 되돌리는 과정의 아주 작은 오차는 허용한다.
+		assertThat(metadata.latitude()).isCloseTo(37.566535, within(0.000001));
+		assertThat(metadata.longitude()).isCloseTo(126.977969, within(0.000001));
+		// 한국 시간 12:30 = 세계 표준시(UTC) 03:30
+		assertThat(metadata.takenAt()).isEqualTo(Instant.parse("2026-10-29T03:30:00Z"));
+	}
+
+	@Test
+	void GPS가_있던_사진도_저장할_파일에는_위치가_남지_않는다() {
+		byte[] photo = TestImages.withGps(TestImages.jpeg(200, 100), 37.566535, 126.977969, "2026:10:29 12:30:00");
+		assertThat(TestImages.containsExif(photo)).isTrue();
+
+		ProcessedImage result = processor.process(upload(photo));
+
+		// 위치는 metadata로 따로 꺼내 두었고, 공개되는 파일 두 개에는 EXIF가 없다.
+		assertThat(result.metadata().hasLocation()).isTrue();
+		assertThat(TestImages.containsExif(result.main())).isFalse();
+		assertThat(TestImages.containsExif(result.thumbnail())).isFalse();
+	}
+
+	@Test
+	void EXIF가_없는_사진은_위치와_촬영_시각이_비어_있다() {
+		PhotoMetadata metadata = processor.process(upload(TestImages.jpeg(200, 100))).metadata();
+
+		assertThat(metadata.hasLocation()).isFalse();
+		assertThat(metadata.takenAt()).isNull();
 	}
 
 	@Test

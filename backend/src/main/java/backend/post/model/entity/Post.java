@@ -51,6 +51,9 @@ public class Post {
 	@Column(nullable = false)
 	private String thumbnailKey;
 
+	// 사진을 찍은 시각 (EXIF). 위치 제공에 동의했고 사진에 정보가 있을 때만 채워진다. 식사 시간대 분석용
+	private Instant photoTakenAt;
+
 	// @Enumerated(STRING): enum을 숫자(0, 1, 2) 대신 이름("ACTIVE")으로 저장한다.
 	// 숫자로 저장하면 나중에 enum 순서를 바꿨을 때 기존 데이터의 의미가 바뀌어 버린다.
 	// @JdbcTypeCode(VARCHAR): 컬럼을 MySQL의 ENUM 타입이 아닌 VARCHAR로 만든다.
@@ -73,12 +76,13 @@ public class Post {
 	}
 
 	// 새 글을 만들 때 쓰는 생성자. 상태와 작성 시각은 여기서 정해서, 빠뜨릴 수 없게 한다.
-	public Post(String nickname, String passwordHash, String memo, String imageKey, String thumbnailKey) {
+	public Post(String nickname, String passwordHash, String memo, String imageKey, String thumbnailKey, Instant photoTakenAt) {
 		this.nickname = nickname;
 		this.passwordHash = passwordHash;
 		this.memo = memo;
 		this.imageKey = imageKey;
 		this.thumbnailKey = thumbnailKey;
+		this.photoTakenAt = photoTakenAt;
 		this.status = PostStatus.ACTIVE;
 		this.createdAt = Instant.now();
 	}
@@ -115,6 +119,10 @@ public class Post {
 
 	public String getThumbnailKey() {
 		return thumbnailKey;
+	}
+
+	public Instant getPhotoTakenAt() {
+		return photoTakenAt;
 	}
 
 	public PostStatus getStatus() {

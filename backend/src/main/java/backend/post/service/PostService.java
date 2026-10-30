@@ -1,17 +1,23 @@
 package backend.post.service;
 
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.data.domain.Limit;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
 import backend.image.ImageProcessor;
 import backend.image.LocalImageStorage;
+import backend.image.PhotoMetadata;
 import backend.image.ProcessedImage;
+import backend.location.model.entity.PostLocation;
+import backend.location.model.repository.PostLocationRepository;
+import backend.location.model.vo.GeoPoint;
 import backend.post.model.dto.FeedPage;
 import backend.post.model.dto.PostCreateForm;
 import backend.post.model.dto.PostSummary;
@@ -37,22 +43,29 @@ public class PostService {
 	private static final int PAGE_SIZE = 20;
 
 	private final PostRepository postRepository;
+	private final PostLocationRepository postLocationRepository;
 	private final ImageProcessor imageProcessor;
 	private final LocalImageStorage imageStorage;
 	private final PasswordEncoder passwordEncoder;
+	// 코드로 트랜잭션 범위를 정하는 도구 (Spring Boot가 자동으로 만들어 둔다)
+	private final TransactionTemplate transactionTemplate;
 
 	// 글 저장. 저장된 글 번호를 돌려준다.
 	// 이 메서드에는 @Transactional을 붙이지 않는다.
 	// 사진 처리는 수백 ms가 걸리는데, 트랜잭션 안에서 하면 그동안 DB 연결을 붙잡고 있게 된다. (기획서 9.2절, LLM 호출과 같은 이유)
-	// DB 작업은 맨 마지막 save() 한 번뿐이고, save()는 그 자체로 트랜잭션 안에서 실행된다.
+	// 그래서 사진 처리를 먼저 끝내고, DB에 저장하는 부분만 트랜잭션으로 묶는다(아래 transactionTemplate).
 	public Long create(PostCreateForm form) {
-		// 사진 검사·회전 보정·EXIF 제거·크기 줄이기. 사진이 아니거나 너무 크면 BusinessException이 난다.
+		// 사진 검사·위치 읽기·회전 보정·EXIF 제거·크기 줄이기. 사진이 아니거나 너무 크면 BusinessException이 난다.
 		ProcessedImage image = imageProcessor.process(form.getImage());
 
 		// 큰 사진과 썸네일을 저장하고, 파일 이름(key)을 받는다.
 		// (DB 저장이 실패하면 파일만 남을 수 있지만, 쓰이지 않는 파일일 뿐이라 MVP에서는 그대로 둔다)
 		String imageKey = imageStorage.saveJpeg(image.main());
 		String thumbnailKey = imageStorage.saveJpeg(image.thumbnail());
+
+		// 위치·촬영 시각은 사용자가 동의했을 때만 쓴다. 동의하지 않았으면 사진에 있었더라도 빈 값으로 취급한다.
+		boolean consent = form.isLocationConsent();
+		PhotoMetadata metadata = consent ? image.metadata() : PhotoMetadata.EMPTY;
 
 		// encode(): 비밀번호를 BCrypt 해시로 바꾼다. 같은 비밀번호도 매번 다른 해시가 나온다(salt).
 		// 나중에 삭제할 때는 matches(입력한 비밀번호, 저장된 해시)로 맞는지만 확인한다.
@@ -61,9 +74,44 @@ public class PostService {
 				passwordEncoder.encode(form.getPassword()),
 				normalizeMemo(form.getMemo()),
 				imageKey,
-				thumbnailKey);
+				thumbnailKey,
+				metadata.takenAt());
 
-		return postRepository.save(post).getId();
+		// 글과 위치, DB 저장 두 건을 하나의 트랜잭션으로 묶는다. (위치 저장이 실패하면 글 저장도 되돌린다)
+		// @Transactional을 붙인 메서드를 따로 만들어 같은 클래스 안에서 부르면 트랜잭션이 걸리지 않는다.
+		// (Spring은 클래스 바깥에서 들어오는 호출에만 트랜잭션을 씌우기 때문 = "self-invocation" 문제)
+		// 그래서 코드로 직접 트랜잭션 범위를 정하는 TransactionTemplate을 쓴다. execute(...) 안이 트랜잭션 범위다.
+		return transactionTemplate.execute(status -> {
+			Post saved = postRepository.save(post);
+			saveLocation(saved, consent, metadata);
+			return saved.getId();
+		});
+	}
+
+	// 동의했고 사진에 GPS 정보가 있으면 위치를 저장한다.
+	// 좌표 값은 로그에도 절대 남기지 않는다. (로그가 유출돼도 사용자의 위치가 드러나지 않게)
+	private void saveLocation(Post post, boolean consent, PhotoMetadata metadata) {
+		if (!consent) {
+			return;
+		}
+		if (!metadata.hasLocation()) {
+			// 동의했지만 사진에 위치가 없는 경우. 아이폰 사파리처럼 업로드할 때 위치를 지우는 브라우저가 있어서,
+			// 동의한 사람 중 실제로 위치가 들어오는 비율(수집률)을 로그로 세어 보려고 남긴다. (기획서 6.2절)
+			log.info("Location consented but no GPS in photo: postId={}", post.getId());
+			return;
+		}
+
+		GeoPoint point;
+		try {
+			point = GeoPoint.of(metadata.latitude(), metadata.longitude());
+		} catch (IllegalArgumentException e) {
+			// 범위를 벗어난 이상한 GPS 값이면 위치만 버리고 글은 그대로 저장한다.
+			log.warn("Invalid GPS in photo: postId={}", post.getId());
+			return;
+		}
+
+		postLocationRepository.save(new PostLocation(post, point, Instant.now()));
+		log.info("Location saved: postId={}", post.getId());
 	}
 
 	// 목록 조회. cursor가 없으면 첫 화면, 있으면 그 번호 다음 글부터 가져온다.
@@ -107,6 +155,9 @@ public class PostService {
 
 		// 상태만 바꾸면 메서드가 끝날 때(트랜잭션 종료) JPA가 UPDATE를 실행한다.
 		post.deleteByAuthor();
+		// 위치는 상태 변경이 아니라 완전히 지운다. 작성자가 글을 지우는 것을 위치 제공 동의 철회로 본다. (기획서 5.1절)
+		// 위치가 없는 글이면 아무 일도 하지 않는다.
+		postLocationRepository.deleteById(id);
 		log.info("Post deleted by author: postId={}", id);
 	}
 

@@ -7,7 +7,9 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.Date;
 import java.util.Iterator;
+import java.util.TimeZone;
 
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -17,6 +19,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.drew.imaging.ImageMetadataReader;
+import com.drew.imaging.ImageProcessingException;
+import com.drew.lang.GeoLocation;
+import com.drew.metadata.Metadata;
+import com.drew.metadata.exif.ExifSubIFDDirectory;
+import com.drew.metadata.exif.GpsDirectory;
+
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +33,8 @@ import net.coobird.thumbnailator.Thumbnails;
 import net.coobird.thumbnailator.geometry.Positions;
 
 // 올린 사진을 저장하기 전에 다듬는다. (기획서 6.2절)
-// 순서: 1. 진짜 사진인지 검사 → 2. 화소 수 검사 → 3. 방향 바로잡기(회전 보정) → 4. 크기 줄이기 + JPEG로 새로 저장(EXIF 제거)
+// 순서: 1. 진짜 사진인지 검사 → 2. 화소 수 검사 → 3. 위치·촬영 시각 꺼내기 → 4. 방향 바로잡기(회전 보정)
+//       → 5. 크기 줄이기 + JPEG로 새로 저장(EXIF 제거)
 //
 // EXIF: 사진 파일 안에 숨어 있는 정보(촬영 시각, 카메라 기종, GPS 위치, 사진 방향 등)
 // → 그대로 공개하면 누구나 사진을 내려받아 작성자의 위치를 알 수 있어서, 공개하는 사진에는 절대 남기지 않는다.
@@ -43,6 +53,9 @@ public class ImageProcessor {
 	// 확장자(.jpg)나 브라우저가 알려 준 형식은 바꿔치기할 수 있지만, 파일 내용의 시작 부분은 실제 형식을 보여 준다.
 	private static final int[] JPEG_SIGNATURE = {0xFF, 0xD8, 0xFF};
 	private static final int[] PNG_SIGNATURE = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+
+	// 촬영 시각을 읽을 때 쓰는 시간대
+	private static final TimeZone KOREA = TimeZone.getTimeZone("Asia/Seoul");
 
 	// 최대 화소 수 (application.properties의 app.image.max-pixels)
 	private final long maxPixels;
@@ -64,18 +77,21 @@ public class ImageProcessor {
 		// 2. 사진 전체를 펼치기 전에 가로·세로 크기만 먼저 읽어서, 너무 큰 사진을 거절한다.
 		checkPixelCount(original);
 
+		// 3. EXIF를 지우기 전에, 원본에서 위치와 촬영 시각을 꺼내 둔다. (EXIF를 지운 뒤에는 읽을 수 없다)
+		PhotoMetadata metadata = readMetadata(original);
+
 		try {
-			// 3. 사진을 펼치면서 EXIF의 방향 정보를 반영한다.
+			// 4. 사진을 펼치면서 EXIF의 방향 정보를 반영한다.
 			// 휴대폰은 세로 사진도 가로로 저장하고 "90도 돌려서 보여 줘"라는 방향 정보만 EXIF에 적어 둔다.
 			// EXIF를 지우기 전에 이 방향대로 실제로 돌려 두지 않으면, 세로 사진이 눕혀져 보인다.
 			BufferedImage upright = Thumbnails.of(new ByteArrayInputStream(original)).scale(1.0).asBufferedImage();
 			BufferedImage rgb = removeTransparency(upright);
 
-			// 4. 크기를 줄여 JPEG로 새로 저장한다.
+			// 5. 크기를 줄여 JPEG로 새로 저장한다.
 			// 그림(픽셀)만 새 파일로 쓰고 EXIF는 옮겨 적지 않으므로, 이 과정에서 위치 정보 등이 모두 사라진다.
 			byte[] main = toJpeg(fitWithin(rgb, MAIN_MAX_SIZE));
 			byte[] thumbnail = toJpeg(Thumbnails.of(rgb).size(THUMBNAIL_SIZE, THUMBNAIL_SIZE).crop(Positions.CENTER));
-			return new ProcessedImage(main, thumbnail);
+			return new ProcessedImage(main, thumbnail, metadata);
 		} catch (IOException e) {
 			// 형식은 맞지만 읽을 수 없는 사진 (손상된 파일, 인쇄용 CMYK JPEG 등)
 			log.warn("Unreadable image: {}", e.getMessage());
@@ -121,6 +137,33 @@ public class ImageProcessor {
 		} catch (IOException e) {
 			log.warn("Unreadable image header: {}", e.getMessage());
 			throw new BusinessException(ErrorCode.INVALID_IMAGE);
+		}
+	}
+
+	// EXIF에서 GPS 위치와 촬영 시각을 꺼낸다. (metadata-extractor 라이브러리)
+	// 사진에 정보가 없거나 읽다가 문제가 생겨도 글은 올라가야 하므로, 예외를 던지지 않고 비어 있는 결과를 돌려준다.
+	private PhotoMetadata readMetadata(byte[] original) {
+		try {
+			// Metadata: 사진 안의 정보 묶음. 그 안에 GPS, EXIF 같은 "디렉터리"(정보 종류별 칸)가 들어 있다.
+			Metadata metadata = ImageMetadataReader.readMetadata(new ByteArrayInputStream(original));
+
+			// GPS 칸에서 위도·경도를 꺼낸다. 칸이 없거나, 값이 0,0(위치를 못 잡은 사진에 가끔 들어가는 값)이면 위치 없음
+			GpsDirectory gps = metadata.getFirstDirectoryOfType(GpsDirectory.class);
+			GeoLocation location = (gps == null) ? null : gps.getGeoLocation();
+			boolean hasLocation = location != null && !location.isZero();
+
+			// EXIF 칸에서 촬영 시각(DateTimeOriginal)을 꺼낸다.
+			// EXIF의 시각에는 시간대가 없는 경우가 많아서(예: "2026:10:29 12:30:00"), 한국 시간으로 보고 읽는다.
+			ExifSubIFDDirectory exif = metadata.getFirstDirectoryOfType(ExifSubIFDDirectory.class);
+			Date takenAt = (exif == null) ? null : exif.getDateOriginal(KOREA);
+
+			return new PhotoMetadata(
+					hasLocation ? location.getLatitude() : null,
+					hasLocation ? location.getLongitude() : null,
+					takenAt == null ? null : takenAt.toInstant());
+		} catch (ImageProcessingException | IOException e) {
+			log.warn("Unreadable photo metadata: {}", e.getMessage());
+			return PhotoMetadata.EMPTY;
 		}
 	}
 

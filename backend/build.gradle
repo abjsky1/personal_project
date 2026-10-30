@@ -32,6 +32,8 @@ dependencies {
 	// Thumbnailator: 사진 크기 줄이기·썸네일 만들기. 사진의 EXIF 방향 정보를 읽어 세로 사진을 똑바로 세워 준다.
 	// Spring Boot가 버전을 관리하지 않는 라이브러리라 버전을 직접 적는다.
 	implementation 'net.coobird:thumbnailator:0.4.21'
+	// metadata-extractor: 사진 원본의 EXIF에서 GPS 위치와 촬영 시각을 읽는다. (버전 직접 지정)
+	implementation 'com.drewnoakes:metadata-extractor:2.21.0'
 	// JSP를 실행 가능한 코드로 바꿔 주는 엔진 (내장 Tomcat용)
 	implementation 'org.apache.tomcat.embed:tomcat-embed-jasper'
 	// JSTL: JSP에서 <c:forEach>, <c:if> 같은 태그를 쓰게 해 준다 (규격 + 실제 구현 두 개가 한 쌍)

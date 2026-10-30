@@ -161,6 +161,21 @@ textarea {
 	font-size: 1rem;
 }
 
+/* 체크박스와 글자를 한 줄에 나란히 (일반 label처럼 굵게 하지 않는다) */
+label.checkbox {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 24px;
+	font-weight: 400;
+}
+
+/* 체크박스를 손가락으로 누르기 쉽게 조금 키운다 */
+label.checkbox input {
+	width: 20px;
+	height: 20px;
+}
+
 form button {
 	width: 100%;
 	margin-top: 24px;

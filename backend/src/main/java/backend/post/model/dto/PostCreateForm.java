@@ -27,6 +27,9 @@ public class PostCreateForm {
 	// MultipartFile: form으로 올린 파일. 파일이 있는지, 형식이 맞는지는 Controller에서 직접 검사한다.
 	private MultipartFile image;
 
+	// 위치·촬영 시각 제공 동의 (체크박스). 기본값 false = 동의하지 않음
+	private boolean locationConsent;
+
 	// Spring이 form 값을 채울 때 setter를, JSP가 값을 다시 보여 줄 때 getter를 쓴다.
 	public String getNickname() {
 		return nickname;
@@ -58,5 +61,14 @@ public class PostCreateForm {
 
 	public void setImage(MultipartFile image) {
 		this.image = image;
+	}
+
+	// boolean 필드의 getter는 get 대신 is로 시작하는 것이 자바의 관례다.
+	public boolean isLocationConsent() {
+		return locationConsent;
+	}
+
+	public void setLocationConsent(boolean locationConsent) {
+		this.locationConsent = locationConsent;
 	}
 }

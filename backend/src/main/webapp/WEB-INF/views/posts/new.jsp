@@ -45,6 +45,18 @@
 		<form:textarea path="memo" maxlength="300" rows="3" />
 		<form:errors path="memo" cssClass="error" element="p" />
 
+		<%-- 위치·촬영 시각 제공 동의 (선택, 처음에는 체크되지 않은 상태) --%>
+		<%-- form:checkbox: 체크하면 locationConsent=true가 전송된다. 체크를 안 했을 때도 false로 받을 수 있게 Spring이 숨은 칸을 함께 만든다. --%>
+		<%-- 무엇을, 왜, 얼마나 보관하는지와 거부해도 불이익이 없다는 것을 체크박스 옆에 알린다. (기획서 8절) --%>
+		<label class="checkbox">
+			<form:checkbox path="locationConsent" />
+			위치·촬영 시각 제공에 동의해요 (선택)
+		</label>
+		<p class="hint">
+			사진에 담긴 위치(GPS)와 찍은 시각을 지역·시간대별 음식 통계에 써요.
+			위치는 다른 사람에게 공개되지 않고, 글을 지우면 함께 지워져요. 동의하지 않아도 글을 올릴 수 있어요.
+		</p>
+
 		<button type="submit">올리기</button>
 	</form:form>
 </main>
