@@ -6,3 +6,6 @@ uploads/
 
 # Claude Code 미리보기 설정 (로컬 전용)
 .claude/
+
+# AI 비교용 음식 사진 (개인 사진이라 Git에 올리지 않음)
+samples/
