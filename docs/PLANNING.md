@@ -439,7 +439,7 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 | 3 | 사진 처리 | 매직 바이트 검사(JPEG·PNG), 회전 보정, EXIF 제거, 리사이즈·썸네일 | 완료 |
 | 4 | 위치·촬영 시각 | 동의 시 GPS → `post_locations`, 삭제 시 위치 완전 삭제 | 완료 |
 
-휴대폰 실기기 테스트(아이폰 Safari): 올리기·지우기 ✅, 동의 시 위치 저장 ✅ (사진 보관함에서 고른 사진). 브라우저에서 바로 찍은 사진은 아이폰이 위치 없이 넘겨준다 → `docs/troubleshooting/2026-10-30-iphone-gps-missing.md`. 테스트 중 발견한 연속 누름 중복 등록은 수정 → `docs/troubleshooting/2026-10-30-double-submit.md`. 안드로이드는 아직 확인하지 않음.
+휴대폰 실기기 테스트(아이폰 Safari): 올리기·지우기 ✅, 동의 시 위치 저장 ✅ (사진 보관함에서 고른 사진). 브라우저에서 바로 찍은 사진은 아이폰이 위치 없이 넘겨준다 → `docs/troubleshooting/2026-10-30-iphone-gps-missing.md`. 테스트 중 발견한 연속 누름 중복 등록은 수정 → `docs/troubleshooting/2026-10-30-double-submit.md`. 안드로이드(삼성 Chrome): 올리기·지우기·회전 ✅, 동의 시 촬영 시각 저장 ✅, 위치는 GPS 없이 도착(카메라 위치 태그 꺼짐 또는 안드로이드의 위치 정보 제거 — 같은 트러블슈팅 문서).
 
 단순하게 시작하기 위해: 무한 스크롤 대신 "더 보기" 링크, 사진은 JPEG·PNG만 (WebP는 추가 라이브러리 필요), IP 해시는 S2 rate limit과 함께.
 
