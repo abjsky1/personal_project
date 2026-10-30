@@ -290,7 +290,9 @@ GitHub (main push) → GitHub Actions → Docker 이미지 빌드 → 레지스�
 - [ ] 이미지 처리 동시 실행 수 제한 (6.2절. S1에서는 화소 수 한도만 넣음 — 서버 메모리 크기가 정해지는 S4에서 수치와 함께 결정)
 - [ ] 비밀값: 환경 변수 주입, 레포·이미지에 포함되지 않았는지 확인
 - [ ] 시간대: JVM·MySQL 시간대 설정, 화면 표시 KST 확인
-- [ ] Docker 로그 로테이션 (안 하면 디스크가 가득 차서 서버가 멈춘다)
+- [ ] Docker 로그 로테이션 (안 하면 디스크가 가득 차서 서버가 멈춘다). 개인정보처리방침에 "이용 기록 3개월 보관 후 삭제"로 적었으므로 3개월을 넘기지 않게
+- [ ] S3: 버킷(공개 차단 유지) + EC2용 IAM 역할 (`s3:PutObject`, `s3:GetObject`, `s3:ListBucket`). ListBucket이 없으면 없는 사진을 요청할 때 404 대신 403(권한 없음)이 돌아온다
+- [ ] 서버 환경 변수: `APP_IMAGE_STORAGE=s3`, `APP_S3_BUCKET=버킷이름`, DB 접속 정보, `GEMINI_API_KEY`(AI 배포 때)
 - [ ] DB 자동 백업 켜기 + 복구 1회 해보기
 - [ ] JSP 개발 모드 끄기 (`server.servlet.jsp.init-parameters.development=false`)
 - [ ] Nginx 뒤에서 실제 사용자 IP 받기 (`server.forward-headers-strategy` + Nginx `X-Forwarded-For`). 안 하면 모든 요청이 Nginx IP 하나로 보여서 업로드 횟수 제한이 전체 사용자를 한꺼번에 막는다
@@ -516,6 +518,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-10-31 — 배포 준비 3가지 완료: 사진 저장소 S3 결정(설정 하나로 폴더/S3 전환), 개인정보처리방침 페이지, 업로드 횟수 제한
 - 2026-10-30 — 진행 순서 변경: 배포 준비 3가지 → S4 배포를 S2보다 먼저. Gemini API 유료 등급 전환
 - 2026-10-30 — S2-1 완료: AI 모델을 `gemini-3.5-flash-lite`로 결정 (사진 20장 비교)
 - 2026-10-30 — S1 완료 (아이폰 실기기 확인). 스프린트 기록(`SPRINTS.md`)과 트러블슈팅 기록 시작
