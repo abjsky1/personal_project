@@ -29,6 +29,9 @@ public enum ErrorCode {
 	POST_NOT_FOUND(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."),
 	// 403: 삭제할 때 입력한 비밀번호가 다름
 	INVALID_PASSWORD(HttpStatus.FORBIDDEN, "비밀번호가 맞지 않습니다."),
+	// 429: 같은 곳(IP)에서 너무 자주 올림 (application.properties의 app.rate-limit.*)
+	// (제한 숫자는 설정으로 바뀔 수 있어서 메시지에 숫자를 넣지 않는다)
+	TOO_MANY_UPLOADS(HttpStatus.TOO_MANY_REQUESTS, "업로드가 너무 잦습니다. 잠시 후 다시 올려 주세요."),
 
 	// ---- 사진 ----
 	// 400: 파일 내용이 JPEG·PNG가 아니거나, 읽을 수 없는 사진 (확장자만 바꾼 파일, 아이폰 HEIC 등)

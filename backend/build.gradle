@@ -34,6 +34,10 @@ dependencies {
 	implementation 'net.coobird:thumbnailator:0.4.21'
 	// metadata-extractor: 사진 원본의 EXIF에서 GPS 위치와 촬영 시각을 읽는다. (버전 직접 지정)
 	implementation 'com.drewnoakes:metadata-extractor:2.21.0'
+	// Bucket4j: 업로드 횟수 제한(1분에 몇 번, 하루에 몇 번)을 계산한다. (버전 직접 지정)
+	implementation 'com.bucket4j:bucket4j_jdk17-core:8.21.0'
+	// Caffeine: IP별 남은 횟수를 메모리에 보관하고, 오래 안 쓴 IP는 자동으로 지운다. (버전은 Spring Boot가 관리)
+	implementation 'com.github.ben-manes.caffeine:caffeine'
 	// JSP를 실행 가능한 코드로 바꿔 주는 엔진 (내장 Tomcat용)
 	implementation 'org.apache.tomcat.embed:tomcat-embed-jasper'
 	// JSTL: JSP에서 <c:forEach>, <c:if> 같은 태그를 쓰게 해 준다 (규격 + 실제 구현 두 개가 한 쌍)

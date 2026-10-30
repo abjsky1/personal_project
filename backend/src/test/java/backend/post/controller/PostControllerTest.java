@@ -37,11 +37,16 @@ import backend.post.model.repository.PostRepository;
 //
 // @Transactional: 테스트 하나가 끝나면 그 테스트에서 DB에 저장한 내용을 모두 되돌린다.
 // → 로컬에서 돌려도 내 개발 DB에 테스트 글이 쌓이지 않는다.
-// @TestPropertySource: 이 테스트에서만 설정을 바꾼다. 테스트로 올린 사진은 uploads/ 대신 build/test-uploads/에 저장한다.
+// @TestPropertySource: 이 테스트에서만 설정을 바꾼다.
+// - 테스트로 올린 사진은 uploads/ 대신 build/test-uploads/에 저장한다.
+// - 이 테스트는 같은 IP에서 여러 번 올리므로, 업로드 횟수 제한을 넉넉하게 푼다. (제한 자체는 UploadRateLimitTest에서 검사)
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-@TestPropertySource(properties = "app.upload-dir=build/test-uploads")
+@TestPropertySource(properties = {
+		"app.upload-dir=build/test-uploads",
+		"app.rate-limit.upload-per-minute=1000",
+		"app.rate-limit.upload-per-day=1000" })
 class PostControllerTest {
 
 	@Autowired
