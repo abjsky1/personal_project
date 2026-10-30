@@ -209,6 +209,50 @@ form button {
 	font-weight: 700;
 }
 
+/* ---- 공통 바닥글 ---- */
+.site-footer {
+	margin-top: 48px;
+	padding-top: 16px;
+	border-top: 1px solid #eee;
+	color: #888;
+	font-size: 0.85rem;
+	text-align: center;
+}
+
+.site-footer a {
+	color: #888;
+}
+
+/* ---- 개인정보처리방침: 긴 글이라 읽기 좋은 폭(760px)으로 좁힌다 ---- */
+.policy {
+	max-width: 760px;
+	margin: 0 auto;
+	line-height: 1.7;
+}
+
+.policy h2 {
+	margin-top: 32px;
+	font-size: 1.1rem;
+}
+
+.policy table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.9rem;
+}
+
+.policy th,
+.policy td {
+	padding: 8px;
+	border: 1px solid #ddd;
+	text-align: left;
+	vertical-align: top;
+}
+
+.policy th {
+	background: #f7f7f7;
+}
+
 /* ---- 좁은 화면(휴대폰·작은 태블릿) ---- */
 /* @media (max-width: 768px): 화면 폭이 768px 이하일 때만 아래 규칙을 덧씌운다. */
 @media (max-width: 768px) {

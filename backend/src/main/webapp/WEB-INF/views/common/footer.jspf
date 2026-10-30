@@ -1,0 +1,7 @@
+<%-- 모든 화면 아래쪽에 붙는 공통 바닥글. 각 JSP에서 <%@ include file="..." %>로 끼워 넣는다. --%>
+<%-- .jspf: 단독으로 열리는 화면이 아니라 다른 JSP에 끼워 넣는 조각이라는 뜻의 확장자 --%>
+<%-- 끼워 넣는 조각도 한글이 깨지지 않게 이 파일의 글자 인코딩(UTF-8)을 따로 적어 줘야 한다. --%>
+<%@ page pageEncoding="UTF-8" %>
+<footer class="site-footer">
+	<a href="/privacy">개인정보처리방침</a>
+</footer>

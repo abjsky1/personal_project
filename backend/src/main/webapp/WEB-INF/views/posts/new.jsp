@@ -55,10 +55,15 @@
 		<p class="hint">
 			사진에 담긴 위치(GPS)와 찍은 시각을 지역·시간대별 음식 통계에 써요.
 			위치는 다른 사람에게 공개되지 않고, 글을 지우면 함께 지워져요. 동의하지 않아도 글을 올릴 수 있어요.
+			<%-- target="_blank": 새 탭에서 연다 → 쓰던 글이 사라지지 않는다 --%>
+			<a href="/privacy" target="_blank">개인정보처리방침</a>
 		</p>
 
 		<button type="submit">올리기</button>
 	</form:form>
+
+	<%-- 공통 바닥글 (개인정보처리방침 링크) --%>
+	<%@ include file="/WEB-INF/views/common/footer.jspf" %>
 </main>
 
 <script>

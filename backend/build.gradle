@@ -34,6 +34,10 @@ dependencies {
 	implementation 'net.coobird:thumbnailator:0.4.21'
 	// metadata-extractor: 사진 원본의 EXIF에서 GPS 위치와 촬영 시각을 읽는다. (버전 직접 지정)
 	implementation 'com.drewnoakes:metadata-extractor:2.21.0'
+	// AWS SDK: 배포 서버에서 사진을 S3에 저장하고 꺼낸다.
+	// platform(bom): 여러 AWS 라이브러리의 버전을 한 번에 맞춰 주는 목록. 아래 s3에는 버전을 따로 적지 않는다.
+	implementation platform('software.amazon.awssdk:bom:2.55.16')
+	implementation 'software.amazon.awssdk:s3'
 	// Bucket4j: 업로드 횟수 제한(1분에 몇 번, 하루에 몇 번)을 계산한다. (버전 직접 지정)
 	implementation 'com.bucket4j:bucket4j_jdk17-core:8.21.0'
 	// Caffeine: IP별 남은 횟수를 메모리에 보관하고, 오래 안 쓴 IP는 자동으로 지운다. (버전은 Spring Boot가 관리)

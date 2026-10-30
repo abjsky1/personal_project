@@ -20,6 +20,9 @@
 	</c:if>
 
 	<a class="button" href="/">목록으로</a>
+
+	<%-- 공통 바닥글 (개인정보처리방침 링크) --%>
+	<%@ include file="/WEB-INF/views/common/footer.jspf" %>
 </main>
 </body>
 </html>

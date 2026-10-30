@@ -22,7 +22,7 @@ public record PostSummary(Long id, String nickname, String memo, String imageUrl
 				post.getId(),
 				post.getNickname(),
 				post.getMemo(),
-				// 사진 주소: /images/파일이름 → ImageWebConfig가 uploads 폴더의 파일로 연결해 준다.
+				// 사진 주소: /images/파일이름 → ImageController가 저장소(폴더 또는 S3)에서 꺼내 보내 준다.
 				"/images/" + post.getImageKey(),
 				"/images/" + post.getThumbnailKey(),
 				TIME_FORMAT.format(post.getCreatedAt()));

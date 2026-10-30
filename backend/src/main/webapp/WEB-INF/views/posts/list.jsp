@@ -45,6 +45,9 @@
 	<c:if test="${feed.nextCursor != null}">
 		<a class="more" href="/?cursor=${feed.nextCursor}">더 보기</a>
 	</c:if>
+
+	<%-- 공통 바닥글 (개인정보처리방침 링크) --%>
+	<%@ include file="/WEB-INF/views/common/footer.jspf" %>
 </main>
 </body>
 </html>

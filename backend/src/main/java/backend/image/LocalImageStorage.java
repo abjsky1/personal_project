@@ -5,15 +5,21 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 // 올린 사진을 내 PC의 폴더(uploads/)에 저장한다. (개발용)
-// 배포(S4)에서는 서버를 다시 올리면 폴더 내용이 사라지므로, 이 클래스 대신 S3에 저장하는 클래스로 바꾼다.
+// 배포 서버에서는 서버를 새로 만들면 폴더 내용이 사라지므로 S3ImageStorage를 쓴다.
+//
+// @ConditionalOnProperty: 설정 값에 따라 이 클래스를 쓸지 정한다.
+// app.image-storage=local 이거나, 설정이 아예 없으면(matchIfMissing) 이 클래스가 ImageStorage로 쓰인다.
 @Component
-public class LocalImageStorage {
+@ConditionalOnProperty(name = "app.image-storage", havingValue = "local", matchIfMissing = true)
+public class LocalImageStorage implements ImageStorage {
 
 	// 사진을 저장할 폴더의 전체 경로 (예: C:/personal_project/uploads)
 	// 주의: 자바 코드에는 주석이라도 역슬래시 뒤에 u를 쓰면 안 된다. 자바가 이를 유니코드 문자 코드의 시작으로 읽어서 컴파일 에러가 난다.
@@ -28,6 +34,7 @@ public class LocalImageStorage {
 	}
 
 	// ImageProcessor가 만든 JPEG 파일 내용을 저장하고, 저장한 파일 이름(key)을 돌려준다.
+	@Override
 	public String saveJpeg(byte[] jpeg) {
 		// 파일 이름은 사용자가 올린 이름을 쓰지 않고 무작위 이름(UUID)으로 새로 만든다.
 		// → 이름이 겹쳐 덮어쓰거나, "../" 같은 이름으로 다른 폴더에 저장되는 문제를 막는다.
@@ -44,7 +51,18 @@ public class LocalImageStorage {
 		return key;
 	}
 
-	public Path getRootDir() {
-		return rootDir;
+	// 폴더에서 사진 파일을 읽는다. 파일이 없으면 비어 있는 Optional
+	// (key 모양 검사는 ImageController가 먼저 해서, 여기에는 "uuid.jpg" 모양만 들어온다)
+	@Override
+	public Optional<byte[]> load(String key) {
+		Path file = rootDir.resolve(key);
+		if (!Files.exists(file)) {
+			return Optional.empty();
+		}
+		try {
+			return Optional.of(Files.readAllBytes(file));
+		} catch (IOException e) {
+			throw new UncheckedIOException("사진 파일 읽기 실패: " + key, e);
+		}
 	}
 }

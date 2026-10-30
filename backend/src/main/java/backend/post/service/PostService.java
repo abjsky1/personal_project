@@ -12,7 +12,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
 import backend.image.ImageProcessor;
-import backend.image.LocalImageStorage;
+import backend.image.ImageStorage;
 import backend.image.PhotoMetadata;
 import backend.image.ProcessedImage;
 import backend.location.model.entity.PostLocation;
@@ -45,7 +45,8 @@ public class PostService {
 	private final PostRepository postRepository;
 	private final PostLocationRepository postLocationRepository;
 	private final ImageProcessor imageProcessor;
-	private final LocalImageStorage imageStorage;
+	// 사진 저장소: 내 PC에서는 폴더(LocalImageStorage), 배포 서버에서는 S3(S3ImageStorage)가 들어온다
+	private final ImageStorage imageStorage;
 	private final PasswordEncoder passwordEncoder;
 	// 코드로 트랜잭션 범위를 정하는 도구 (Spring Boot가 자동으로 만들어 둔다)
 	private final TransactionTemplate transactionTemplate;
