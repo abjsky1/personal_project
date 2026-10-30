@@ -1,0 +1,9 @@
+# docker build 때 컨테이너로 보내지 않을 파일 (.gitignore와 같은 역할)
+# 빌드 결과물·캐시는 컨테이너 안에서 새로 만들고, 테스트 코드는 war에 들어가지 않으므로 뺀다.
+# → 보내는 양이 줄어 빌드가 빨라지고, 테스트만 고쳤을 때는 이미지를 다시 만들지 않는다.
+build
+.gradle
+bin
+.vscode
+src/test
+HELP.md

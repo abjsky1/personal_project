@@ -1,0 +1,12 @@
+# 내 PC에서 배포 구성을 미리 시험할 때만 compose.yaml 위에 덧씌우는 설정
+# 내 PC에는 S3 권한이 없으므로, 사진을 S3 대신 컨테이너 안 폴더에 저장한다. (컨테이너를 지우면 사진도 사라진다)
+#
+# 실행 (deploy 폴더에서, 루트의 .env 비밀번호를 그대로 쓴다):
+#   docker compose --env-file ../.env -f compose.yaml -f compose.local.yaml up -d --build
+# 끄기 (DB까지 지우려면 끝에 -v):
+#   docker compose --env-file ../.env -f compose.yaml -f compose.local.yaml down
+services:
+  app:
+    environment:
+      APP_IMAGE_STORAGE: local
+      APP_UPLOAD_DIR: /app/uploads

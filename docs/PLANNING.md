@@ -288,21 +288,25 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - 운영 서버의 로컬 디스크에 이미지 저장 금지 — 컨테이너 재배포 시 사라진다.
 - 롤백: Docker 이미지 태그를 커밋 SHA로 남겨 이전 버전으로 즉시 되돌릴 수 있게 한다.
 
+- **배포 파일** (S4-1): `backend/Dockerfile`(2단계 빌드, `amazoncorretto:17-alpine`, root가 아닌 사용자로 실행), `backend/src/main/resources/application-prod.properties`(배포 서버 전용 설정), `deploy/compose.yaml`(nginx·app·mysql), `deploy/nginx.conf`, `deploy/.env.example`. 내 PC에서 같은 구성을 시험할 때는 `deploy/compose.local.yaml`을 덧씌운다(사진을 S3 대신 컨테이너 안 폴더에).
+- **서버는 x86(t3 계열)**: 이미지를 내 PC·GitHub Actions(둘 다 x86)에서 그대로 만들 수 있다. ARM(t4g)은 이미지를 따로 만들어야 해서 쓰지 않는다.
+- **메모리 실측** (내 PC Docker, 2026-10-31): app 컨테이너 약 650MB(힙 512MB, 4,800만 화소 사진 처리 직후), MySQL 약 460MB, Nginx 약 20MB. 2GB 서버에 운영체제까지 넣으면 여유가 크지 않으므로 swap을 함께 켠다.
+
 **S4 배포 체크리스트** (처음 배포할 때 자주 터지는 것들)
-- [ ] 업로드 한도: Nginx `client_max_body_size`가 Spring 한도와 맞는지 (6.2절)
-- [ ] JVM 힙(`-Xmx`)과 컨테이너 메모리 한도 지정 (이미지 디코딩 OOM 방지)
-- [ ] 이미지 처리 동시 실행 수 제한 (6.2절. S1에서는 화소 수 한도만 넣음 — 서버 메모리 크기가 정해지는 S4에서 수치와 함께 결정)
-- [ ] 비밀값: 환경 변수 주입, 레포·이미지에 포함되지 않았는지 확인
-- [ ] 시간대: JVM·MySQL 시간대 설정, 화면 표시 KST 확인
-- [ ] Docker 로그 로테이션 (안 하면 디스크가 가득 차서 서버가 멈춘다). 개인정보처리방침에 "이용 기록 3개월 보관 후 삭제"로 적었으므로 3개월을 넘기지 않게
+- [x] 업로드 한도: Nginx `client_max_body_size 20m` = Tomcat `max-swallow-size`. 10~20MB는 Spring까지 와서 우리 에러 화면, 20MB 초과는 Nginx 413 화면 (S4-1에서 15MB·25MB로 확인)
+- [x] JVM 힙 `-Xmx512m` + app 컨테이너 메모리 한도 1GB (4,800만 화소 사진이 1.4초에 처리됨)
+- [x] 이미지 처리 동시 실행 수 제한: 한 번에 한 장 (`ImageProcessor.process`에 `synchronized`). 사용자가 늘어 기다림이 생기면 2장으로 늘리는 것을 검토
+- [ ] 비밀값: 환경 변수 주입, 레포·이미지에 포함되지 않았는지 확인 — 이미지에는 없음 ✅ (`.env`는 빌드 대상 폴더 밖), 서버 `.env`는 S4-3
+- [x] 시간대: 시각은 `Instant`(시간대와 무관한 한 시점)로 저장하고 화면은 코드에서 `Asia/Seoul`로 바꿔 보여 주므로 서버 시간대와 상관없다. 컨테이너 `TZ=Asia/Seoul`은 로그 시각을 한국 시간으로 읽기 위해
+- [x] Docker 로그 로테이션: 컨테이너마다 10MB × 3개. 크기 기준이라 사용자가 적으면 3개월보다 오래 남을 수 있음(배포로 컨테이너를 새로 만들면 지워진다) → S4-6에서 "이용 기록 3개월 보관"과 맞는지 확인
 - [ ] S3: 버킷(공개 차단 유지) + EC2용 IAM 역할 (`s3:PutObject`, `s3:GetObject`, `s3:ListBucket`). ListBucket이 없으면 없는 사진을 요청할 때 404 대신 403(권한 없음)이 돌아온다
 - [ ] 서버 환경 변수: `APP_IMAGE_STORAGE=s3`, `APP_S3_BUCKET=버킷이름`, DB 접속 정보, `GEMINI_API_KEY`(AI 배포 때)
 - [ ] DB 백업: 매일 `mysqldump` → S3, 복구 1회 해보기 (DB가 EC2 안에 있으므로 필수)
 - [ ] EC2 종료 방지(termination protection) 켜기 — "중지"와 "종료"를 헷갈려 서버(와 DB)를 날리지 않게
 - [ ] AWS 요금 알림(Budgets) 설정 — 크레딧이 줄거나 예상보다 많이 쓰면 메일로 알림
-- [ ] JSP 개발 모드 끄기 (`server.servlet.jsp.init-parameters.development=false`)
-- [ ] Nginx 뒤에서 실제 사용자 IP 받기 (`server.forward-headers-strategy` + Nginx `X-Forwarded-For`). 안 하면 모든 요청이 Nginx IP 하나로 보여서 업로드 횟수 제한이 전체 사용자를 한꺼번에 막는다
-- [ ] CSS 같은 정적 파일 주소에 버전 붙이기 (배포 후에도 브라우저가 예전 CSS를 쓰는 문제 방지)
+- [x] JSP 개발 모드 끄기 (`server.servlet.jsp.init-parameters.development=false`)
+- [x] Nginx 뒤에서 실제 사용자 IP 받기 (`server.forward-headers-strategy=native` + Nginx `X-Forwarded-For $remote_addr`). 안 하면 모든 요청이 Nginx IP 하나로 보여서 업로드 횟수 제한이 전체 사용자를 한꺼번에 막는다 (S4-1: IP 두 개로 보내서 한쪽만 4번째에 막히는 것 확인)
+- [x] CSS 같은 정적 파일 주소에 버전 붙이기: 내용 지문 방식(`/css/app-해시.css`, 1년 캐시). JSP는 `<c:url>` + `ResourceUrlEncodingFilter`를 직접 등록해야 한다 (Spring Boot가 Thymeleaf 등에만 자동 등록)
 
 ## 11. 운영·관측 (MVP 최소)
 
@@ -318,7 +322,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - **JSON 구조화 로그**: 설정 한 줄(`logging.structured.format.console=ecs`)로 켠다. 로컬은 읽기 쉬운 글자 형식 유지
 - **에러 추적 + 알림**: Sentry (프론트 + 백엔드). 새 에러가 나면 메일로 알림
 - **다운 알림**: 외부 업타임 모니터가 `/actuator/health`를 확인, 응답 없으면 알림
-- **백업**: RDS 자동 백업
+- **백업**: 매일 `mysqldump` → S3 (DB가 EC2 안의 Docker MySQL이라서, 10절)
 
 **장애 기록**: `docs/troubleshooting/YYYY-MM-DD-제목.md` — 현상 / 영향 / 원인 / 해결 / 재발 방지 (개발 중 발견한 문제도 같은 형식으로 남긴다)
 
@@ -463,7 +467,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 
 | # | 조각 | 누가 | 끝나면 되는 것 | 상태 |
 |---|---|---|---|---|
-| 1 | Docker 이미지 + 배포용 설정 | Claude | 내 PC에서 배포 서버와 같은 방식(Docker Compose)으로 사이트가 뜸 | |
+| 1 | Docker 이미지 + 배포용 설정 | Claude | 내 PC에서 배포 서버와 같은 방식(Docker Compose)으로 사이트가 뜸 | ✅ 2026-10-31 |
 | 2 | AWS 계정 준비 | 사용자 (체크리스트) | 요금 알림, 서울 리전, 루트 대신 관리용 IAM 사용자 | |
 | 3 | 서버·S3 만들기 + 첫 배포 | 사용자(AWS 화면) + Claude(명령·설정) | 서버 주소로 접속 가능, 사진이 S3에 저장, DB 매일 백업 | |
 | 4 | 도메인 + HTTPS | 사용자(도메인 구입) + Claude(Nginx 설정) | `https://도메인`으로 접속 | |
@@ -522,7 +526,9 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | 촬영 시각 | 위치와 같은 동의를 받았을 때만 저장 (동의 문구 하나로 위치·촬영 시각을 함께 안내) | 2026-10-30 |
 | 로그 형식 | 로컬은 글자 형식 + `[traceId]`, JSON(ECS)은 배포(S4)에서 켬. 로그 검색 도구가 생기는 시점에 맞춤 | 2026-10-29 |
 | 화면 | React를 빼고 JSP + JSTL로 Spring이 화면까지 만든다 (war 패키징). 서버 하나로 배포가 단순해지고, 최소 구성으로 시작 | 2026-10-29 |
-| DB 테이블 생성 | Flyway를 빼고 JPA `ddl-auto=update`로 자동 생성. 개발 단계에서는 SQL 파일 관리보다 단순함을 우선. 운영 DB 방식은 미정 6번 | 2026-10-29 |
+| DB 테이블 생성 | Flyway를 빼고 JPA `ddl-auto=update`로 자동 생성. 개발 단계에서는 SQL 파일 관리보다 단순함을 우선 | 2026-10-29 |
+| 운영 DB 테이블 | 첫 배포도 `ddl-auto=update` (빈 DB에 테이블을 자동으로 만든다). update는 추가만 하고 삭제·이름 변경은 안 하므로, 그런 변경이 필요해지면 그때 SQL 직접 관리(또는 Flyway)로 바꾼다 | 2026-10-31 |
+| 배포 이미지 | `amazoncorretto:17-alpine` 2단계 빌드, 서버는 x86(t3 계열). 설정은 `prod` 프로필 + 환경 변수 | 2026-10-31 |
 
 **미정**
 
@@ -533,9 +539,11 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | 3 | ~~위치 좌표 저장 정밀도~~ | 결정됨 → 18절 (원본 6자리) |
 | 4 | 레포 구조 | 모노레포 권장 (`backend/`, `infra/`, `docs/`) — 화면은 JSP라 `backend/` 안에 있음 |
 | 5 | AWS 월 예산 | 구성은 결정됨(10절). 무료 플랜 크레딧이 끝난 뒤의 월 예산은 첫 달 요금을 보고 정한다 |
-| 6 | 운영 DB의 스키마 변경 방식 | S4에서 결정. 운영에서는 `ddl-auto`를 `validate` 또는 `none`으로 두고, 테이블 변경 SQL을 직접 관리하는 것이 일반적 (Flyway 재도입 포함 검토) |
+| 6 | ~~운영 DB의 스키마 변경 방식~~ | 결정됨 → 18절 (첫 배포는 `update`, 필요해지면 SQL 직접 관리) |
 
 ## 변경 이력
+
+- 2026-10-31 — S4-1 완료: Docker 이미지 + 배포용 설정(prod 프로필, Nginx, Compose). 내 PC Docker에서 올리기·사진·CSS 지문·IP별 횟수 제한·업로드 한도·메모리 확인
 
 - 2026-10-31 — S4 배포 계획: 새 AWS 계정, EC2 한 대(Docker Compose: Nginx·Spring·MySQL) + S3(사진·DB 백업), 6조각
 - 2026-10-31 — 배포 준비 3가지 완료: 사진 저장소 S3 결정(설정 하나로 폴더/S3 전환), 개인정보처리방침 페이지, 업로드 횟수 제한

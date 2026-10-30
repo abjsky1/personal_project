@@ -67,7 +67,11 @@ public class ImageProcessor {
 		this.maxPixels = maxPixels;
 	}
 
-	public ProcessedImage process(MultipartFile file) {
+	// synchronized: 사진 처리를 한 번에 한 장씩만 한다. (다른 요청은 앞 사진이 끝날 때까지 줄 서서 기다린다)
+	// 사진을 펼치면 화소 수만큼 메모리를 쓴다. 큰 사진(약 5,000만 화소)은 한 장에 수백 MB.
+	// 메모리 2GB 서버에서 큰 사진 여러 장을 동시에 펼치면 메모리가 모자라 서버가 멈출 수 있어서 막는다.
+	// 보통 사진은 1초 안에 끝나므로 사용자가 적은 지금은 기다림이 거의 없다.
+	public synchronized ProcessedImage process(MultipartFile file) {
 		byte[] original = readBytes(file);
 
 		// 1. 파일 내용이 진짜 JPEG·PNG인지 검사한다.

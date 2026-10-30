@@ -8,7 +8,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>음식 칼로리 게시판</title>
 <%-- 모든 화면이 함께 쓰는 스타일 (src/main/webapp/css/app.css) --%>
-<link rel="stylesheet" href="/css/app.css">
+<%-- c:url: 배포 서버에서는 주소 뒤에 파일 내용의 지문이 붙는다 (/css/app-3f2a….css). 개발 PC에서는 그대로 /css/app.css --%>
+<link rel="stylesheet" href="<c:url value='/css/app.css' />">
 </head>
 <body>
 <main>

@@ -63,7 +63,8 @@ public class UploadRateLimitInterceptor implements HandlerInterceptor {
 		}
 
 		// getRemoteAddr(): 요청을 보낸 쪽의 IP
-		// 배포 후 Nginx 뒤에서는 Nginx의 IP가 찍히므로, 실제 사용자 IP를 쓰도록 S4에서 설정한다. (기획서 10절 체크리스트)
+		// 배포 서버에서는 Nginx를 거쳐 오지만, application-prod.properties의 forward-headers-strategy 설정 덕분에
+		// Nginx의 IP가 아니라 진짜 사용자 IP가 나온다.
 		String ip = request.getRemoteAddr();
 		// get(키, 없을 때 만드는 방법): 이 IP의 양동이가 없으면 새로 만들어 넣고, 있으면 그대로 꺼낸다.
 		Bucket bucket = buckets.get(ip, key -> newBucket());

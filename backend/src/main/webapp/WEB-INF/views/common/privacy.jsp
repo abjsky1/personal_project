@@ -8,7 +8,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>개인정보처리방침</title>
-<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="<c:url value='/css/app.css' />">
 </head>
 <body>
 <main>
