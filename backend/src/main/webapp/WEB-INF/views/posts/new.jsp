@@ -62,15 +62,32 @@
 </main>
 
 <script>
-	// 10MB가 넘는 사진은 보내기 전에 막는다.
-	// 서버도 10MB에서 거절하지만, 큰 파일을 끝까지 다 보낸 뒤에 거절당하면 그동안 기다려야 하므로 먼저 확인한다.
-	document.querySelector('form').addEventListener('submit', function (event) {
+	const form = document.querySelector('form');
+	const button = form.querySelector('button[type="submit"]');
+
+	form.addEventListener('submit', function (event) {
+		// 10MB가 넘는 사진은 보내기 전에 막는다.
+		// 서버도 10MB에서 거절하지만, 큰 파일을 끝까지 다 보낸 뒤에 거절당하면 그동안 기다려야 하므로 먼저 확인한다.
 		const file = document.getElementById('image').files[0];
 		if (file && file.size > 10 * 1024 * 1024) {
 			// preventDefault(): form 제출을 멈춘다.
 			event.preventDefault();
 			alert('사진은 10MB까지 올릴 수 있어요.');
+			return;
 		}
+
+		// 여러 번 눌러서 같은 글이 여러 개 올라가는 것을 막는다. (휴대폰 테스트에서 5초 동안 9개가 올라간 문제)
+		// 사진을 보내고 처리하는 데 몇 초가 걸리는데, 그동안 화면이 그대로면 사용자가 버튼을 또 누르게 된다.
+		// → 첫 번째 누름에서 버튼을 바로 막고(disabled), 기다리는 중이라는 것을 글자로 보여 준다.
+		button.disabled = true;
+		button.textContent = '올리는 중…';
+	});
+
+	// 아이폰 Safari 등은 "뒤로 가기"를 하면 이전 화면을 그대로 되살린다(bfcache). 그러면 버튼이 막힌 채로 남아 있게 된다.
+	// pageshow: 화면이 보일 때마다(되살아날 때 포함) 실행된다 → 버튼을 원래대로 돌려놓는다.
+	window.addEventListener('pageshow', function () {
+		button.disabled = false;
+		button.textContent = '올리기';
 	});
 </script>
 </body>

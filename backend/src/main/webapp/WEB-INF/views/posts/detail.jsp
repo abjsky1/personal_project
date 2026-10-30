@@ -26,9 +26,8 @@
 				<p class="memo"><c:out value="${post.memo}" /></p>
 			</c:if>
 
-			<%-- 삭제: 작성할 때 입력한 비밀번호가 맞아야 지워진다. --%>
-			<%-- onsubmit의 confirm(): "정말 삭제할까요?" 창에서 취소를 누르면 false가 되어 전송하지 않는다. --%>
-			<form class="delete-form" action="/posts/${post.id}/delete" method="post" onsubmit="return confirm('정말 삭제할까요?');">
+			<%-- 삭제: 작성할 때 입력한 비밀번호가 맞아야 지워진다. 확인 창과 연속 누름 막기는 아래 script에서 처리한다. --%>
+			<form class="delete-form" action="/posts/${post.id}/delete" method="post">
 				<label for="password">비밀번호</label>
 				<input type="password" id="password" name="password" maxlength="20" required>
 				<%-- deleteError: 비밀번호가 틀렸을 때 Controller가 redirect하면서 넘긴 메시지 (한 번만 보인다) --%>
@@ -40,5 +39,27 @@
 		</div>
 	</div>
 </main>
+
+<script>
+	const deleteForm = document.querySelector('.delete-form');
+	const deleteButton = deleteForm.querySelector('button[type="submit"]');
+
+	deleteForm.addEventListener('submit', function (event) {
+		// confirm(): "정말 삭제할까요?" 창. 취소를 누르면 false → 전송을 멈춘다.
+		if (!confirm('정말 삭제할까요?')) {
+			event.preventDefault();
+			return;
+		}
+		// 연속으로 누르면 두 번째 요청은 이미 지워진 글이라 "게시글을 찾을 수 없습니다" 에러 화면이 나온다. → 첫 번째만 보낸다.
+		deleteButton.disabled = true;
+		deleteButton.textContent = '삭제하는 중…';
+	});
+
+	// "뒤로 가기"로 이 화면이 되살아났을 때 버튼이 막힌 채로 남지 않게 원래대로 돌려놓는다.
+	window.addEventListener('pageshow', function () {
+		deleteButton.disabled = false;
+		deleteButton.textContent = '삭제';
+	});
+</script>
 </body>
 </html>
