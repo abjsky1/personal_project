@@ -1,5 +1,7 @@
 # 내 PC에서 배포 구성을 미리 시험할 때만 compose.yaml 위에 덧씌우는 설정
-# 내 PC에는 S3 권한이 없으므로, 사진을 S3 대신 컨테이너 안 폴더에 저장한다. (컨테이너를 지우면 사진도 사라진다)
+# 내 PC에는 RDS도 S3 권한도 없으므로 대신할 것을 붙인다:
+#   - RDS 대신: mysql 컨테이너 (같은 MySQL 8.4)
+#   - S3 대신: 컨테이너 안 폴더에 사진 저장 (컨테이너를 지우면 사진도 사라진다)
 #
 # 실행 (deploy 폴더에서, 루트의 .env 비밀번호를 그대로 쓴다):
 #   docker compose --env-file ../.env -f compose.yaml -f compose.local.yaml up -d --build
@@ -10,3 +12,26 @@ services:
     environment:
       APP_IMAGE_STORAGE: local
       APP_UPLOAD_DIR: /app/uploads
+    depends_on:
+      # MySQL이 접속을 받을 준비가 된 뒤에 켠다 (안 그러면 DB 연결 실패로 켜지자마자 꺼진다)
+      mysql:
+        condition: service_healthy
+
+  # RDS 대신 쓰는 MySQL. compose.yaml의 DB_HOST 기본값(mysql)이 이 컨테이너를 가리킨다.
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: macros
+      MYSQL_USER: macros
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  mysql-data:

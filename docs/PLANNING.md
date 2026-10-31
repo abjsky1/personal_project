@@ -274,23 +274,26 @@ backend
 - **배포 단계 (S4)**: **AWS**로 배포한다. 첫 배포는 가장 작은 구성으로 시작한다 (2026-10-30 결정):
 
 ```
-[사용자] ─ HTTPS ─ EC2 (Docker Compose: Nginx → Spring war, MySQL) 
-                        ├─ S3 (사진, 비공개 — Spring이 꺼내서 보냄)
-                        └─ S3 (DB 백업, 매일)
+[사용자] ─ HTTPS ─ EC2 (Docker Compose: Nginx → Spring war)
+                        ├─ RDS (MySQL 8.4, 외부에 비공개 — EC2에서만 접속)
+                        └─ S3 (사진, 비공개 — Spring이 꺼내서 보냄)
 GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 → 레지스트리 → EC2에서 pull & 재시작
 ```
 
 - **AWS 계정**: 새로 만든다 (무료 플랜: 가입 크레딧 + 활동 크레딧, 6개월).
-- **DB는 EC2 안의 Docker MySQL** (RDS 대신, 추가 비용 0). 대신 **서버를 지우면 DB도 사라지므로**: 매일 `mysqldump` → S3 백업, 복구 1회 연습, EC2 종료 방지(termination protection) 켜기. 서버 하나에 Spring·MySQL·Nginx가 함께 돌므로 메모리 2GB 이상(+ swap).
-- CloudFront, RDS는 사용자가 늘거나 운영이 익숙해진 뒤 검토한다.
+- **DB는 RDS** (2026-10-31 변경, 처음엔 EC2 안 Docker MySQL). 메모리를 재 보니 한 서버에 Spring(약 650MB)과 MySQL(약 460MB)을 같이 두면 2GB 서버에 여유가 없어서, DB를 AWS가 관리하는 RDS로 뺐다. 덤으로 자동 백업이 생기고, EC2를 지워도 DB는 남는다.
+  - 가장 작은 무료 플랜 대상 크기(`db.t4g.micro` 등), MySQL 8.4 (로컬과 같은 버전), 처음 만들 DB 이름 `macros`, 마스터 사용자 `macros`
+  - 공개 접근 끄기, 보안 그룹은 EC2에서 오는 3306만 허용
+  - 자동 백업 켜기, 삭제 방지(deletion protection) 켜기
+- CloudFront는 사용자가 늘거나 운영이 익숙해진 뒤 검토한다.
 
 - 이미지 저장소를 인터페이스로 분리해 두었으므로 로컬 → S3 전환은 구현체 교체와 설정 변경으로 끝난다.
 - 운영 서버의 로컬 디스크에 이미지 저장 금지 — 컨테이너 재배포 시 사라진다.
 - 롤백: Docker 이미지 태그를 커밋 SHA로 남겨 이전 버전으로 즉시 되돌릴 수 있게 한다.
 
-- **배포 파일** (S4-1): `backend/Dockerfile`(2단계 빌드, `amazoncorretto:17-alpine`, root가 아닌 사용자로 실행), `backend/src/main/resources/application-prod.properties`(배포 서버 전용 설정), `deploy/compose.yaml`(nginx·app·mysql), `deploy/nginx.conf`, `deploy/.env.example`. 내 PC에서 같은 구성을 시험할 때는 `deploy/compose.local.yaml`을 덧씌운다(사진을 S3 대신 컨테이너 안 폴더에).
-- **서버는 x86(t3 계열)**: 이미지를 내 PC·GitHub Actions(둘 다 x86)에서 그대로 만들 수 있다. ARM(t4g)은 이미지를 따로 만들어야 해서 쓰지 않는다.
-- **메모리 실측** (내 PC Docker, 2026-10-31): app 컨테이너 약 650MB(힙 512MB, 4,800만 화소 사진 처리 직후), MySQL 약 460MB, Nginx 약 20MB. 2GB 서버에 운영체제까지 넣으면 여유가 크지 않으므로 swap을 함께 켠다.
+- **배포 파일** (S4-1): `backend/Dockerfile`(2단계 빌드, `amazoncorretto:17-alpine`, root가 아닌 사용자로 실행), `backend/src/main/resources/application-prod.properties`(배포 서버 전용 설정), `deploy/compose.yaml`(nginx·app, DB는 `.env`의 `DB_HOST` = RDS 주소), `deploy/nginx.conf`, `deploy/.env.example`. 내 PC에서 같은 구성을 시험할 때는 `deploy/compose.local.yaml`을 덧씌운다(RDS 대신 mysql 컨테이너, S3 대신 컨테이너 안 폴더).
+- **서버는 x86(t3 계열)**: 이미지를 내 PC·GitHub Actions(둘 다 x86)에서 그대로 만들 수 있다. ARM(t4g)은 이미지를 따로 만들어야 해서 쓰지 않는다. (RDS는 AWS가 관리하므로 ARM이어도 상관없다)
+- **메모리 실측** (내 PC Docker, 2026-10-31): app 컨테이너 약 650MB(힙 512MB, 4,800만 화소 사진 처리 직후), MySQL 약 460MB, Nginx 약 20MB. → MySQL을 RDS로 빼면 EC2에는 app + Nginx + 운영체제만 남아 2GB 서버(t3.small)에 여유가 생긴다. 1GB 서버는 빠듯해서 쓰지 않는다.
 
 **S4 배포 체크리스트** (처음 배포할 때 자주 터지는 것들)
 - [x] 업로드 한도: Nginx `client_max_body_size 20m` = Tomcat `max-swallow-size`. 10~20MB는 Spring까지 와서 우리 에러 화면, 20MB 초과는 Nginx 413 화면 (S4-1에서 15MB·25MB로 확인)
@@ -300,9 +303,10 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - [x] 시간대: 시각은 `Instant`(시간대와 무관한 한 시점)로 저장하고 화면은 코드에서 `Asia/Seoul`로 바꿔 보여 주므로 서버 시간대와 상관없다. 컨테이너 `TZ=Asia/Seoul`은 로그 시각을 한국 시간으로 읽기 위해
 - [x] Docker 로그 로테이션: 컨테이너마다 10MB × 3개. 크기 기준이라 사용자가 적으면 3개월보다 오래 남을 수 있음(배포로 컨테이너를 새로 만들면 지워진다) → S4-6에서 "이용 기록 3개월 보관"과 맞는지 확인
 - [ ] S3: 버킷(공개 차단 유지) + EC2용 IAM 역할 (`s3:PutObject`, `s3:GetObject`, `s3:ListBucket`). ListBucket이 없으면 없는 사진을 요청할 때 404 대신 403(권한 없음)이 돌아온다
-- [ ] 서버 환경 변수: `APP_IMAGE_STORAGE=s3`, `APP_S3_BUCKET=버킷이름`, DB 접속 정보, `GEMINI_API_KEY`(AI 배포 때)
-- [ ] DB 백업: 매일 `mysqldump` → S3, 복구 1회 해보기 (DB가 EC2 안에 있으므로 필수)
-- [ ] EC2 종료 방지(termination protection) 켜기 — "중지"와 "종료"를 헷갈려 서버(와 DB)를 날리지 않게
+- [ ] 서버 `.env`: `DB_HOST`(RDS 엔드포인트), `MYSQL_PASSWORD`(RDS 마스터 비밀번호), `APP_S3_BUCKET`, `GEMINI_API_KEY`(AI 배포 때). 사진 저장소 s3는 prod 프로필이 이미 켠다
+- [ ] RDS: 공개 접근 끄기 + 보안 그룹은 EC2에서만 3306 허용, 자동 백업 켜기, 복구 1회 해보기
+- [ ] RDS 삭제 방지(deletion protection) 켜기 — 실수로 DB를 지우지 않게
+- [ ] app 컨테이너를 새로 만든 뒤(재배포)에도 Nginx가 502 없이 연결되는지 확인 (S4-5). Nginx는 켜질 때 app 주소를 한 번만 찾아 두기 때문에, app 주소가 바뀌면 끊길 수 있다
 - [ ] AWS 요금 알림(Budgets) 설정 — 크레딧이 줄거나 예상보다 많이 쓰면 메일로 알림
 - [x] JSP 개발 모드 끄기 (`server.servlet.jsp.init-parameters.development=false`)
 - [x] Nginx 뒤에서 실제 사용자 IP 받기 (`server.forward-headers-strategy=native` + Nginx `X-Forwarded-For $remote_addr`). 안 하면 모든 요청이 Nginx IP 하나로 보여서 업로드 횟수 제한이 전체 사용자를 한꺼번에 막는다 (S4-1: IP 두 개로 보내서 한쪽만 4번째에 막히는 것 확인)
@@ -322,7 +326,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - **JSON 구조화 로그**: 설정 한 줄(`logging.structured.format.console=ecs`)로 켠다. 로컬은 읽기 쉬운 글자 형식 유지
 - **에러 추적 + 알림**: Sentry (프론트 + 백엔드). 새 에러가 나면 메일로 알림
 - **다운 알림**: 외부 업타임 모니터가 `/actuator/health`를 확인, 응답 없으면 알림
-- **백업**: 매일 `mysqldump` → S3 (DB가 EC2 안의 Docker MySQL이라서, 10절)
+- **백업**: RDS 자동 백업 (10절)
 
 **장애 기록**: `docs/troubleshooting/YYYY-MM-DD-제목.md` — 현상 / 영향 / 원인 / 해결 / 재발 방지 (개발 중 발견한 문제도 같은 형식으로 남긴다)
 
@@ -469,7 +473,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 |---|---|---|---|---|
 | 1 | Docker 이미지 + 배포용 설정 | Claude | 내 PC에서 배포 서버와 같은 방식(Docker Compose)으로 사이트가 뜸 | ✅ 2026-10-31 |
 | 2 | AWS 계정 준비 | 사용자 (체크리스트) | 요금 알림, 서울 리전, 루트 대신 관리용 IAM 사용자 | |
-| 3 | 서버·S3 만들기 + 첫 배포 | 사용자(AWS 화면) + Claude(명령·설정) | 서버 주소로 접속 가능, 사진이 S3에 저장, DB 매일 백업 | |
+| 3 | 서버(EC2)·RDS·S3 만들기 + 첫 배포 | 사용자(AWS 화면) + Claude(명령·설정) | 서버 주소로 접속 가능, 글이 RDS에·사진이 S3에 저장, RDS 자동 백업 켜짐 | |
 | 4 | 도메인 + HTTPS | 사용자(도메인 구입) + Claude(Nginx 설정) | `https://도메인`으로 접속 | |
 | 5 | 자동 배포 | Claude + 사용자(GitHub 비밀값 등록) | main에 push하면 몇 분 뒤 서버에 반영 | |
 | 6 | 감시·백업 점검 | 함께 | 다운 알림, 백업 복구 연습, 로그 정리 | |
@@ -529,6 +533,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | DB 테이블 생성 | Flyway를 빼고 JPA `ddl-auto=update`로 자동 생성. 개발 단계에서는 SQL 파일 관리보다 단순함을 우선 | 2026-10-29 |
 | 운영 DB 테이블 | 첫 배포도 `ddl-auto=update` (빈 DB에 테이블을 자동으로 만든다). update는 추가만 하고 삭제·이름 변경은 안 하므로, 그런 변경이 필요해지면 그때 SQL 직접 관리(또는 Flyway)로 바꾼다 | 2026-10-31 |
 | 배포 이미지 | `amazoncorretto:17-alpine` 2단계 빌드, 서버는 x86(t3 계열). 설정은 `prod` 프로필 + 환경 변수 | 2026-10-31 |
+| 운영 DB | **RDS MySQL 8.4** (EC2 안 Docker MySQL에서 변경). 메모리 실측 결과 2GB 서버에 Spring·MySQL을 함께 두면 여유가 없어서. 자동 백업·EC2와 분리라는 이점도 있음 | 2026-10-31 |
 
 **미정**
 
@@ -543,6 +548,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-10-31 — 운영 DB를 EC2 안 Docker MySQL → RDS로 변경 (메모리 실측 결과). 서버 Compose에서 mysql을 빼고 `DB_HOST`로 RDS에 접속, 매일 `mysqldump` 백업 대신 RDS 자동 백업
 - 2026-10-31 — S4-1 완료: Docker 이미지 + 배포용 설정(prod 프로필, Nginx, Compose). 내 PC Docker에서 올리기·사진·CSS 지문·IP별 횟수 제한·업로드 한도·메모리 확인
 
 - 2026-10-31 — S4 배포 계획: 새 AWS 계정, EC2 한 대(Docker Compose: Nginx·Spring·MySQL) + S3(사진·DB 백업), 6조각

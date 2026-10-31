@@ -1,4 +1,5 @@
-# 배포 서버(EC2)에서 실행하는 구성: [사용자] → nginx(80번) → app(Spring, 8080) → mysql
+# 배포 서버(EC2)에서 실행하는 구성: [사용자] → nginx(80번) → app(Spring, 8080) → RDS(MySQL, 서버 밖)
+# DB는 이 파일에 없다: AWS가 관리하는 RDS를 쓰고, app이 .env의 DB_HOST(RDS 주소)로 접속한다.
 # 실행: deploy 폴더에서  docker compose up -d --build
 # 비밀값은 같은 폴더의 .env에서 읽는다 (.env.example을 복사해서 채운다. Git에는 올라가지 않는다)
 
@@ -43,9 +44,12 @@ services:
       # application-prod.properties를 켠다
       SPRING_PROFILES_ACTIVE: prod
       # ${이름}: .env의 값을 넣는다
+      # DB_HOST: RDS 주소. :- 뒤의 mysql은 .env에 값이 없을 때 쓰는 기본값으로,
+      # 내 PC 시험용 compose.local.yaml이 띄우는 mysql 컨테이너를 가리킨다.
+      DB_HOST: ${DB_HOST:-mysql}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       APP_S3_BUCKET: ${APP_S3_BUCKET:-}
-      # :- 뒤는 .env에 값이 없을 때 쓰는 기본값 (AI 기능은 아직 배포 전이라 비어 있어도 된다)
+      # AI 기능은 아직 배포 전이라 비어 있어도 된다
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       # JVM 옵션: 자바가 쓸 메모리(힙)를 최대 512MB로 묶는다.
       # 서버 메모리 2GB를 MySQL·Nginx·운영체제와 나눠 쓰므로, 자바가 메모리를 끝없이 늘리지 않게 한다.
@@ -53,10 +57,6 @@ services:
       TZ: Asia/Seoul
     # 컨테이너 전체 메모리 한도 (힙 512MB + 자바 자체가 쓰는 메모리). 넘으면 이 컨테이너만 꺼졌다가 다시 켜진다.
     mem_limit: 1g
-    depends_on:
-      # MySQL이 접속을 받을 준비가 된 뒤에 켠다 (안 그러면 DB 연결 실패로 켜지자마자 꺼진다)
-      mysql:
-        condition: service_healthy
     # 상태 검사: 서버가 요청을 받을 수 있는지 30초마다 확인한다 (docker ps에 healthy로 표시)
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/actuator/health"]
@@ -66,27 +66,3 @@ services:
       start_period: 60s
       retries: 3
     logging: *logging
-
-  mysql:
-    image: mysql:8.4
-    restart: unless-stopped
-    # ports가 없다: DB는 밖에 열지 않는다 (app만 접속)
-    environment:
-      MYSQL_DATABASE: macros
-      MYSQL_USER: macros
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      TZ: Asia/Seoul
-    volumes:
-      # DB 파일은 컨테이너가 아니라 Docker 볼륨에 둔다 → 컨테이너를 새로 만들어도 데이터가 남는다
-      # (서버 자체를 지우면 같이 사라지므로 매일 S3에 백업한다: S4-3)
-      - mysql-data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-    logging: *logging
-
-volumes:
-  mysql-data:
