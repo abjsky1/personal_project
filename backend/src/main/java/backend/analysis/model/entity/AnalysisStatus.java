@@ -9,5 +9,7 @@ public enum AnalysisStatus {
 	// 분석은 끝났지만 음식 사진이 아니었음
 	NOT_FOOD,
 	// 실패 (시간 초과, 이상한 응답 등). 이유는 errorMessage에 적는다.
-	FAILED
+	FAILED,
+	// 오늘 분석 횟수 상한을 넘어서 AI를 부르지 않았음
+	LIMIT_EXCEEDED
 }

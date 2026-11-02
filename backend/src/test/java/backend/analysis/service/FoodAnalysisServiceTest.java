@@ -1,10 +1,14 @@
 package backend.analysis.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,13 +31,14 @@ class FoodAnalysisServiceTest {
 
 	private static final Long POST_ID = 1L;
 	private static final String IMAGE_KEY = "photo.jpg";
+	private static final int DAILY_LIMIT = 200;
 
 	private final FoodAnalysisRepository repository = mock(FoodAnalysisRepository.class);
 	private final FoodAnalyzer analyzer = mock(FoodAnalyzer.class);
 	private final ImageStorage storage = mock(ImageStorage.class);
 	private final byte[] jpeg = {1, 2, 3};
 
-	private final FoodAnalysisService service = new FoodAnalysisService(repository, analyzer, storage, JsonMapper.builder().build());
+	private final FoodAnalysisService service = new FoodAnalysisService(repository, analyzer, storage, JsonMapper.builder().build(), DAILY_LIMIT);
 
 	private FoodAnalysis analysis;
 
@@ -130,6 +135,40 @@ class FoodAnalysisServiceTest {
 		service.analyze(POST_ID, IMAGE_KEY);
 
 		assertThatFailed("UNEXPECTED");
+	}
+
+	@Test
+	void 오늘_횟수가_상한에_닿으면_AI를_부르지_않고_LIMIT_EXCEEDED로_저장한다() {
+		when(repository.countByCompletedAtGreaterThanEqual(any())).thenReturn((long) DAILY_LIMIT);
+
+		service.analyze(POST_ID, IMAGE_KEY);
+
+		assertThat(analysis.getStatus()).isEqualTo(AnalysisStatus.LIMIT_EXCEEDED);
+		// AI를 부르지 않았으니 오늘 횟수에 세면 안 된다.
+		assertThat(analysis.getCompletedAt()).isNull();
+		assertThat(analysis.getAttemptCount()).isZero();
+		verify(analyzer, never()).analyze(any());
+		verify(repository).save(analysis);
+	}
+
+	@Test
+	void 상한보다_하나_적으면_분석한다() {
+		when(repository.countByCompletedAtGreaterThanEqual(any())).thenReturn(DAILY_LIMIT - 1L);
+		aiAnswers(new FoodAnalysisResult(false, List.of(), "HIGH", "음식이 아니에요"));
+
+		service.analyze(POST_ID, IMAGE_KEY);
+
+		verify(analyzer).analyze(jpeg);
+	}
+
+	@Test
+	void 오늘_횟수는_한국_시간_자정부터_센다() {
+		ZoneId korea = ZoneId.of("Asia/Seoul");
+		aiAnswers(new FoodAnalysisResult(false, List.of(), "HIGH", "음식이 아니에요"));
+
+		service.analyze(POST_ID, IMAGE_KEY);
+
+		verify(repository).countByCompletedAtGreaterThanEqual(LocalDate.now(korea).atStartOfDay(korea).toInstant());
 	}
 
 	private void aiAnswers(FoodAnalysisResult result) {

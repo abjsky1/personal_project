@@ -76,7 +76,7 @@ public class FoodAnalysis {
 
 	private Long latencyMs;
 
-	// 시도 횟수 (S2-4 자동 재시도에서 쓴다)
+	// AI를 부른 횟수 (지금은 다시 시도하지 않아서 0 또는 1이다)
 	@Column(nullable = false)
 	private int attemptCount;
 
@@ -87,6 +87,7 @@ public class FoodAnalysis {
 	@Column(nullable = false)
 	private Instant createdAt;
 
+	// AI 호출이 끝난 시각. 하루 분석 횟수를 셀 때도 쓴다. AI를 부르지 않았으면(PENDING, LIMIT_EXCEEDED) 비어 있다.
 	private Instant completedAt;
 
 	protected FoodAnalysis() {
@@ -125,6 +126,11 @@ public class FoodAnalysis {
 		this.attemptCount++;
 		this.latencyMs = latencyMs;
 		this.completedAt = Instant.now();
+	}
+
+	// 오늘 분석 횟수 상한을 넘었을 때. AI를 부르지 않았으므로 시도 횟수와 완료 시각은 그대로 둔다.
+	public void markLimitExceeded() {
+		this.status = AnalysisStatus.LIMIT_EXCEEDED;
 	}
 
 	private void finishCall(FoodAnalyzerResponse response, long latencyMs) {

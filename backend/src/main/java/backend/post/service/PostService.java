@@ -103,7 +103,7 @@ public class PostService {
 		return postId;
 	}
 
-	// 분석 줄이 가득 차 있어도 글 올리기는 성공시킨다. 그 글은 PENDING으로 남아 있다가 자동 재시도(S2-4)가 처리한다.
+	// 분석 줄이 가득 차 있어도 글 올리기는 성공시킨다. 그 글은 PENDING으로 남는다. (자동 재시도는 아직 없다, 기획서 6.1절)
 	private void startAnalysis(Long postId, String imageKey) {
 		try {
 			foodAnalysisService.analyzeInBackground(postId, imageKey);

@@ -58,6 +58,7 @@ public class Post {
 	// 숫자로 저장하면 나중에 enum 순서를 바꿨을 때 기존 데이터의 의미가 바뀌어 버린다.
 	// @JdbcTypeCode(VARCHAR): 컬럼을 MySQL의 ENUM 타입이 아닌 VARCHAR로 만든다.
 	// 그냥 두면 ENUM('ACTIVE', ...)으로 만들어지는데, 나중에 상태를 하나 추가하면 ddl-auto=update가 기존 컬럼을 고치지 않아서 저장이 실패한다.
+	// (같은 이유로 CHECK 제약도 만들지 않는다: NoColumnCheckMySQLDialect)
 	@Enumerated(EnumType.STRING)
 	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false, length = 30)

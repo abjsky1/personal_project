@@ -1,9 +1,13 @@
 package backend.analysis.service;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.stream.Stream;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,7 +23,6 @@ import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
 import backend.image.ImageStorage;
 import backend.post.model.entity.PostStatus;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
@@ -27,16 +30,32 @@ import tools.jackson.databind.json.JsonMapper;
 // AI 분석을 실행하고 결과를 저장한다.
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class FoodAnalysisService {
 
 	// 합계가 이보다 크면 AI 응답을 믿지 않고 실패로 처리한다. (한 끼 10,000kcal 같은 이상치, 기획서 6.3절)
 	private static final double MAX_TOTAL = 10_000;
+	// 하루의 기준: 한국 시간 자정
+	private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
 
 	private final FoodAnalysisRepository foodAnalysisRepository;
 	private final FoodAnalyzer foodAnalyzer;
 	private final ImageStorage imageStorage;
 	private final JsonMapper jsonMapper;
+	// 전체 하루 분석 횟수 상한 (application.properties의 app.analysis.daily-limit)
+	private final int dailyLimit;
+
+	public FoodAnalysisService(
+			FoodAnalysisRepository foodAnalysisRepository,
+			FoodAnalyzer foodAnalyzer,
+			ImageStorage imageStorage,
+			JsonMapper jsonMapper,
+			@Value("${app.analysis.daily-limit}") int dailyLimit) {
+		this.foodAnalysisRepository = foodAnalysisRepository;
+		this.foodAnalyzer = foodAnalyzer;
+		this.imageStorage = imageStorage;
+		this.jsonMapper = jsonMapper;
+		this.dailyLimit = dailyLimit;
+	}
 
 	// @Async: 이 메서드를 부른 쪽은 끝날 때까지 기다리지 않고, 일은 뒤에서 다른 스레드(일꾼)가 한다.
 	// → 사용자는 AI 응답을 기다리지 않고 글 올리기를 바로 끝낼 수 있다. (일꾼 수는 application.properties)
@@ -55,6 +74,13 @@ public class FoodAnalysisService {
 			return;
 		}
 
+		if (isDailyLimitReached()) {
+			analysis.markLimitExceeded();
+			foodAnalysisRepository.save(analysis);
+			log.warn("Daily analysis limit reached: postId={}, limit={}", postId, dailyLimit);
+			return;
+		}
+
 		long startedAt = System.currentTimeMillis();
 		try {
 			byte[] jpeg = imageStorage.load(imageKey).orElseThrow(() -> new FoodAnalysisException("IMAGE_NOT_FOUND"));
@@ -67,6 +93,14 @@ public class FoodAnalysisService {
 			log.error("Unexpected food analysis error: postId={}", postId, e);
 			saveFailure(analysis, "UNEXPECTED", startedAt);
 		}
+	}
+
+	// 오늘(한국 시간 자정부터) AI 호출이 몇 번 끝났는지 DB에서 센다.
+	// 메모리가 아니라 DB에서 세는 이유: 배포로 서버를 다시 켜도 오늘 횟수가 0으로 돌아가지 않는다.
+	// 일꾼 2명이 동시에 분석하면 상한을 1~2건 넘을 수 있지만, 비용을 막는 장치라 그 정도는 괜찮다.
+	private boolean isDailyLimitReached() {
+		Instant startOfToday = LocalDate.now(KOREA).atStartOfDay(KOREA).toInstant();
+		return foodAnalysisRepository.countByCompletedAtGreaterThanEqual(startOfToday) >= dailyLimit;
 	}
 
 	private void saveResult(FoodAnalysis analysis, FoodAnalyzerResponse response, long latencyMs) {

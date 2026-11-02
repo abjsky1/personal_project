@@ -66,6 +66,9 @@
 						<c:when test="${analysis.status == 'FAILED'}">
 							<p>칼로리 분석에 실패했어요.</p>
 						</c:when>
+						<c:when test="${analysis.status == 'LIMIT_EXCEEDED'}">
+							<p>오늘 분석 횟수가 다 차서 이 사진은 칼로리를 분석하지 못했어요.</p>
+						</c:when>
 						<c:otherwise>
 							<p id="analysis-pending">칼로리를 분석하고 있어요…</p>
 						</c:otherwise>
