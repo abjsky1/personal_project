@@ -83,6 +83,12 @@ button {
 	background: #eee;
 }
 
+.card-kcal {
+	margin: 8px 0 0;
+	font-size: 1.1rem;
+	font-weight: 700;
+}
+
 .meta {
 	margin: 8px 0 0;
 	color: #666;

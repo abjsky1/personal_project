@@ -404,7 +404,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 
 ## 13. 화면 주소·API
 
-화면은 JSP로 만들고, HTML form은 GET·POST만 보낼 수 있으므로 삭제도 POST로 받는다. 저장·삭제 후에는 목록으로 redirect한다 (새로고침 시 중복 저장 방지).
+화면은 JSP로 만들고, HTML form은 GET·POST만 보낼 수 있으므로 삭제도 POST로 받는다. 저장 후에는 그 글의 상세 화면으로, 삭제 후에는 목록으로 redirect한다 (새로고침 시 중복 저장 방지).
 
 **게시글 (S1)**
 
@@ -412,7 +412,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 |---|---|---|
 | GET | `/` | 목록 (최신순 20개, ACTIVE만). "더 보기" = `/?cursor={마지막 글 id}` |
 | GET | `/posts/new` | 글쓰기 화면 |
-| POST | `/posts` | multipart(image, nickname, password, memo) 저장 → `/`로 이동. 검사에 걸리면 글쓰기 화면에 칸별 메시지 |
+| POST | `/posts` | multipart(image, nickname, password, memo) 저장 → `/posts/{id}`로 이동. 검사에 걸리면 글쓰기 화면에 칸별 메시지 |
 | GET | `/posts/{id}` | 상세 화면 (S1-2) |
 | POST | `/posts/{id}/delete` | 비밀번호 확인 → `DELETED_BY_AUTHOR` → `/`로 이동 (S1-2) |
 | GET | `/images/{파일이름}` | 저장한 사진 (개발: `uploads/` 폴더, 배포: S3) |
@@ -421,7 +421,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 
 | Method | Path | 설명 |
 |---|---|---|
-| GET | `/api/posts/{id}/analysis` | 분석 상태 (S2, 상세 화면의 JavaScript가 2초마다 확인) |
+| GET | `/api/posts/{id}/analysis` | 분석 상태 `{"status":"PENDING"}`. 상세 화면의 JavaScript가 2초마다 최대 60초 확인하고, 끝나면 화면을 새로 연다. 없는 글·삭제된 글·분석 기록이 없는 글은 404 |
 
 **S3에서 같은 방식으로 정리**: 댓글(작성·삭제), 피드백 게시판(목록·상세·작성·삭제), 운영자 API(관리자 토큰, 상태 변경·피드백 답변)
 
@@ -475,7 +475,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 |---|---|---|---|
 | 1 | AI 모델 고르기 | 음식 사진 20장 비교로 `gemini-3.5-flash-lite` 결정 | ✅ 2026-10-30 |
 | 2 | 분석 붙이기 | 사진을 올리면 뒤에서 Gemini가 분석해 저장하고, 상세 화면을 새로고침하면 음식·칼로리가 보인다. 처리방침에 "Google로 전송" 추가 | ✅ 2026-11-02 |
-| 3 | 화면 자동 갱신 | 올린 뒤 "분석 중"이 보이다가 새로고침 없이 결과가 뜬다. 목록 카드에도 칼로리 표시 | |
+| 3 | 화면 자동 갱신 | 올린 뒤 "분석 중"이 보이다가 새로고침 없이 결과가 뜬다. 목록 카드에도 칼로리 표시 | ✅ 2026-11-02 |
 | 4 | 실패 복구 | 실패한 건과 서버 재시작으로 남은 건을 자동으로 다시 분석(삭제된 글은 건너뜀), 하루 분석 상한 | |
 
 S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에서 실제 Gemini로 분석 성공. 딸기 1개 8kcal, 한정식 상차림 7개 항목 1,950kcal, 음식이 아닌 그림은 `NOT_FOOD`. 걸린 시간 2.2~3.5초, 요청당 입력 약 1,200토큰 + 출력 50~600토큰.
@@ -561,6 +561,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-11-02 — S2-3 완료: 글을 올리면 상세 화면으로 이동하고, 분석 상태 API를 2초마다 확인해 끝나면 결과를 보여 준다. 목록 카드에 칼로리 표시 (분석 기록은 한 번의 쿼리로 읽음)
 - 2026-11-02 — S2-2 완료: 사진을 올리면 뒤에서 Gemini가 분석해 `food_analyses`에 저장하고 상세 화면에 표시. 처리방침에 Google 위탁·국외 이전 추가, 글쓰기 화면에 안내 추가
 - 2026-11-02 — 진행 순서 변경: S2(AI) → S4(배포) → S3(댓글). S2 나머지를 3조각으로 나눔
 - 2026-10-31 — 운영 DB를 EC2 안 Docker MySQL → RDS로 변경 (메모리 실측 결과). 서버 Compose에서 mysql을 빼고 `DB_HOST`로 RDS에 접속, 매일 `mysqldump` 백업 대신 RDS 자동 백업

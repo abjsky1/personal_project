@@ -67,7 +67,7 @@
 							<p>칼로리 분석에 실패했어요.</p>
 						</c:when>
 						<c:otherwise>
-							<p>칼로리를 분석하고 있어요. 잠시 후 새로고침해 주세요.</p>
+							<p id="analysis-pending">칼로리를 분석하고 있어요…</p>
 						</c:otherwise>
 					</c:choose>
 				</section>
@@ -111,5 +111,41 @@
 		deleteButton.textContent = '삭제';
 	});
 </script>
+
+<%-- 분석 중일 때만 실행한다. 분석이 끝났는지 2초마다 서버에 물어보고(폴링), 끝나면 화면을 새로 열어 결과를 보여 준다. --%>
+<%-- 결과를 JavaScript로 다시 그리지 않고 새로 여는 이유: 결과 화면을 위 JSP 한 곳에서만 관리하려고 --%>
+<c:if test="${analysis.status == 'PENDING'}">
+<script>
+	const POLL_INTERVAL_MS = 2000;
+	// 이만큼 기다려도 안 끝나면 그만 물어본다 (서버에 요청을 계속 보내지 않게)
+	const MAX_WAIT_MS = 60000;
+	const pollStartedAt = Date.now();
+
+	async function checkAnalysis() {
+		try {
+			// fetch: 화면을 이동하지 않고 서버에 요청을 보낸다. await: 응답이 올 때까지 기다린다.
+			const response = await fetch('/api/posts/${post.id}/analysis');
+			if (response.ok) {
+				const body = await response.json();
+				if (body.status !== 'PENDING') {
+					location.reload();
+					return;
+				}
+			}
+		} catch (error) {
+			// 휴대폰 연결이 잠깐 끊긴 경우 등. 다음 차례에 다시 물어본다.
+		}
+
+		if (Date.now() - pollStartedAt >= MAX_WAIT_MS) {
+			document.getElementById('analysis-pending').textContent = '분석이 오래 걸리고 있어요. 잠시 후 새로고침해 주세요.';
+			return;
+		}
+		// setInterval 대신 응답을 받은 뒤에 다음 요청을 예약한다 → 응답이 느려도 요청이 겹쳐 쌓이지 않는다.
+		setTimeout(checkAnalysis, POLL_INTERVAL_MS);
+	}
+
+	setTimeout(checkAnalysis, POLL_INTERVAL_MS);
+</script>
+</c:if>
 </body>
 </html>

@@ -2,6 +2,9 @@ package backend.post.service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.data.domain.Limit;
@@ -151,15 +154,24 @@ public class PostService {
 		// 다음에 이어서 볼 위치 = 이번 화면의 마지막 글 번호
 		Long nextCursor = hasNext ? pagePosts.get(pagePosts.size() - 1).getId() : null;
 
+		// 이번 화면의 글들의 분석 기록을 한 번에 읽어 온다. 글마다 따로 읽으면 글 20개에 쿼리가 20번 더 나간다 (N+1 문제).
+		// toMap: 글 번호로 바로 찾을 수 있게 "글 번호 → 분석 기록" 지도로 만든다.
+		List<Long> postIds = pagePosts.stream().map(Post::getId).toList();
+		Map<Long, FoodAnalysis> analyses = foodAnalysisRepository.findAllById(postIds).stream()
+				.collect(Collectors.toMap(FoodAnalysis::getPostId, Function.identity()));
+
 		// stream().map(...).toList(): 목록의 Post 하나하나를 PostSummary로 바꿔 새 목록을 만든다.
-		return new FeedPage(pagePosts.stream().map(PostSummary::from).toList(), nextCursor);
+		List<PostSummary> summaries = pagePosts.stream()
+				.map(post -> PostSummary.from(post, analyses.get(post.getId())))
+				.toList();
+		return new FeedPage(summaries, nextCursor);
 	}
 
 	// 상세 조회. 없거나 삭제된 글이면 POST_NOT_FOUND 예외를 던진다 → 에러 화면(404)이 나온다.
 	// 글 내용은 목록과 같은 값이라 PostSummary를 함께 쓴다. (분석 결과는 Controller가 FoodAnalysisService에서 따로 받는다)
 	@Transactional(readOnly = true)
 	public PostSummary getDetail(Long id) {
-		return PostSummary.from(findActivePost(id));
+		return PostSummary.from(findActivePost(id), null);
 	}
 
 	// 작성자 삭제: 비밀번호가 맞으면 상태를 DELETED_BY_AUTHOR로 바꾼다. (DB에서 지우지 않는다)

@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,8 +24,12 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
+import backend.analysis.model.dto.FoodAnalysisResult;
+import backend.analysis.model.dto.FoodAnalysisResult.FoodItem;
+import backend.analysis.model.dto.FoodAnalyzerResponse;
 import backend.analysis.model.entity.AnalysisStatus;
 import backend.analysis.model.entity.FoodAnalysis;
 import backend.analysis.model.repository.FoodAnalysisRepository;
@@ -32,6 +37,8 @@ import backend.common.error.ErrorCode;
 import backend.image.TestImages;
 import backend.location.model.entity.PostLocation;
 import backend.location.model.repository.PostLocationRepository;
+import backend.post.model.dto.FeedPage;
+import backend.post.model.dto.PostSummary;
 import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
 import backend.post.model.repository.PostRepository;
@@ -139,17 +146,18 @@ class PostControllerTest {
 	}
 
 	@Test
-	void 글을_올리면_저장되고_목록으로_이동한다() throws Exception {
+	void 글을_올리면_저장되고_그_글의_상세_화면으로_이동한다() throws Exception {
 		// multipart(): 파일이 포함된 form 전송을 흉내 낸다. param(): 글자 칸의 값
-		mockMvc.perform(multipart("/posts").file(photo)
+		MvcResult result = mockMvc.perform(multipart("/posts").file(photo)
 				.param("nickname", "테스터")
 				.param("password", "1234")
 				.param("memo", "점심"))
 				.andExpect(status().is3xxRedirection())
-				.andExpect(redirectedUrl("/"));
+				.andReturn();
 
 		// 가장 최근에 저장된 글(번호가 가장 큰 글)을 꺼내 확인한다.
 		Post saved = postRepository.findAll(Sort.by(Sort.Direction.DESC, "id")).get(0);
+		assertThat(result.getResponse().getRedirectedUrl()).isEqualTo("/posts/" + saved.getId());
 		assertThat(saved.getNickname()).isEqualTo("테스터");
 		assertThat(saved.getMemo()).isEqualTo("점심");
 		assertThat(saved.getStatus()).isEqualTo(PostStatus.ACTIVE);
@@ -204,6 +212,36 @@ class PostControllerTest {
 		FoodAnalysis analysis = foodAnalysisRepository.findById(latestPost().getId()).orElseThrow();
 		assertThat(analysis.getStatus()).isEqualTo(AnalysisStatus.PENDING);
 		assertThat(analysis.getAttemptCount()).isZero();
+	}
+
+	@Test
+	void 목록은_글마다_분석_상태와_칼로리를_함께_넘긴다() throws Exception {
+		Post done = savePost("1234");
+		FoodAnalysis doneAnalysis = new FoodAnalysis(done);
+		doneAnalysis.markDone(new FoodAnalyzerResponse(
+				new FoodAnalysisResult(true, List.of(new FoodItem("공기밥", 210, 310, 68, 5, 1)), "HIGH", "1공기"),
+				"test-model", 1300, 100), "[]", 2000);
+		foodAnalysisRepository.save(doneAnalysis);
+
+		Post pending = savePost("1234");
+		foodAnalysisRepository.save(new FoodAnalysis(pending));
+
+		// 분석 기록이 없는 옛날 글
+		Post old = savePost("1234");
+
+		MvcResult result = mockMvc.perform(get("/")).andExpect(status().isOk()).andReturn();
+		FeedPage feed = (FeedPage) result.getModelAndView().getModel().get("feed");
+
+		PostSummary doneSummary = summaryOf(feed, done);
+		assertThat(doneSummary.analysisStatus()).isEqualTo(AnalysisStatus.DONE);
+		assertThat(doneSummary.totalKcal()).isEqualByComparingTo("310");
+		assertThat(summaryOf(feed, pending).analysisStatus()).isEqualTo(AnalysisStatus.PENDING);
+		assertThat(summaryOf(feed, pending).totalKcal()).isNull();
+		assertThat(summaryOf(feed, old).analysisStatus()).isNull();
+	}
+
+	private PostSummary summaryOf(FeedPage feed, Post post) {
+		return feed.posts().stream().filter(summary -> summary.id().equals(post.getId())).findFirst().orElseThrow();
 	}
 
 	@Test

@@ -61,8 +61,9 @@ public class PostController {
 			return "posts/new";
 		}
 
+		Long postId;
 		try {
-			postService.create(form);
+			postId = postService.create(form);
 		} catch (BusinessException e) {
 			// 사진 검사에 걸린 경우(진짜 사진이 아님, 해상도가 너무 큼)는 에러 화면 대신 글쓰기 화면의 사진 칸 아래에 메시지를 보여 준다.
 			// 그 밖의 에러는 그대로 던져서 에러 화면으로 보낸다.
@@ -74,9 +75,9 @@ public class PostController {
 			return "posts/new";
 		}
 
-		// redirect: 저장 후 목록 주소로 이동하라고 브라우저에 알린다.
+		// redirect: 저장 후 방금 올린 글의 상세 주소로 이동하라고 브라우저에 알린다. 거기서 분석 결과가 뜨는 것을 바로 볼 수 있다.
 		// 화면을 바로 보여 주지 않고 이동시키는 이유: 새로고침을 눌렀을 때 같은 글이 한 번 더 저장되는 것을 막는다.
-		return "redirect:/";
+		return "redirect:/posts/" + postId;
 	}
 
 	// 상세 화면

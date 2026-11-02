@@ -1,6 +1,7 @@
 <%-- 게시글 목록 (첫 화면) --%>
 <%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -33,6 +34,15 @@
 				<%-- 목록에는 큰 사진 대신 600 × 600 썸네일을 쓴다 (보통 수십 KB라 목록이 빨리 뜬다) --%>
 				<%-- loading="lazy": 화면에 가까워졌을 때 사진을 불러온다 (휴대폰 데이터 절약) --%>
 				<img src="${post.thumbnailUrl}" alt="음식 사진" loading="lazy">
+				<%-- 분석이 끝난 글은 칼로리, 분석 중인 글은 안내를 보여 준다. 음식이 아니거나 실패한 글, 분석 기록이 없는 글은 아무것도 보여 주지 않는다. --%>
+				<c:choose>
+					<c:when test="${post.analysisStatus == 'DONE'}">
+						<p class="card-kcal"><fmt:formatNumber value="${post.totalKcal}" maxFractionDigits="0" /> kcal</p>
+					</c:when>
+					<c:when test="${post.analysisStatus == 'PENDING'}">
+						<p class="meta">칼로리 분석 중</p>
+					</c:when>
+				</c:choose>
 				<%-- 닉네임·메모는 사용자가 쓴 값이라 반드시 c:out으로 출력한다 (XSS 방지) --%>
 				<p class="meta"><strong><c:out value="${post.nickname}" /></strong> · <c:out value="${post.createdAt}" /></p>
 				<c:if test="${not empty post.memo}">

@@ -8,13 +8,17 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import backend.analysis.model.dto.AnalysisStatusResponse;
 import backend.analysis.model.dto.FoodAnalysisResult;
 import backend.analysis.model.dto.FoodAnalysisResult.FoodItem;
 import backend.analysis.model.dto.FoodAnalysisView;
 import backend.analysis.model.dto.FoodAnalyzerResponse;
 import backend.analysis.model.entity.FoodAnalysis;
 import backend.analysis.model.repository.FoodAnalysisRepository;
+import backend.common.error.BusinessException;
+import backend.common.error.ErrorCode;
 import backend.image.ImageStorage;
+import backend.post.model.entity.PostStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.core.type.TypeReference;
@@ -102,6 +106,14 @@ public class FoodAnalysisService {
 		if (hasNegative || tooLarge) {
 			throw new FoodAnalysisException("OUT_OF_RANGE");
 		}
+	}
+
+	// 분석 상태만 알려 준다. 없는 글, 삭제된 글, 분석 기록이 없는 글은 404로 응답한다.
+	@Transactional(readOnly = true)
+	public AnalysisStatusResponse getStatus(Long postId) {
+		return foodAnalysisRepository.findByPostIdAndPostStatus(postId, PostStatus.ACTIVE)
+				.map(analysis -> new AnalysisStatusResponse(analysis.getStatus()))
+				.orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
 	}
 
 	// 상세 화면용 분석 결과. AI 분석을 넣기 전에 올린 글은 기록이 없어서 null을 돌려준다.
