@@ -3,12 +3,16 @@ package backend.post.service;
 import java.time.Instant;
 import java.util.List;
 
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.data.domain.Limit;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import backend.analysis.model.entity.FoodAnalysis;
+import backend.analysis.model.repository.FoodAnalysisRepository;
+import backend.analysis.service.FoodAnalysisService;
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
 import backend.image.ImageProcessor;
@@ -44,6 +48,8 @@ public class PostService {
 
 	private final PostRepository postRepository;
 	private final PostLocationRepository postLocationRepository;
+	private final FoodAnalysisRepository foodAnalysisRepository;
+	private final FoodAnalysisService foodAnalysisService;
 	private final ImageProcessor imageProcessor;
 	// 사진 저장소: 내 PC에서는 폴더(LocalImageStorage), 배포 서버에서는 S3(S3ImageStorage)가 들어온다
 	private final ImageStorage imageStorage;
@@ -78,15 +84,29 @@ public class PostService {
 				thumbnailKey,
 				metadata.takenAt());
 
-		// 글과 위치, DB 저장 두 건을 하나의 트랜잭션으로 묶는다. (위치 저장이 실패하면 글 저장도 되돌린다)
+		// 글과 위치, 분석 대기 기록을 하나의 트랜잭션으로 묶는다. (위치 저장이 실패하면 글 저장도 되돌린다)
 		// @Transactional을 붙인 메서드를 따로 만들어 같은 클래스 안에서 부르면 트랜잭션이 걸리지 않는다.
 		// (Spring은 클래스 바깥에서 들어오는 호출에만 트랜잭션을 씌우기 때문 = "self-invocation" 문제)
 		// 그래서 코드로 직접 트랜잭션 범위를 정하는 TransactionTemplate을 쓴다. execute(...) 안이 트랜잭션 범위다.
-		return transactionTemplate.execute(status -> {
+		Long postId = transactionTemplate.execute(status -> {
 			Post saved = postRepository.save(post);
 			saveLocation(saved, consent, metadata);
+			foodAnalysisRepository.save(new FoodAnalysis(saved));
 			return saved.getId();
 		});
+
+		// 분석은 트랜잭션이 끝난(DB에 확정된) 뒤에 시작한다. 먼저 시작하면 일꾼이 아직 확정되지 않은 글을 찾지 못한다.
+		startAnalysis(postId, imageKey);
+		return postId;
+	}
+
+	// 분석 줄이 가득 차 있어도 글 올리기는 성공시킨다. 그 글은 PENDING으로 남아 있다가 자동 재시도(S2-4)가 처리한다.
+	private void startAnalysis(Long postId, String imageKey) {
+		try {
+			foodAnalysisService.analyzeInBackground(postId, imageKey);
+		} catch (TaskRejectedException e) {
+			log.warn("Food analysis queue is full: postId={}", postId);
+		}
 	}
 
 	// 동의했고 사진에 GPS 정보가 있으면 위치를 저장한다.
@@ -136,7 +156,7 @@ public class PostService {
 	}
 
 	// 상세 조회. 없거나 삭제된 글이면 POST_NOT_FOUND 예외를 던진다 → 에러 화면(404)이 나온다.
-	// 상세 화면도 지금은 목록과 같은 값만 보여 주므로 PostSummary를 함께 쓴다. (S2에서 분석 결과가 붙으면 상세용 DTO를 따로 만든다)
+	// 글 내용은 목록과 같은 값이라 PostSummary를 함께 쓴다. (분석 결과는 Controller가 FoodAnalysisService에서 따로 받는다)
 	@Transactional(readOnly = true)
 	public PostSummary getDetail(Long id) {
 		return PostSummary.from(findActivePost(id));

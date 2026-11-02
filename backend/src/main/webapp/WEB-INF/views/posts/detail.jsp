@@ -1,6 +1,8 @@
 <%-- 게시글 상세 화면 --%>
 <%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<%-- fmt:formatNumber: 숫자를 보기 좋게 바꾼다 (1650.0 → 1,650) --%>
+<%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -24,6 +26,51 @@
 			<p class="meta"><strong><c:out value="${post.nickname}" /></strong> · <c:out value="${post.createdAt}" /></p>
 			<c:if test="${not empty post.memo}">
 				<p class="memo"><c:out value="${post.memo}" /></p>
+			</c:if>
+
+			<%-- AI 분석 결과. AI 분석을 넣기 전에 올린 글은 ${analysis}가 비어 있어서 이 칸이 나오지 않는다. --%>
+			<%-- 음식 이름과 설명도 사용자 입력처럼 c:out으로 찍는다. 사진 속 글자가 AI를 거쳐 HTML로 끼어들 수 있기 때문이다. --%>
+			<c:if test="${not empty analysis}">
+				<section class="analysis">
+					<c:choose>
+						<c:when test="${analysis.status == 'DONE'}">
+							<p class="total-kcal"><fmt:formatNumber value="${analysis.totalKcal}" maxFractionDigits="0" /> kcal</p>
+							<p class="meta">
+								탄수화물 <fmt:formatNumber value="${analysis.carbsG}" maxFractionDigits="0" />g ·
+								단백질 <fmt:formatNumber value="${analysis.proteinG}" maxFractionDigits="0" />g ·
+								지방 <fmt:formatNumber value="${analysis.fatG}" maxFractionDigits="0" />g
+							</p>
+							<table>
+								<thead>
+									<tr><th>음식</th><th>양</th><th>칼로리</th></tr>
+								</thead>
+								<tbody>
+									<c:forEach var="item" items="${analysis.items}">
+										<tr>
+											<td><c:out value="${item.name}" /></td>
+											<td><fmt:formatNumber value="${item.amountG}" maxFractionDigits="0" />g</td>
+											<td><fmt:formatNumber value="${item.kcal}" maxFractionDigits="0" /> kcal</td>
+										</tr>
+									</c:forEach>
+								</tbody>
+							</table>
+							<p class="hint"><c:out value="${analysis.comment}" /></p>
+							<c:if test="${not empty analysis.confidenceLabel}">
+								<p class="hint">AI의 확신 정도: <c:out value="${analysis.confidenceLabel}" /></p>
+							</c:if>
+							<p class="hint">AI 추정치이며 실제와 다를 수 있습니다. 의료·영양 상담을 대신하지 않습니다.</p>
+						</c:when>
+						<c:when test="${analysis.status == 'NOT_FOOD'}">
+							<p>사진에서 음식을 찾지 못했어요.</p>
+						</c:when>
+						<c:when test="${analysis.status == 'FAILED'}">
+							<p>칼로리 분석에 실패했어요.</p>
+						</c:when>
+						<c:otherwise>
+							<p>칼로리를 분석하고 있어요. 잠시 후 새로고침해 주세요.</p>
+						</c:otherwise>
+					</c:choose>
+				</section>
 			</c:if>
 
 			<%-- 삭제: 작성할 때 입력한 비밀번호가 맞아야 지워진다. 확인 창과 연속 누름 막기는 아래 script에서 처리한다. --%>

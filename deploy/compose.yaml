@@ -49,7 +49,7 @@ services:
       DB_HOST: ${DB_HOST:-mysql}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       APP_S3_BUCKET: ${APP_S3_BUCKET:-}
-      # AI 기능은 아직 배포 전이라 비어 있어도 된다
+      # AI 분석용 키. 비어 있으면 글은 올라가지만 분석은 실패로 저장된다.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       # JVM 옵션: 자바가 쓸 메모리(힙)를 최대 512MB로 묶는다.
       # 서버 메모리 2GB를 MySQL·Nginx·운영체제와 나눠 쓰므로, 자바가 메모리를 끝없이 늘리지 않게 한다.

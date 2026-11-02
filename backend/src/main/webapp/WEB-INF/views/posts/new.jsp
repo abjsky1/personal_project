@@ -28,6 +28,7 @@
 		<label for="image">사진</label>
 		<input type="file" id="image" name="image" accept="image/jpeg,image/png">
 		<p class="hint">JPEG·PNG, 10MB까지. 올린 사진의 위치 정보(EXIF)는 지우고 저장해요.</p>
+		<p class="hint">칼로리 분석을 위해 위치 정보를 지운 사진을 Google(Gemini)로 보내요.</p>
 		<%-- form:errors: 이 칸에 검사 메시지가 있을 때만 <p class="error">메시지</p>를 만든다. --%>
 		<form:errors path="image" cssClass="error" element="p" />
 

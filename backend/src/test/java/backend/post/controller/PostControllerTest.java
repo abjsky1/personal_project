@@ -25,6 +25,9 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import backend.analysis.model.entity.AnalysisStatus;
+import backend.analysis.model.entity.FoodAnalysis;
+import backend.analysis.model.repository.FoodAnalysisRepository;
 import backend.common.error.ErrorCode;
 import backend.image.TestImages;
 import backend.location.model.entity.PostLocation;
@@ -60,6 +63,9 @@ class PostControllerTest {
 
 	@Autowired
 	private PostLocationRepository postLocationRepository;
+
+	@Autowired
+	private FoodAnalysisRepository foodAnalysisRepository;
 
 	// 테스트용 사진 파일: (form의 칸 이름, 파일 이름, 형식, 내용)
 	// 서버가 파일 내용을 진짜 사진인지 검사하므로, 코드로 만든 실제 JPEG(300 × 200)를 넣는다.
@@ -182,7 +188,32 @@ class PostControllerTest {
 		mockMvc.perform(get("/posts/" + post.getId()))
 				.andExpect(status().isOk())
 				.andExpect(view().name("posts/detail"))
-				.andExpect(model().attributeExists("post"));
+				.andExpect(model().attributeExists("post"))
+				// AI 분석을 넣기 전에 올린 글에는 분석 기록이 없다. 그래도 화면은 열려야 한다.
+				.andExpect(model().attributeDoesNotExist("analysis"));
+	}
+
+	@Test
+	void 글을_올리면_분석_대기_기록이_함께_저장된다() throws Exception {
+		mockMvc.perform(multipart("/posts").file(photo)
+				.param("nickname", "테스터")
+				.param("password", "1234"))
+				.andExpect(status().is3xxRedirection());
+
+		// @Transactional 테스트라 글이 확정되지 않아서, 뒤에서 도는 분석은 이 글을 보지 못하고 PENDING 그대로다.
+		FoodAnalysis analysis = foodAnalysisRepository.findById(latestPost().getId()).orElseThrow();
+		assertThat(analysis.getStatus()).isEqualTo(AnalysisStatus.PENDING);
+		assertThat(analysis.getAttemptCount()).isZero();
+	}
+
+	@Test
+	void 상세_화면은_분석_기록이_있으면_함께_넘긴다() throws Exception {
+		Post post = savePost("1234");
+		foodAnalysisRepository.save(new FoodAnalysis(post));
+
+		mockMvc.perform(get("/posts/" + post.getId()))
+				.andExpect(status().isOk())
+				.andExpect(model().attributeExists("analysis"));
 	}
 
 	@Test

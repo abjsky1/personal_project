@@ -111,7 +111,7 @@ sequenceDiagram
 ```
 
 - **왜 비동기인가**: LLM 응답은 수 초~수십 초 걸린다. 동기로 기다리면 요청 타임아웃·스레드 점유 문제가 생기고, 분석이 실패해도 글은 남아 있어야 재시도할 수 있다.
-- **MVP 구현**: Spring `@Async` + 크기 제한 있는 스레드 풀.
+- **MVP 구현**: Spring `@Async` + 크기 제한 있는 스레드 풀 (일꾼 2명, 대기 줄 50건). 글이 DB에 확정된 뒤에 분석을 시작하고, AI 응답을 기다리는 동안은 트랜잭션을 잡지 않는다. 일꾼 스레드에도 요청의 traceId를 넘겨서 업로드와 분석 로그를 한 번호로 찾는다.
 - **자동 재시도 (스케줄러)**: 아래 건을 주기적으로 다시 처리한다. 사용자가 누르는 재분석 버튼은 없다.
   - 10분 이상 PENDING인 건 (서버 재시작으로 유실된 작업)
   - FAILED이면서 시도 횟수 3회 미만인 건
@@ -166,6 +166,7 @@ sequenceDiagram
 
 - 첫 배포는 **무료 티어 LLM API**로 운영한다. 후보: Google Gemini API 무료 티어, Groq, OpenRouter 무료 모델 등. 무료 조건은 자주 바뀌므로 고르는 시점에 확인한다.
 - **결정 (2026-10-30)**: Google AI Studio의 **`gemini-3.5-flash-lite`** (무료: 분당 15건, 하루 500건). 음식 사진 20장 비교에서 20/20 성공, 평균 2.5초, 음식 이름 19/20. 3.8 Flash는 무료 하루 20건에 혼잡(503)·시간 초과가 잦아 제외 → [`ai-model-comparison.md`](ai-model-comparison.md)
+- **호출 방식 (S2-2)**: `RestClient`(라이브러리 추가 없음)로 `generateContent`를 부른다. 키는 헤더(`x-goog-api-key`), 시간 제한은 30초, 응답 형식은 `responseSchema`로 강제한다. Google 문서는 새 프로젝트에 Interactions API를 권장하고 `generateContent`를 legacy로 부르지만 "계속 지원"이라고 적었고, 모델 비교도 이 API로 했으므로 그대로 쓴다.
 - **선택 기준**
   1. 이미지 입력 지원
   2. JSON 스키마 강제(구조화 출력) 지원
@@ -202,7 +203,9 @@ sequenceDiagram
 - **위치 정보**: 수집 항목(사진의 GPS 좌표·촬영 시각), 목적(지역·시간대별 통계), 보관 기간, 동의 거부 시 불이익 없음을 동의 체크박스 옆과 처리방침에 명시한다.
   - 개인 위치정보를 수집·이용하면 「위치정보의 보호 및 이용 등에 관한 법률」 적용 대상이 될 수 있다(동의, 신고 의무 등). **공개 운영 전에 해당 여부를 확인**한다.
   - 좌표는 **원본 정밀도(소수점 6자리, 약 10cm)**로 저장한다 (18절 결정). 정확한 지점이므로 공개 화면·API는 물론 **로그에도 좌표를 남기지 않는다**. 2차 가공 결과는 행정구역 단위로만 공개한다.
-- 사진이 **외부 AI 서비스로 전송**되고, 무료 티어 조건에 따라 공급자의 모델 개선에 쓰일 수 있다는 사실을 처리방침과 업로드 화면에 명시한다.
+- 사진이 **Google(Gemini API)로 전송**된다는 사실을 처리방침(국외 이전)과 업로드 화면에 명시한다. 유료 등급이라 제품 개선·학습에는 쓰이지 않지만, Google이 부정 사용 감시를 위해 최대 55일 보관한다 (Gemini API 약관, 2026-11-02 확인). 약관이 바뀌면 처리방침도 고친다.
+  - 2026-10-26 이후 만든 프로젝트는 AI Studio의 **Logs and Datasets 로깅이 기본으로 켜져** 있어 내 프로젝트에도 요청이 저장된다 (최대 55일). 필요 없으므로 끈다 (사용자가 AI Studio에서 직접).
+  - 처리방침의 국외 이전 내용은 **공개 운영 전에 법적으로 충분한지 확인**한다.
 - **삭제한 게시글·댓글·피드백도 DB에 보관**된다는 사실과 보관 목적(운영·분쟁 대응)을 처리방침에 명시한다.
 - IP는 남용 방지 목적으로만, 해시로 저장하고 30일 후 비운다.
 - 분석 결과 옆에 항상: "AI 추정치이며 실제와 다를 수 있습니다. 의료·영양 상담을 대신하지 않습니다."
@@ -303,7 +306,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - [x] 시간대: 시각은 `Instant`(시간대와 무관한 한 시점)로 저장하고 화면은 코드에서 `Asia/Seoul`로 바꿔 보여 주므로 서버 시간대와 상관없다. 컨테이너 `TZ=Asia/Seoul`은 로그 시각을 한국 시간으로 읽기 위해
 - [x] Docker 로그 로테이션: 컨테이너마다 10MB × 3개. 크기 기준이라 사용자가 적으면 3개월보다 오래 남을 수 있음(배포로 컨테이너를 새로 만들면 지워진다) → S4-6에서 "이용 기록 3개월 보관"과 맞는지 확인
 - [ ] S3: 버킷(공개 차단 유지) + EC2용 IAM 역할 (`s3:PutObject`, `s3:GetObject`, `s3:ListBucket`). ListBucket이 없으면 없는 사진을 요청할 때 404 대신 403(권한 없음)이 돌아온다
-- [ ] 서버 `.env`: `DB_HOST`(RDS 엔드포인트), `MYSQL_PASSWORD`(RDS 마스터 비밀번호), `APP_S3_BUCKET`, `GEMINI_API_KEY`(AI 배포 때). 사진 저장소 s3는 prod 프로필이 이미 켠다
+- [ ] 서버 `.env`: `DB_HOST`(RDS 엔드포인트), `MYSQL_PASSWORD`(RDS 마스터 비밀번호), `APP_S3_BUCKET`, `GEMINI_API_KEY`. 사진 저장소 s3는 prod 프로필이 이미 켠다
 - [ ] RDS: 공개 접근 끄기 + 보안 그룹은 EC2에서만 3306 허용, 자동 백업 켜기, 복구 1회 해보기
 - [ ] RDS 삭제 방지(deletion protection) 켜기 — 실수로 DB를 지우지 않게
 - [ ] app 컨테이너를 새로 만든 뒤(재배포)에도 Nginx가 502 없이 연결되는지 확인 (S4-5). Nginx는 켜질 때 app 주소를 한 번만 찾아 두기 때문에, app 주소가 바뀌면 끊길 수 있다
@@ -374,14 +377,13 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
-| id | BIGINT PK AUTO_INCREMENT | |
-| post_id | BIGINT FK UNIQUE | |
+| post_id | BIGINT PK, FK | `post_locations`와 같은 방식 |
 | status | VARCHAR(20) | PENDING / DONE / NOT_FOOD / FAILED |
 | total_kcal, carbs_g, protein_g, fat_g | DECIMAL(7,1) | 서버에서 계산 |
-| items | JSON | 음식별 상세 |
+| items | TEXT | 음식별 상세를 JSON 글자로 저장 (컬럼 안을 검색할 일이 없어서 JSON 타입 대신) |
 | confidence, comment | VARCHAR | |
-| provider, model, input_tokens, output_tokens, latency_ms | | 성능·한도 추적 |
-| attempt_count, error_message | | 자동 재시도·장애 분석 |
+| model, input_tokens, output_tokens, latency_ms | | 성능·한도 추적 (공급자는 모델 이름으로 구분) |
+| attempt_count, error_message | | 자동 재시도·장애 분석. error_message는 `HTTP_429` 같은 짧은 이유만 |
 | created_at, completed_at | DATETIME(6) | |
 
 **feedbacks**
@@ -472,9 +474,11 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 | # | 조각 | 끝나면 되는 것 | 상태 |
 |---|---|---|---|
 | 1 | AI 모델 고르기 | 음식 사진 20장 비교로 `gemini-3.5-flash-lite` 결정 | ✅ 2026-10-30 |
-| 2 | 분석 붙이기 | 사진을 올리면 뒤에서 Gemini가 분석해 저장하고, 상세 화면을 새로고침하면 음식·칼로리가 보인다. 처리방침에 "Google로 전송" 추가 | |
+| 2 | 분석 붙이기 | 사진을 올리면 뒤에서 Gemini가 분석해 저장하고, 상세 화면을 새로고침하면 음식·칼로리가 보인다. 처리방침에 "Google로 전송" 추가 | ✅ 2026-11-02 |
 | 3 | 화면 자동 갱신 | 올린 뒤 "분석 중"이 보이다가 새로고침 없이 결과가 뜬다. 목록 카드에도 칼로리 표시 | |
-| 4 | 실패 복구 | 실패한 건과 서버 재시작으로 남은 건을 자동으로 다시 분석, 하루 분석 상한 | |
+| 4 | 실패 복구 | 실패한 건과 서버 재시작으로 남은 건을 자동으로 다시 분석(삭제된 글은 건너뜀), 하루 분석 상한 | |
+
+S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에서 실제 Gemini로 분석 성공. 딸기 1개 8kcal, 한정식 상차림 7개 항목 1,950kcal, 음식이 아닌 그림은 `NOT_FOOD`. 걸린 시간 2.2~3.5초, 요청당 입력 약 1,200토큰 + 출력 50~600토큰.
 
 **S4 조각** (배포, 2026-10-30 계획)
 
@@ -557,6 +561,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-11-02 — S2-2 완료: 사진을 올리면 뒤에서 Gemini가 분석해 `food_analyses`에 저장하고 상세 화면에 표시. 처리방침에 Google 위탁·국외 이전 추가, 글쓰기 화면에 안내 추가
 - 2026-11-02 — 진행 순서 변경: S2(AI) → S4(배포) → S3(댓글). S2 나머지를 3조각으로 나눔
 - 2026-10-31 — 운영 DB를 EC2 안 Docker MySQL → RDS로 변경 (메모리 실측 결과). 서버 Compose에서 mysql을 빼고 `DB_HOST`로 RDS에 접속, 매일 `mysqldump` 백업 대신 RDS 자동 백업
 - 2026-10-31 — S4-1 완료: Docker 이미지 + 배포용 설정(prod 프로필, Nginx, Compose). 내 PC Docker에서 올리기·사진·CSS 지문·IP별 횟수 제한·업로드 한도·메모리 확인

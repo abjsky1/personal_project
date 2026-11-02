@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import backend.analysis.service.FoodAnalysisService;
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
 import backend.post.model.dto.PostCreateForm;
@@ -27,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 public class PostController {
 
 	private final PostService postService;
+	private final FoodAnalysisService foodAnalysisService;
 
 	// 첫 화면 = 게시글 목록
 	// @RequestParam(required = false): 주소의 ?cursor=값 을 받는다. 없으면 null (첫 화면)
@@ -83,6 +85,7 @@ public class PostController {
 	@GetMapping("/posts/{id}")
 	public String detail(@PathVariable Long id, Model model) {
 		model.addAttribute("post", postService.getDetail(id));
+		model.addAttribute("analysis", foodAnalysisService.getView(id));
 		return "posts/detail";
 	}
 
