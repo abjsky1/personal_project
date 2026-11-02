@@ -282,7 +282,7 @@ backend
 GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 → 레지스트리 → EC2에서 pull & 재시작
 ```
 
-- **AWS 계정**: 새로 만든다 (무료 플랜: 가입 크레딧 + 활동 크레딧, 6개월).
+- **AWS 계정**: 새로 만들었다 (2026-11-02, 무료 플랜: 가입 크레딧 + 활동 크레딧, 6개월). 가입은 "Sign up for AWS (advanced)"로 했다. "new"는 한국을 시드니 리전에 배정해서 서울을 고를 수 없다.
 - **DB는 RDS** (2026-10-31 변경, 처음엔 EC2 안 Docker MySQL). 메모리를 재 보니 한 서버에 Spring(약 650MB)과 MySQL(약 460MB)을 같이 두면 2GB 서버에 여유가 없어서, DB를 AWS가 관리하는 RDS로 뺐다. 덤으로 자동 백업이 생기고, EC2를 지워도 DB는 남는다.
   - 가장 작은 무료 플랜 대상 크기(`db.t4g.micro` 등), MySQL 8.4 (로컬과 같은 버전), 처음 만들 DB 이름 `macros`, 마스터 사용자 `macros`
   - 공개 접근 끄기, 보안 그룹은 EC2에서 오는 3306만 허용
@@ -312,7 +312,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - [ ] RDS: 공개 접근 끄기 + 보안 그룹은 EC2에서만 3306 허용, 자동 백업 켜기, 복구 1회 해보기
 - [ ] RDS 삭제 방지(deletion protection) 켜기 — 실수로 DB를 지우지 않게
 - [ ] app 컨테이너를 새로 만든 뒤(재배포)에도 Nginx가 502 없이 연결되는지 확인 (S4-5). Nginx는 켜질 때 app 주소를 한 번만 찾아 두기 때문에, app 주소가 바뀌면 끊길 수 있다
-- [ ] AWS 요금 알림(Budgets) 설정 — 크레딧이 줄거나 예상보다 많이 쓰면 메일로 알림
+- [x] AWS 요금 알림(Budgets) 설정: 월 50달러. 메일로 알려 줄 뿐 요금을 막아 주지는 않는다 (가입 방식 advanced에는 지출 상한 기능이 없음)
 - [x] JSP 개발 모드 끄기 (`server.servlet.jsp.init-parameters.development=false`)
 - [x] Nginx 뒤에서 실제 사용자 IP 받기 (`server.forward-headers-strategy=native` + Nginx `X-Forwarded-For $remote_addr`). 안 하면 모든 요청이 Nginx IP 하나로 보여서 업로드 횟수 제한이 전체 사용자를 한꺼번에 막는다 (S4-1: IP 두 개로 보내서 한쪽만 4번째에 막히는 것 확인)
 - [x] CSS 같은 정적 파일 주소에 버전 붙이기: 내용 지문 방식(`/css/app-해시.css`, 1년 캐시). JSP는 `<c:url>` + `ResourceUrlEncodingFilter`를 직접 등록해야 한다 (Spring Boot가 Thymeleaf 등에만 자동 등록)
@@ -489,7 +489,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 | # | 조각 | 누가 | 끝나면 되는 것 | 상태 |
 |---|---|---|---|---|
 | 1 | Docker 이미지 + 배포용 설정 | Claude | 내 PC에서 배포 서버와 같은 방식(Docker Compose)으로 사이트가 뜸 | ✅ 2026-10-31 |
-| 2 | AWS 계정 준비 | 사용자 (체크리스트) | 요금 알림, 서울 리전, 루트 대신 관리용 IAM 사용자 | |
+| 2 | AWS 계정 준비 | 사용자 (체크리스트) | 요금 알림, 서울 리전, 루트 대신 관리용 IAM 사용자 | ✅ 2026-11-02 |
 | 3 | 서버(EC2)·RDS·S3 만들기 + 첫 배포 | 사용자(AWS 화면) + Claude(명령·설정) | 서버 주소로 접속 가능, 글이 RDS에·사진이 S3에 저장, RDS 자동 백업 켜짐 | |
 | 4 | 도메인 + HTTPS | 사용자(도메인 구입) + Claude(Nginx 설정) | `https://도메인`으로 접속 | |
 | 5 | 자동 배포 | Claude + 사용자(GitHub 비밀값 등록) | main에 push하면 몇 분 뒤 서버에 반영 | |
