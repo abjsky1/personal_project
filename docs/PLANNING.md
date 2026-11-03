@@ -284,9 +284,9 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 
 - **AWS 계정**: 새로 만들었다 (2026-11-02, 무료 플랜: 가입 크레딧 + 활동 크레딧, 6개월). 가입은 "Sign up for AWS (advanced)"로 했다. "new"는 한국을 시드니 리전에 배정해서 서울을 고를 수 없다.
 - **DB는 RDS** (2026-10-31 변경, 처음엔 EC2 안 Docker MySQL). 메모리를 재 보니 한 서버에 Spring(약 650MB)과 MySQL(약 460MB)을 같이 두면 2GB 서버에 여유가 없어서, DB를 AWS가 관리하는 RDS로 뺐다. 덤으로 자동 백업이 생기고, EC2를 지워도 DB는 남는다.
-  - 가장 작은 무료 플랜 대상 크기(`db.t4g.micro` 등), MySQL 8.4 (로컬과 같은 버전), 처음 만들 DB 이름 `macros`, 마스터 사용자 `macros`
-  - 공개 접근 끄기, 보안 그룹은 EC2에서 오는 3306만 허용
-  - 자동 백업 켜기, 삭제 방지(deletion protection) 켜기
+  - 만든 것 (2026-11-03, `macros-db`): `db.t4g.micro`, MySQL 8.4 (로컬과 같은 버전), 단일 AZ, gp3 20GiB(자동 확장 끔), 저장 암호화, DB 이름 `macros`, 마스터 사용자 `macros`. 마스터 비밀번호는 비밀번호 관리자와 서버 `.env`에만 둔다
+  - 공개 접근 없음. 보안 그룹 `macros-db`는 3306을 EC2의 보안 그룹(`macros-web`)에서 오는 것만 허용 → RDS 주소가 내부 IP(172.31.x)로만 풀린다
+  - 삭제 방지 켬. 자동 백업은 **보관 1일** — 7일로 하면 "무료 플랜 고객이 쓸 수 있는 최대를 넘는다"며 만들기가 거부된다. 유료 플랜으로 바꿀 때 7일로 올린다
 - **월 비용 추정 (서울, 2026-11-02)**: EC2 t3.small 약 19달러 + 디스크 약 2달러 + 공인 IP 약 4달러 + RDS 약 18~21달러 + S3 1달러 미만 = **약 45달러**. 대부분 사용량과 상관없는 고정 요금이고, 정확한 금액은 첫 달 청구서로 확인한다.
   - 비교한 다른 구성: EC2 + 서버 안 MySQL 약 25달러, Lightsail(서버·디스크·IP 포함) + 서버 안 MySQL 약 13달러. 비교 후 EC2 + RDS로 결정했다. 비용이 부담되면 다시 검토한다.
   - 크레딧 100달러는 약 2달, 활동 크레딧까지 200달러면 약 4달 반 쓴다. **무료 플랜은 크레딧을 다 쓰면 계정이 닫히므로, 그 전에 유료 플랜으로 바꾼다.**
@@ -299,19 +299,31 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - **배포 파일** (S4-1): `backend/Dockerfile`(2단계 빌드, `amazoncorretto:17-alpine`, root가 아닌 사용자로 실행), `backend/src/main/resources/application-prod.properties`(배포 서버 전용 설정), `deploy/compose.yaml`(nginx·app, DB는 `.env`의 `DB_HOST` = RDS 주소), `deploy/nginx.conf`, `deploy/.env.example`. 내 PC에서 같은 구성을 시험할 때는 `deploy/compose.local.yaml`을 덧씌운다(RDS 대신 mysql 컨테이너, S3 대신 컨테이너 안 폴더).
 - **서버는 x86(t3 계열)**: 이미지를 내 PC·GitHub Actions(둘 다 x86)에서 그대로 만들 수 있다. ARM(t4g)은 이미지를 따로 만들어야 해서 쓰지 않는다. (RDS는 AWS가 관리하므로 ARM이어도 상관없다)
 - **메모리 실측** (내 PC Docker, 2026-10-31): app 컨테이너 약 650MB(힙 512MB, 4,800만 화소 사진 처리 직후), MySQL 약 460MB, Nginx 약 20MB. → MySQL을 RDS로 빼면 EC2에는 app + Nginx + 운영체제만 남아 2GB 서버(t3.small)에 여유가 생긴다. 1GB 서버는 빠듯해서 쓰지 않는다.
+- **서버** (S4-3, 2026-11-03, `macros-server`): EC2 t3.small(2 vCPU, 2GB), **Amazon Linux 2023**(Ubuntu 대신 — 사용자 결정, AWS가 만든 기본 이미지), 디스크 gp3 20GiB, 서울 리전, 종료 방지 켬. 접속은 `ec2-user` + 키 파일(`macros-key.pem`, 레포 밖 `~/.ssh/`에 보관)
+  - 보안 그룹 `macros-web`: SSH(22)는 내 IP만, 80·443은 전체. 8080·3306은 밖에서 닫혀 있는 것을 확인
+  - IAM 역할 `macros-ec2`(S3 읽기·쓰기·목록)를 서버에 붙여 키 없이 S3를 쓴다. 메타데이터는 IMDSv2만, **홉 제한 2** — 컨테이너 안의 앱이 역할 자격 증명을 받으려면 Docker 네트워크 한 단계를 더 지나야 해서 기본값 1로는 안 된다
+  - Amazon Linux 2023 메모: 패키지는 `dnf`. Docker는 `dnf install docker`로 되지만 **Compose·Buildx 플러그인은 저장소에 없다** → GitHub 릴리스 파일을 `/usr/local/lib/docker/cli-plugins/`에 직접 넣음 (Compose v5.6.1, Buildx v0.38.1. 함께 깔리는 Buildx 0.12는 Compose가 요구하는 버전보다 낮다). `dnf`가 갱신해 주지 않으므로 올릴 때는 같은 방법으로 다시 넣는다
+  - 스왑 2GB(`/swapfile`, `fstab` 등록): 사진 처리나 빌드 때 메모리가 모자라 앱이 죽는 것을 막는 안전판. 평소엔 거의 쓰지 않는다
+  - **공인 IP는 서버를 중지했다가 켜면 바뀐다**(재부팅은 안 바뀜). 도메인을 붙이기 전에 Elastic IP로 고정한다 (S4-4)
+- **첫 배포** (2026-11-03): 서버에서 레포를 `git clone`하고 `deploy/.env`(레포 밖, `chmod 600`)를 만든 뒤 `docker compose up -d --build`. 이미지를 서버에서 직접 빌드(84초, 앱 기동 17초) — GitHub Actions 빌드 + 레지스트리는 S4-5에서. 확인한 것: 글 3개가 RDS에·사진 6개(글마다 큰 사진 + 썸네일)가 S3 `images/`에 저장, AI 분석 성공, 첫 화면 0.06초·사진 0.2~0.3초, 서버를 재부팅해도 1분 뒤 컨테이너와 스왑이 스스로 돌아옴. 한가할 때 메모리: app 약 570MB, Nginx 약 5MB
 
 **S4 배포 체크리스트** (처음 배포할 때 자주 터지는 것들)
 - [x] 업로드 한도: Nginx `client_max_body_size 20m` = Tomcat `max-swallow-size`. 10~20MB는 Spring까지 와서 우리 에러 화면, 20MB 초과는 Nginx 413 화면 (S4-1에서 15MB·25MB로 확인)
 - [x] JVM 힙 `-Xmx512m` + app 컨테이너 메모리 한도 1GB (4,800만 화소 사진이 1.4초에 처리됨)
 - [x] 이미지 처리 동시 실행 수 제한: 한 번에 한 장 (`ImageProcessor.process`에 `synchronized`). 사용자가 늘어 기다림이 생기면 2장으로 늘리는 것을 검토
-- [ ] 비밀값: 환경 변수 주입, 레포·이미지에 포함되지 않았는지 확인 — 이미지에는 없음 ✅ (`.env`는 빌드 대상 폴더 밖), 서버 `.env`는 S4-3
+- [x] 비밀값: 환경 변수 주입, 레포·이미지에 포함되지 않았는지 확인 — 이미지에는 없음 (`.env`는 빌드 대상 폴더 밖), 서버 `.env`는 레포 밖·`chmod 600`. 밖에서 `/.env`, `/.git/config`를 요청해도 404 (S4-3)
 - [x] 시간대: 시각은 `Instant`(시간대와 무관한 한 시점)로 저장하고 화면은 코드에서 `Asia/Seoul`로 바꿔 보여 주므로 서버 시간대와 상관없다. 컨테이너 `TZ=Asia/Seoul`은 로그 시각을 한국 시간으로 읽기 위해
 - [x] Docker 로그 로테이션: 컨테이너마다 10MB × 3개. 크기 기준이라 사용자가 적으면 3개월보다 오래 남을 수 있음(배포로 컨테이너를 새로 만들면 지워진다) → S4-6에서 "이용 기록 3개월 보관"과 맞는지 확인
-- [ ] S3: 버킷(공개 차단 유지) + EC2용 IAM 역할 (`s3:PutObject`, `s3:GetObject`, `s3:ListBucket`). ListBucket이 없으면 없는 사진을 요청할 때 404 대신 403(권한 없음)이 돌아온다
-- [ ] 서버 `.env`: `DB_HOST`(RDS 엔드포인트), `MYSQL_PASSWORD`(RDS 마스터 비밀번호), `APP_S3_BUCKET`, `GEMINI_API_KEY`. 사진 저장소 s3는 prod 프로필이 이미 켠다
-- [ ] RDS: 공개 접근 끄기 + 보안 그룹은 EC2에서만 3306 허용, 자동 백업 켜기, 복구 1회 해보기
-- [ ] RDS 삭제 방지(deletion protection) 켜기 — 실수로 DB를 지우지 않게
+- [x] S3: 버킷(공개 차단 유지) + EC2용 IAM 역할 (`s3:PutObject`, `s3:GetObject`, `s3:ListBucket`). ListBucket이 없으면 없는 사진을 요청할 때 404 대신 403(권한 없음)이 돌아온다 (S4-3: 없는 사진은 404, 버킷 주소로 직접 접근하면 403인 것을 확인)
+- [x] 서버 `.env`: `DB_HOST`(RDS 엔드포인트), `MYSQL_PASSWORD`(RDS 마스터 비밀번호), `APP_S3_BUCKET`, `GEMINI_API_KEY`. 사진 저장소 s3는 prod 프로필이 이미 켠다 (S4-3. 버킷 이름·RDS 주소도 레포가 아니라 서버 `.env`에만 적는다)
+- [x] RDS: 공개 접근 끄기 + 보안 그룹은 EC2에서만 3306 허용, 자동 백업 켜기 (S4-3. 보관 1일은 무료 플랜 제한 → 10절)
+- [ ] RDS 백업에서 복구 1회 해보기 (S4-6)
+- [x] RDS 삭제 방지(deletion protection) 켜기 — 실수로 DB를 지우지 않게 (S4-3. EC2도 종료 방지 켬)
+- [x] 서버 재부팅 뒤 자동 복구: 1분 뒤 컨테이너가 스스로 올라오고(`restart: unless-stopped`) 스왑도 유지 (S4-3에서 확인)
 - [ ] app 컨테이너를 새로 만든 뒤(재배포)에도 Nginx가 502 없이 연결되는지 확인 (S4-5). Nginx는 켜질 때 app 주소를 한 번만 찾아 두기 때문에, app 주소가 바뀌면 끊길 수 있다
+- [ ] 공인 IP 고정(Elastic IP) — 도메인을 붙이기 전에 (S4-4)
+- [ ] 세션 쿠키에 `Secure` — HTTPS를 붙인 뒤에 (S4-4). 지금은 HTTP라 `HttpOnly`만 있다
+- [ ] 테스트로 올린 글 지우기 — 지인 베타 전에
 - [x] AWS 요금 알림(Budgets) 설정: 월 50달러. 메일로 알려 줄 뿐 요금을 막아 주지는 않는다 (가입 방식 advanced에는 지출 상한 기능이 없음)
 - [x] JSP 개발 모드 끄기 (`server.servlet.jsp.init-parameters.development=false`)
 - [x] Nginx 뒤에서 실제 사용자 IP 받기 (`server.forward-headers-strategy=native` + Nginx `X-Forwarded-For $remote_addr`). 안 하면 모든 요청이 Nginx IP 하나로 보여서 업로드 횟수 제한이 전체 사용자를 한꺼번에 막는다 (S4-1: IP 두 개로 보내서 한쪽만 4번째에 막히는 것 확인)
@@ -490,7 +502,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 |---|---|---|---|---|
 | 1 | Docker 이미지 + 배포용 설정 | Claude | 내 PC에서 배포 서버와 같은 방식(Docker Compose)으로 사이트가 뜸 | ✅ 2026-10-31 |
 | 2 | AWS 계정 준비 | 사용자 (체크리스트) | 요금 알림, 서울 리전, 루트 대신 관리용 IAM 사용자 | ✅ 2026-11-02 |
-| 3 | 서버(EC2)·RDS·S3 만들기 + 첫 배포 | 사용자(AWS 화면) + Claude(명령·설정) | 서버 주소로 접속 가능, 글이 RDS에·사진이 S3에 저장, RDS 자동 백업 켜짐 | |
+| 3 | 서버(EC2)·RDS·S3 만들기 + 첫 배포 | 사용자(AWS 화면) + Claude(명령·설정) | 서버 주소로 접속 가능, 글이 RDS에·사진이 S3에 저장, RDS 자동 백업 켜짐 | ✅ 2026-11-03 |
 | 4 | 도메인 + HTTPS | 사용자(도메인 구입) + Claude(Nginx 설정) | `https://도메인`으로 접속 | |
 | 5 | 자동 배포 | Claude + 사용자(GitHub 비밀값 등록) | main에 push하면 몇 분 뒤 서버에 반영 | |
 | 6 | 감시·백업 점검 | 함께 | 다운 알림, 백업 복구 연습, 로그 정리 | |
@@ -554,12 +566,14 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | 하루 분석 상한 | 전체 200건, 넘으면 AI를 부르지 않음 (유료 등급 비용 보호). 450건은 무료 한도 기준이라 다시 정함 | 2026-11-02 |
 | enum 컬럼 | CHECK 제약을 만들지 않는다 (`NoColumnCheckMySQLDialect`). 있으면 상태를 추가할 때 `update`가 못 고쳐서 저장이 실패한다 | 2026-11-02 |
 | 운영 DB | **RDS MySQL 8.4** (EC2 안 Docker MySQL에서 변경). 메모리 실측 결과 2GB 서버에 Spring·MySQL을 함께 두면 여유가 없어서. 자동 백업·EC2와 분리라는 이점도 있음 | 2026-10-31 |
+| 서버 OS | **Amazon Linux 2023** (Ubuntu 대신). Compose·Buildx 플러그인은 저장소에 없어 직접 설치 (10절) | 2026-11-03 |
+| RDS 백업 보관 | 1일 (무료 플랜의 최대). 유료 플랜으로 바꿀 때 7일로 | 2026-11-03 |
 
 **미정**
 
 | # | 항목 | 권장안 / 결정 시점 |
 |---|---|---|
-| 1 | 서비스 이름 / 도메인 | S4 전까지 |
+| 1 | 서비스 이름 / 도메인 | S4-4(도메인 + HTTPS) 전까지 |
 | 2 | ~~무료 LLM 공급자~~ | 결정됨 → 18절 (`gemini-3.5-flash-lite`) |
 | 3 | ~~위치 좌표 저장 정밀도~~ | 결정됨 → 18절 (원본 6자리) |
 | 4 | 레포 구조 | 모노레포 권장 (`backend/`, `infra/`, `docs/`) — 화면은 JSP라 `backend/` 안에 있음 |
@@ -568,6 +582,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-11-03 — S4-3 완료: EC2(Amazon Linux 2023, t3.small)·RDS(db.t4g.micro)·S3를 만들고 첫 배포. 서버 주소로 접속되고 글은 RDS에·사진은 S3에 저장, 재부팅 뒤 자동 복구 확인. RDS 자동 백업은 무료 플랜 제한으로 1일
 - 2026-11-02 — 배포 구성을 EC2 + RDS로 확정 (서버 안 MySQL, Lightsail과 비용 비교 후). 월 비용 추정 기록
 - 2026-11-02 — S2 완료. S2-4를 "실패 복구"에서 "하루 분석 상한"으로 줄이고 자동 재시도는 배포 뒤로 미룸. enum 컬럼의 CHECK 제약 제거 → `docs/troubleshooting/2026-11-02-enum-check-constraint.md`
 - 2026-11-02 — S2-3 완료: 글을 올리면 상세 화면으로 이동하고, 분석 상태 API를 2초마다 확인해 끝나면 결과를 보여 준다. 목록 카드에 칼로리 표시 (분석 기록은 한 번의 쿼리로 읽음)
