@@ -306,6 +306,9 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
   - 스왑 2GB(`/swapfile`, `fstab` 등록): 사진 처리나 빌드 때 메모리가 모자라 앱이 죽는 것을 막는 안전판. 평소엔 거의 쓰지 않는다
   - **공인 IP는 서버를 중지했다가 켜면 바뀐다**(재부팅은 안 바뀜) → Elastic IP(`macros-ip`)를 붙여 고정했다 (2026-11-03, S4-4 첫 조각). 요금은 자동 주소와 같지만, 서버를 지울 때는 이 주소도 릴리스해야 요금이 멈춘다
 - **첫 배포** (2026-11-03): 서버에서 레포를 `git clone`하고 `deploy/.env`(레포 밖, `chmod 600`)를 만든 뒤 `docker compose up -d --build`. 이미지를 서버에서 직접 빌드(84초, 앱 기동 17초) — GitHub Actions 빌드 + 레지스트리는 S4-5에서. 확인한 것: 글 3개가 RDS에·사진 6개(글마다 큰 사진 + 썸네일)가 S3 `images/`에 저장, AI 분석 성공, 첫 화면 0.06초·사진 0.2~0.3초, 서버를 재부팅해도 1분 뒤 컨테이너와 스왑이 스스로 돌아옴. 한가할 때 메모리: app 약 570MB, Nginx 약 5MB
+- **도메인** (S4-4, 2026-11-03): 서비스 이름 **찍먹**, 주소 **`jjikmuk.com`**. 가비아에서 구입(첫해 20,900원, 이후 27,500원/년, 만기 2027-11-03, 기관이전 잠금 켬). Route 53은 무료 플랜에서 도메인 구입이 막혀 있어("Free Tier accounts are not supported") 가비아로 했다. DNS도 가비아: A 레코드 `@`와 `www` → Elastic IP. 공개 WHOIS에는 가비아가 소유자 개인정보를 기본으로 가려 준다(조회해서 확인). 이름은 나중에 바꿀 수 있다(새 도메인 + 예전 주소에서 301).
+- **HTTPS** (S4-4): Let's Encrypt 무료 인증서(90일짜리). `deploy/compose.yaml`의 **certbot 컨테이너**가 12시간마다 "만료 30일 전이면 갱신"을 시도하고(webroot 방식: nginx 80번이 `/.well-known/acme-challenge/`를 certbot과 공유하는 볼륨에서 내준다), nginx는 6시간마다 reload해서 갱신된 인증서를 읽는다. http → https, `www.jjikmuk.com` → `jjikmuk.com`으로 301. HSTS 6개월. 세션 쿠키 `Secure`. 내 PC 시험은 `nginx.local.conf`(http만).
+  - **처음 발급 (서버에서 한 번만)**: nginx가 80번을 쓰고 있어서 standalone 방식으로 certbot이 잠깐 80번을 직접 받는다. `docker compose stop nginx` → `docker compose run --rm --entrypoint certbot -p 80:80 certbot certonly --standalone -d jjikmuk.com -d www.jjikmuk.com --agree-tos --register-unsafely-without-email` → `docker compose up -d --build` → 갱신 리허설 `docker compose run --rm --entrypoint certbot certbot renew --dry-run --webroot -w /var/www/certbot`. 인증서는 이름 있는 볼륨 `certbot-etc`에 남는다(`down -v`를 하면 지워지므로 다시 받으면 된다).
 
 **S4 배포 체크리스트** (처음 배포할 때 자주 터지는 것들)
 - [x] 업로드 한도: Nginx `client_max_body_size 20m` = Tomcat `max-swallow-size`. 10~20MB는 Spring까지 와서 우리 에러 화면, 20MB 초과는 Nginx 413 화면 (S4-1에서 15MB·25MB로 확인)
@@ -568,12 +571,14 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | 운영 DB | **RDS MySQL 8.4** (EC2 안 Docker MySQL에서 변경). 메모리 실측 결과 2GB 서버에 Spring·MySQL을 함께 두면 여유가 없어서. 자동 백업·EC2와 분리라는 이점도 있음 | 2026-10-31 |
 | 서버 OS | **Amazon Linux 2023** (Ubuntu 대신). Compose·Buildx 플러그인은 저장소에 없어 직접 설치 (10절) | 2026-11-03 |
 | RDS 백업 보관 | 1일 (무료 플랜의 최대). 유료 플랜으로 바꿀 때 7일로 | 2026-11-03 |
+| 서비스 이름·도메인 | **찍먹**, `jjikmuk.com` (가비아). 2음절·된소리로 입에 붙고, 찍다(사진) + 먹다 두 뜻. 상표는 식품·음식점류에만 있어 앱·웹 분야와 무관(키프리스 확인). 로마자 `jj`가 낯선 건 알고 감수 | 2026-11-03 |
+| HTTPS | Let's Encrypt + certbot 컨테이너(자동 갱신), Nginx 유지. 주소는 `https://jjikmuk.com` 하나로 모음(http·www는 301) | 2026-11-03 |
 
 **미정**
 
 | # | 항목 | 권장안 / 결정 시점 |
 |---|---|---|
-| 1 | 서비스 이름 / 도메인 | S4-4(도메인 + HTTPS) 전까지 |
+| 1 | ~~서비스 이름 / 도메인~~ | 결정됨 → 18절 (찍먹, `jjikmuk.com`) |
 | 2 | ~~무료 LLM 공급자~~ | 결정됨 → 18절 (`gemini-3.5-flash-lite`) |
 | 3 | ~~위치 좌표 저장 정밀도~~ | 결정됨 → 18절 (원본 6자리) |
 | 4 | 레포 구조 | 모노레포 권장 (`backend/`, `infra/`, `docs/`) — 화면은 JSP라 `backend/` 안에 있음 |
@@ -582,6 +587,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-11-03 — 서비스 이름 **찍먹**, 도메인 `jjikmuk.com`(가비아) 결정·구입, DNS 연결. HTTPS 설정 추가(Let's Encrypt, certbot 컨테이너, http·www → https 301, 세션 쿠키 Secure). 서버 적용은 다음 단계
 - 2026-11-03 — S4-3 완료: EC2(Amazon Linux 2023, t3.small)·RDS(db.t4g.micro)·S3를 만들고 첫 배포. 서버 주소로 접속되고 글은 RDS에·사진은 S3에 저장, 재부팅 뒤 자동 복구 확인. RDS 자동 백업은 무료 플랜 제한으로 1일
 - 2026-11-02 — 배포 구성을 EC2 + RDS로 확정 (서버 안 MySQL, Lightsail과 비용 비교 후). 월 비용 추정 기록
 - 2026-11-02 — S2 완료. S2-4를 "실패 복구"에서 "하루 분석 상한"으로 줄이고 자동 재시도는 배포 뒤로 미룸. enum 컬럼의 CHECK 제약 제거 → `docs/troubleshooting/2026-11-02-enum-check-constraint.md`
