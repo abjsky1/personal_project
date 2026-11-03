@@ -304,7 +304,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
   - IAM 역할 `macros-ec2`(S3 읽기·쓰기·목록)를 서버에 붙여 키 없이 S3를 쓴다. 메타데이터는 IMDSv2만, **홉 제한 2** — 컨테이너 안의 앱이 역할 자격 증명을 받으려면 Docker 네트워크 한 단계를 더 지나야 해서 기본값 1로는 안 된다
   - Amazon Linux 2023 메모: 패키지는 `dnf`. Docker는 `dnf install docker`로 되지만 **Compose·Buildx 플러그인은 저장소에 없다** → GitHub 릴리스 파일을 `/usr/local/lib/docker/cli-plugins/`에 직접 넣음 (Compose v5.6.1, Buildx v0.38.1. 함께 깔리는 Buildx 0.12는 Compose가 요구하는 버전보다 낮다). `dnf`가 갱신해 주지 않으므로 올릴 때는 같은 방법으로 다시 넣는다
   - 스왑 2GB(`/swapfile`, `fstab` 등록): 사진 처리나 빌드 때 메모리가 모자라 앱이 죽는 것을 막는 안전판. 평소엔 거의 쓰지 않는다
-  - **공인 IP는 서버를 중지했다가 켜면 바뀐다**(재부팅은 안 바뀜). 도메인을 붙이기 전에 Elastic IP로 고정한다 (S4-4)
+  - **공인 IP는 서버를 중지했다가 켜면 바뀐다**(재부팅은 안 바뀜) → Elastic IP(`macros-ip`)를 붙여 고정했다 (2026-11-03, S4-4 첫 조각). 요금은 자동 주소와 같지만, 서버를 지울 때는 이 주소도 릴리스해야 요금이 멈춘다
 - **첫 배포** (2026-11-03): 서버에서 레포를 `git clone`하고 `deploy/.env`(레포 밖, `chmod 600`)를 만든 뒤 `docker compose up -d --build`. 이미지를 서버에서 직접 빌드(84초, 앱 기동 17초) — GitHub Actions 빌드 + 레지스트리는 S4-5에서. 확인한 것: 글 3개가 RDS에·사진 6개(글마다 큰 사진 + 썸네일)가 S3 `images/`에 저장, AI 분석 성공, 첫 화면 0.06초·사진 0.2~0.3초, 서버를 재부팅해도 1분 뒤 컨테이너와 스왑이 스스로 돌아옴. 한가할 때 메모리: app 약 570MB, Nginx 약 5MB
 
 **S4 배포 체크리스트** (처음 배포할 때 자주 터지는 것들)
@@ -321,7 +321,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - [x] RDS 삭제 방지(deletion protection) 켜기 — 실수로 DB를 지우지 않게 (S4-3. EC2도 종료 방지 켬)
 - [x] 서버 재부팅 뒤 자동 복구: 1분 뒤 컨테이너가 스스로 올라오고(`restart: unless-stopped`) 스왑도 유지 (S4-3에서 확인)
 - [ ] app 컨테이너를 새로 만든 뒤(재배포)에도 Nginx가 502 없이 연결되는지 확인 (S4-5). Nginx는 켜질 때 app 주소를 한 번만 찾아 두기 때문에, app 주소가 바뀌면 끊길 수 있다
-- [ ] 공인 IP 고정(Elastic IP) — 도메인을 붙이기 전에 (S4-4)
+- [x] 공인 IP 고정(Elastic IP) — 도메인을 붙이기 전에 (S4-4, 2026-11-03. 붙이는 순간 예전 주소는 AWS로 돌아가고 서버는 멈추지 않았다)
 - [ ] 세션 쿠키에 `Secure` — HTTPS를 붙인 뒤에 (S4-4). 지금은 HTTP라 `HttpOnly`만 있다
 - [ ] 테스트로 올린 글 지우기 — 지인 베타 전에
 - [x] AWS 요금 알림(Budgets) 설정: 월 50달러. 메일로 알려 줄 뿐 요금을 막아 주지는 않는다 (가입 방식 advanced에는 지출 상한 기능이 없음)
