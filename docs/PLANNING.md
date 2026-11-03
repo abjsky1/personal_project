@@ -325,7 +325,8 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - [x] 서버 재부팅 뒤 자동 복구: 1분 뒤 컨테이너가 스스로 올라오고(`restart: unless-stopped`) 스왑도 유지 (S4-3에서 확인)
 - [ ] app 컨테이너를 새로 만든 뒤(재배포)에도 Nginx가 502 없이 연결되는지 확인 (S4-5). Nginx는 켜질 때 app 주소를 한 번만 찾아 두기 때문에, app 주소가 바뀌면 끊길 수 있다
 - [x] 공인 IP 고정(Elastic IP) — 도메인을 붙이기 전에 (S4-4, 2026-11-03. 붙이는 순간 예전 주소는 AWS로 돌아가고 서버는 멈추지 않았다)
-- [ ] 세션 쿠키에 `Secure` — HTTPS를 붙인 뒤에 (S4-4). 지금은 HTTP라 `HttpOnly`만 있다
+- [x] 세션 쿠키에 `Secure` — HTTPS를 붙인 뒤에 (S4-4, 2026-11-03: https 응답의 `Set-Cookie`에 `Secure; HttpOnly` 확인)
+- [x] HTTPS: Let's Encrypt 발급, http·www·IP 접속은 모두 `https://jjikmuk.com`으로 301, HSTS, 갱신 리허설 성공 (S4-4, 2026-11-03)
 - [ ] 테스트로 올린 글 지우기 — 지인 베타 전에
 - [x] AWS 요금 알림(Budgets) 설정: 월 50달러. 메일로 알려 줄 뿐 요금을 막아 주지는 않는다 (가입 방식 advanced에는 지출 상한 기능이 없음)
 - [x] JSP 개발 모드 끄기 (`server.servlet.jsp.init-parameters.development=false`)
@@ -506,7 +507,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 | 1 | Docker 이미지 + 배포용 설정 | Claude | 내 PC에서 배포 서버와 같은 방식(Docker Compose)으로 사이트가 뜸 | ✅ 2026-10-31 |
 | 2 | AWS 계정 준비 | 사용자 (체크리스트) | 요금 알림, 서울 리전, 루트 대신 관리용 IAM 사용자 | ✅ 2026-11-02 |
 | 3 | 서버(EC2)·RDS·S3 만들기 + 첫 배포 | 사용자(AWS 화면) + Claude(명령·설정) | 서버 주소로 접속 가능, 글이 RDS에·사진이 S3에 저장, RDS 자동 백업 켜짐 | ✅ 2026-11-03 |
-| 4 | 도메인 + HTTPS | 사용자(도메인 구입) + Claude(Nginx 설정) | `https://도메인`으로 접속 | |
+| 4 | 도메인 + HTTPS | 사용자(도메인 구입) + Claude(Nginx 설정) | `https://도메인`으로 접속 | ✅ 2026-11-03 |
 | 5 | 자동 배포 | Claude + 사용자(GitHub 비밀값 등록) | main에 push하면 몇 분 뒤 서버에 반영 | |
 | 6 | 감시·백업 점검 | 함께 | 다운 알림, 백업 복구 연습, 로그 정리 | |
 
@@ -587,7 +588,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
-- 2026-11-03 — 서비스 이름 **찍먹**, 도메인 `jjikmuk.com`(가비아) 결정·구입, DNS 연결. HTTPS 설정 추가(Let's Encrypt, certbot 컨테이너, http·www → https 301, 세션 쿠키 Secure). 서버 적용은 다음 단계
+- 2026-11-03 — 서비스 이름 **찍먹**, 도메인 `jjikmuk.com`(가비아) 결정·구입, DNS 연결. HTTPS 적용(Let's Encrypt, certbot 컨테이너, http·www → https 301, 세션 쿠키 Secure) → **S4-4 완료**. 휴대폰(아이폰)에서 `https://jjikmuk.com`으로 갤러리·카메라 사진 업로드, 분석 결과 자동 표시, 삭제, 비밀번호 오류까지 확인
 - 2026-11-03 — S4-3 완료: EC2(Amazon Linux 2023, t3.small)·RDS(db.t4g.micro)·S3를 만들고 첫 배포. 서버 주소로 접속되고 글은 RDS에·사진은 S3에 저장, 재부팅 뒤 자동 복구 확인. RDS 자동 백업은 무료 플랜 제한으로 1일
 - 2026-11-02 — 배포 구성을 EC2 + RDS로 확정 (서버 안 MySQL, Lightsail과 비용 비교 후). 월 비용 추정 기록
 - 2026-11-02 — S2 완료. S2-4를 "실패 복구"에서 "하루 분석 상한"으로 줄이고 자동 재시도는 배포 뒤로 미룸. enum 컬럼의 CHECK 제약 제거 → `docs/troubleshooting/2026-11-02-enum-check-constraint.md`
