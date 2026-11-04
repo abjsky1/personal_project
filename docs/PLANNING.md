@@ -314,7 +314,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
   - 첫 자동 배포 확인 (2026-11-04): push → 테스트 1분 → 이미지 0.5~2분(캐시) → 서버 교체 2분, **약 5분 뒤 반영**. 교체 중 app이 멈추는 시간 약 20초
   - `deploy.sh`: `.env`의 `APP_IMAGE_TAG`를 바꾸고 `docker compose pull` → `up -d` → healthy 대기(최대 2분, 실패면 로그 출력) → 안 쓰는 이미지 정리. **되돌리기** = `bash deploy.sh <예전 SHA>`(GHCR에 남은 이미지를 다시 받음). 비상시(GHCR 장애)는 `docker compose up -d --build`로 서버에서 직접 빌드
   - 배포 중 app이 바뀌는 약 20초 동안은 접속이 안 된다(무중단은 사용자가 늘면 검토). Nginx는 `resolver`로 app 주소를 10초마다 다시 물어, 재배포로 app 주소가 바뀌어도 502가 나지 않는다
-  - 이때부터 작업은 브랜치 → PR → CI 통과 → 머지(= 배포). GitHub 규칙으로 "PR 없이 main에 push 금지, CI 통과해야 머지"를 켠다 (16절)
+  - 이때부터 작업은 브랜치 → PR → CI 통과 → 머지(= 배포). GitHub 규칙(ruleset `main`, 2026-11-04 켬): PR 없이 main에 push 금지, `backend` 검사 통과해야 머지, 강제 push·삭제 금지 (16절)
 
 **S4 배포 체크리스트** (처음 배포할 때 자주 터지는 것들)
 - [x] 업로드 한도: Nginx `client_max_body_size 20m` = Tomcat `max-swallow-size`. 10~20MB는 Spring까지 와서 우리 에러 화면, 20MB 초과는 Nginx 413 화면 (S4-1에서 15MB·25MB로 확인)
@@ -523,7 +523,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 - **백로그**: GitHub Projects 칸반 — Backlog / Next / In Progress / Done (4.2절 항목을 이슈로 등록)
 - **이슈 라벨**: `bug` · `feature` · `user-request` · `ops` · `tech-debt`
 - **피드백 → 이슈 → 답변**: 피드백 게시판 글 중 처리할 것은 GitHub 이슈(`user-request`)로 옮겨 진행 상태를 "진행 중"으로 바꾸고, 배포되면 "반영 완료"와 답변을 남긴다.
-- **브랜치**: 자동 배포 전에는 `main`에 직접 커밋·push하고, CI는 push 후에 확인한다 (❌면 다음 커밋으로 고침). **자동 배포(S4-5)부터** `main` = 배포 대상이 되므로 작업은 `feat/*`, `fix/*`, `chore/*` → PR → CI 통과 후 머지 (머지 시 자동 배포, "CI 통과해야 머지" 규칙도 이때 켬)
+- **브랜치**: 자동 배포 전에는 `main`에 직접 커밋·push하고, CI는 push 후에 확인한다 (❌면 다음 커밋으로 고침). **자동 배포(S4-5)부터** `main` = 배포 대상이 되므로 작업은 `feat/*`, `fix/*`, `chore/*` → PR → CI 통과 후 머지 (머지 시 자동 배포, "CI 통과해야 머지" 규칙도 이때 켬) → **2026-11-04부터 적용 중**. PR은 GitHub 화면에서 만들고(이 PC에 `gh` 없음), 머지 뒤 약 5분이면 서버에 반영된다
 - **커밋 메시지**: `feat`(기능 추가·변경) / `fix`(버그 수정) / `chore`(그 외 전부) + 한국어 요약. 한 줄 비우고 세부 내용과 이유를 적는다. PR 제목도 같은 형식
   ```
   fix: 세로 사진이 눕혀지는 문제 수정
