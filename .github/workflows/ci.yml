@@ -120,6 +120,12 @@ jobs:
       AWS_REGION: ap-northeast-2
       INSTANCE_ID: i-0f4506ea91b8a4fc9
     steps:
+      # (진단용, 원인을 찾으면 지운다) GitHub이 AWS에 내는 증명서의 내용(발급자·대상·주체)만 찍어서 신뢰 정책과 비교한다. 증명서 자체는 찍지 않는다.
+      - name: 증명서 내용 확인
+        run: |
+          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          python3 -c "import base64, json, sys; p = sys.argv[1]; p += '=' * (-len(p) % 4); d = json.loads(base64.urlsafe_b64decode(p)); print(json.dumps({k: d.get(k) for k in ['iss', 'aud', 'sub', 'ref', 'repository', 'repository_owner', 'event_name']}, indent=2))" "$(echo "$TOKEN" | cut -d. -f2)"
+
       # AWS_DEPLOY_ROLE_ARN: 저장소 Settings → Variables에 넣어 둔 배포용 IAM 역할 주소
       - uses: aws-actions/configure-aws-credentials@v4
         with:
