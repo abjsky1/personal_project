@@ -1,7 +1,12 @@
-# GitHub Actions CI 설정 파일
+# GitHub Actions CI/CD 설정 파일
 # GitHub은 .github/workflows/ 폴더 안의 yml 파일을 찾아서 자동으로 실행한다.
-# 실제 검사 명령은 gradlew·npm 스크립트를 그대로 쓰고, 이 파일에는 "언제, 어떤 순서로 실행할지"만 적는다.
+# 실제 검사·배포 명령은 gradlew·deploy.sh 스크립트를 그대로 쓰고, 이 파일에는 "언제, 어떤 순서로 실행할지"만 적는다.
 # → 나중에 Jenkins 같은 다른 CI로 옮겨도 같은 명령을 그대로 쓸 수 있다.
+#
+# 흐름 (S4-5 자동 배포)
+#   PR:        backend(빌드·테스트)만 실행 → 결과가 PR 화면에 표시된다
+#   main push: backend → image(Docker 이미지를 만들어 GHCR에 올림) → deploy(서버가 그 이미지를 받아 교체)
+#   되돌리기: 서버에서  bash deploy/deploy.sh <예전 커밋 SHA>
 
 # Actions 탭과 PR 화면에 보이는 이름
 name: CI
@@ -59,3 +64,103 @@ jobs:
       - name: 빌드·테스트
         working-directory: backend
         run: ./gradlew build
+
+  # ---- 아래 두 job은 main에 push됐을 때만 실행된다 (PR에서는 검사만) ----
+
+  # Docker 이미지를 GitHub 컴퓨터에서 만들어 GHCR(GitHub 컨테이너 저장소)에 올린다.
+  # 서버(2GB)에서 빌드하지 않으므로 사용자가 쓰는 중에도 서버가 느려지지 않는다.
+  image:
+    # backend(테스트)가 통과해야 시작한다
+    needs: backend
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # GHCR에 이미지를 올리려면 packages 쓰기 권한이 필요하다 (GITHUB_TOKEN은 GitHub이 실행마다 만들어 주는 임시 열쇠)
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      # buildx: Dockerfile의 --mount=type=cache 같은 BuildKit 기능을 쓰기 위해
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # 태그 두 개: 커밋 SHA(되돌리기용, 어느 코드로 만든 이미지인지 확실) + latest(최신)
+      # cache: 바뀌지 않은 단계(기본 이미지 등)는 지난 실행의 결과를 재사용한다
+      - uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/macros-app:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/macros-app:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # 서버에 "새 이미지로 바꿔라"를 전달한다.
+  # SSH 대신 AWS SSM(Systems Manager)으로 명령을 보낸다: 서버의 22번 포트를 GitHub에 열 필요도, SSH 키를 GitHub에 맡길 필요도 없다.
+  # AWS 접속 권한은 OIDC로 받는다: GitHub이 "이 실행은 abjsky1/personal_project의 main이다"라고 증명하면 AWS가 임시 권한을 준다 (비밀값 저장 없음).
+  deploy:
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # 배포는 한 번에 하나만. 먼저 시작한 배포가 끝날 때까지 다음 배포는 기다린다.
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      # OIDC 증명서(id-token)를 발급받기 위해
+      id-token: write
+    env:
+      AWS_REGION: ap-northeast-2
+      INSTANCE_ID: i-0f4506ea91b8a4fc9
+    steps:
+      # AWS_DEPLOY_ROLE_ARN: 저장소 Settings → Variables에 넣어 둔 배포용 IAM 역할 주소
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 서버에서 ec2-user로: 최신 코드 받기(deploy 폴더의 설정·스크립트) → deploy.sh <커밋 SHA>
+      - name: 서버에 배포 명령 보내기 (SSM)
+        id: send
+        run: |
+          SCRIPT="cd /home/ec2-user/personal_project && git pull --ff-only --quiet && bash deploy/deploy.sh $GITHUB_SHA"
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy ${GITHUB_SHA:0:7}" \
+            --parameters "commands=[\"runuser -u ec2-user -- bash -lc '$SCRIPT'\"],executionTimeout=[\"900\"]" \
+            --query Command.CommandId --output text)
+          echo "cmd_id=$CMD_ID" >> "$GITHUB_OUTPUT"
+
+      # 서버의 실행이 끝날 때까지 10초마다 확인하고, 서버가 찍은 출력을 그대로 보여 준다
+      - name: 서버 결과 기다리기
+        run: |
+          CMD_ID="${{ steps.send.outputs.cmd_id }}"
+          for i in $(seq 1 90); do
+            sleep 10
+            STATUS=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+                       --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Pending|InProgress|Delayed) continue;; esac
+            break
+          done
+          echo "---- 서버 출력 ----"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query StandardOutputContent --output text
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query StandardErrorContent --output text >&2
+          echo "---- 상태: $STATUS ----"
+          [ "$STATUS" = "Success" ] || exit 1
+
+      # 밖에서 실제 주소로 확인한다 (nginx·https까지 거쳐서 응답하는지)
+      - name: 사이트 확인
+        run: |
+          for i in $(seq 1 12); do
+            curl -fsS https://jjikmuk.com/actuator/health && exit 0
+            sleep 5
+          done
+          echo "사이트가 응답하지 않습니다"; exit 1

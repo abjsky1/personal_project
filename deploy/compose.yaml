@@ -1,7 +1,8 @@
 # 배포 서버(EC2)에서 실행하는 구성: [사용자] → nginx(80·443번) → app(Spring, 8080) → RDS(MySQL, 서버 밖)
 #                                                └ certbot: https 인증서 발급·갱신 (nginx와 볼륨을 공유)
 # DB는 이 파일에 없다: AWS가 관리하는 RDS를 쓰고, app이 .env의 DB_HOST(RDS 주소)로 접속한다.
-# 실행: deploy 폴더에서  docker compose up -d --build
+# 평소 배포: main에 push하면 GitHub Actions가 이미지를 만들고 서버에서 deploy.sh를 실행한다 (사람이 할 일 없음)
+# 처음 올리거나 비상시(서버에서 직접 빌드): deploy 폴더에서  docker compose up -d --build
 # 비밀값은 같은 폴더의 .env에서 읽는다 (.env.example을 복사해서 채운다. Git에는 올라가지 않는다)
 # 인증서를 처음 받는 순서(서버에 한 번만): 기획서 10절 "HTTPS"
 
@@ -57,9 +58,11 @@ services:
 
   # Spring 서버 (backend/Dockerfile로 만든 이미지)
   app:
-    # 이미지를 backend 폴더의 Dockerfile로 만든다 (--build를 붙이면 매번 새로 만든다)
+    # 평소에는 GitHub Actions가 만들어 GHCR(GitHub 컨테이너 저장소)에 올린 이미지를 받는다.
+    # 태그 = 커밋 SHA. .env의 APP_IMAGE_TAG에 적혀 있고(deploy.sh가 바꾼다), 없으면 latest
+    image: ghcr.io/abjsky1/macros-app:${APP_IMAGE_TAG:-latest}
+    # build는 내 PC 시험용·비상용으로 남겨 둔다: docker compose up -d --build 를 하면 서버에서 직접 만든다
     build: ../backend
-    image: macros-app
     restart: unless-stopped
     # ports가 없다: app은 밖에 열지 않고, 같은 Compose 안의 nginx만 접속할 수 있다.
     environment:

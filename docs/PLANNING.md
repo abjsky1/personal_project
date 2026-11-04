@@ -309,6 +309,11 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - **도메인** (S4-4, 2026-11-03): 서비스 이름 **찍먹**, 주소 **`jjikmuk.com`**. 가비아에서 구입(첫해 20,900원, 이후 27,500원/년, 만기 2027-11-03, 기관이전 잠금 켬). Route 53은 무료 플랜에서 도메인 구입이 막혀 있어("Free Tier accounts are not supported") 가비아로 했다. DNS도 가비아: A 레코드 `@`와 `www` → Elastic IP. 공개 WHOIS에는 가비아가 소유자 개인정보를 기본으로 가려 준다(조회해서 확인). 이름은 나중에 바꿀 수 있다(새 도메인 + 예전 주소에서 301).
 - **HTTPS** (S4-4): Let's Encrypt 무료 인증서(90일짜리). `deploy/compose.yaml`의 **certbot 컨테이너**가 12시간마다 "만료 30일 전이면 갱신"을 시도하고(webroot 방식: nginx 80번이 `/.well-known/acme-challenge/`를 certbot과 공유하는 볼륨에서 내준다), nginx는 6시간마다 reload해서 갱신된 인증서를 읽는다. http → https, `www.jjikmuk.com` → `jjikmuk.com`으로 301. HSTS 6개월. 세션 쿠키 `Secure`. 내 PC 시험은 `nginx.local.conf`(http만).
   - **처음 발급 (서버에서 한 번만)**: nginx가 80번을 쓰고 있어서 standalone 방식으로 certbot이 잠깐 80번을 직접 받는다. `docker compose stop nginx` → `docker compose run --rm --entrypoint certbot -p 80:80 certbot certonly --standalone -d jjikmuk.com -d www.jjikmuk.com --agree-tos --register-unsafely-without-email` → `docker compose up -d --build` → 갱신 리허설 `docker compose run --rm --entrypoint certbot certbot renew --dry-run --webroot -w /var/www/certbot`. 인증서는 이름 있는 볼륨 `certbot-etc`에 남는다(`down -v`를 하면 지워지므로 다시 받으면 된다).
+- **자동 배포** (S4-5, 2026-11-03): `main`에 push → GitHub Actions `backend`(테스트) → `image`(Docker 이미지를 GitHub 컴퓨터에서 만들어 **GHCR** `ghcr.io/abjsky1/macros-app`에 올림, 태그 = 커밋 SHA + latest) → `deploy`(AWS **SSM**으로 서버에 명령: `git pull` 뒤 `deploy/deploy.sh <SHA>`). 서버에서는 빌드하지 않고 이미지만 받는다.
+  - 서버에 명령을 보내는 길은 SSH 대신 SSM: 22번 포트를 GitHub에 열 필요도, SSH 키를 GitHub에 맡길 필요도 없다. AWS 권한은 **OIDC**(GitHub이 "이 실행은 이 저장소의 main"임을 증명하면 AWS가 임시 권한을 줌) → GitHub에 저장하는 비밀값 0개. 준비물: EC2 역할에 `AmazonSSMManagedInstanceCore`, IAM OIDC 공급자 + 배포 역할 `macros-deploy`(SSM SendCommand를 이 인스턴스에만), 저장소 변수 `AWS_DEPLOY_ROLE_ARN`
+  - `deploy.sh`: `.env`의 `APP_IMAGE_TAG`를 바꾸고 `docker compose pull` → `up -d` → healthy 대기(최대 2분, 실패면 로그 출력) → 안 쓰는 이미지 정리. **되돌리기** = `bash deploy.sh <예전 SHA>`(GHCR에 남은 이미지를 다시 받음). 비상시(GHCR 장애)는 `docker compose up -d --build`로 서버에서 직접 빌드
+  - 배포 중 app이 바뀌는 약 20초 동안은 접속이 안 된다(무중단은 사용자가 늘면 검토). Nginx는 `resolver`로 app 주소를 10초마다 다시 물어, 재배포로 app 주소가 바뀌어도 502가 나지 않는다
+  - 이때부터 작업은 브랜치 → PR → CI 통과 → 머지(= 배포). GitHub 규칙으로 "PR 없이 main에 push 금지, CI 통과해야 머지"를 켠다 (16절)
 
 **S4 배포 체크리스트** (처음 배포할 때 자주 터지는 것들)
 - [x] 업로드 한도: Nginx `client_max_body_size 20m` = Tomcat `max-swallow-size`. 10~20MB는 Spring까지 와서 우리 에러 화면, 20MB 초과는 Nginx 413 화면 (S4-1에서 15MB·25MB로 확인)
@@ -323,7 +328,8 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - [ ] RDS 백업에서 복구 1회 해보기 (S4-6)
 - [x] RDS 삭제 방지(deletion protection) 켜기 — 실수로 DB를 지우지 않게 (S4-3. EC2도 종료 방지 켬)
 - [x] 서버 재부팅 뒤 자동 복구: 1분 뒤 컨테이너가 스스로 올라오고(`restart: unless-stopped`) 스왑도 유지 (S4-3에서 확인)
-- [ ] app 컨테이너를 새로 만든 뒤(재배포)에도 Nginx가 502 없이 연결되는지 확인 (S4-5). Nginx는 켜질 때 app 주소를 한 번만 찾아 두기 때문에, app 주소가 바뀌면 끊길 수 있다
+- [ ] app 컨테이너를 새로 만든 뒤(재배포)에도 Nginx가 502 없이 연결되는지 확인 (S4-5). Nginx는 켜질 때 app 주소를 한 번만 찾아 두기 때문에, app 주소가 바뀌면 끊길 수 있다 → `resolver 127.0.0.11 valid=10s` + 변수 `proxy_pass`로 해결, 첫 자동 배포에서 확인
+- [ ] 배포 때마다 쌓이는 옛 app 이미지 정리 — `deploy.sh`가 교체 뒤 `docker image prune -af` (S4-5, 첫 자동 배포에서 확인)
 - [x] 공인 IP 고정(Elastic IP) — 도메인을 붙이기 전에 (S4-4, 2026-11-03. 붙이는 순간 예전 주소는 AWS로 돌아가고 서버는 멈추지 않았다)
 - [x] 세션 쿠키에 `Secure` — HTTPS를 붙인 뒤에 (S4-4, 2026-11-03: https 응답의 `Set-Cookie`에 `Secure; HttpOnly` 확인)
 - [x] HTTPS: Let's Encrypt 발급, http·www·IP 접속은 모두 `https://jjikmuk.com`으로 301, HSTS, 갱신 리허설 성공 (S4-4, 2026-11-03)
@@ -574,6 +580,8 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | RDS 백업 보관 | 1일 (무료 플랜의 최대). 유료 플랜으로 바꿀 때 7일로 | 2026-11-03 |
 | 서비스 이름·도메인 | **찍먹**, `jjikmuk.com` (가비아). 2음절·된소리로 입에 붙고, 찍다(사진) + 먹다 두 뜻. 상표는 식품·음식점류에만 있어 앱·웹 분야와 무관(키프리스 확인). 로마자 `jj`가 낯선 건 알고 감수 | 2026-11-03 |
 | HTTPS | Let's Encrypt + certbot 컨테이너(자동 갱신), Nginx 유지. 주소는 `https://jjikmuk.com` 하나로 모음(http·www는 301) | 2026-11-03 |
+| 자동 배포 | GitHub Actions → GHCR 이미지(태그 = 커밋 SHA) → AWS SSM으로 서버에 `deploy.sh`. 서버에서 빌드 안 함. AWS 권한은 OIDC(비밀값 저장 없음), SSH 포트는 계속 내 IP만 | 2026-11-03 |
+| 롤백 | `bash deploy.sh <예전 SHA>` (GHCR에 남은 이미지를 다시 받음). 무중단 배포는 사용자가 늘면 검토 | 2026-11-03 |
 
 **미정**
 
@@ -588,6 +596,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-11-03 — S4-5 자동 배포 설정: main push → 테스트 → GHCR 이미지 → SSM으로 서버에서 `deploy.sh`. Nginx에 `resolver`(재배포 뒤 502 방지). AWS(SSM 권한, OIDC 배포 역할)·GitHub(변수, PR 규칙) 설정은 사용자 작업, 첫 자동 배포 확인은 다음 단계
 - 2026-11-03 — 서비스 이름 **찍먹**, 도메인 `jjikmuk.com`(가비아) 결정·구입, DNS 연결. HTTPS 적용(Let's Encrypt, certbot 컨테이너, http·www → https 301, 세션 쿠키 Secure) → **S4-4 완료**. 휴대폰(아이폰)에서 `https://jjikmuk.com`으로 갤러리·카메라 사진 업로드, 분석 결과 자동 표시, 삭제, 비밀번호 오류까지 확인
 - 2026-11-03 — S4-3 완료: EC2(Amazon Linux 2023, t3.small)·RDS(db.t4g.micro)·S3를 만들고 첫 배포. 서버 주소로 접속되고 글은 RDS에·사진은 S3에 저장, 재부팅 뒤 자동 복구 확인. RDS 자동 백업은 무료 플랜 제한으로 1일
 - 2026-11-02 — 배포 구성을 EC2 + RDS로 확정 (서버 안 MySQL, Lightsail과 비용 비교 후). 월 비용 추정 기록

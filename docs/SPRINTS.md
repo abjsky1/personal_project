@@ -154,7 +154,8 @@
 | `2309f90` `04894e8` `4d76b91` | S4-1 | 배포 계획, Docker 이미지 + 배포용 설정(prod 프로필, Nginx, Compose), 운영 DB를 RDS로 변경 |
 | `7d6c3b4` `f2a2121` | S4-2 | 배포 구성 EC2 + RDS 확정(월 약 45달러), AWS 계정(무료 플랜, 서울, IAM 사용자 + 패스키, 요금 알림 50달러) |
 | `14c6117` `17b2c05` | S4-3 | EC2(Amazon Linux 2023, t3.small)·RDS(db.t4g.micro)·S3 만들고 첫 배포, 공인 IP 고정. 서버 구성은 PLANNING 10절 |
-| `ea6ff7c` (이번 커밋) | S4-4 | 서비스 이름 찍먹·`jjikmuk.com`(가비아) + DNS, HTTPS(Let's Encrypt, certbot 컨테이너, nginx 443). 휴대폰에서 실제 주소로 확인 |
+| `ea6ff7c` `c52aa9b` | S4-4 | 서비스 이름 찍먹·`jjikmuk.com`(가비아) + DNS, HTTPS(Let's Encrypt, certbot 컨테이너, nginx 443). 휴대폰에서 실제 주소로 확인 |
+| (이번 커밋) | S4-5 | 자동 배포: GitHub Actions → GHCR 이미지 → SSM으로 서버에서 `deploy.sh`. AWS OIDC 배포 역할, PR 규칙 |
 
 ### 만난 문제
 | 문제 | 원인 | 기록 |
