@@ -322,7 +322,8 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - [x] 이미지 처리 동시 실행 수 제한: 한 번에 한 장 (`ImageProcessor.process`에 `synchronized`). 사용자가 늘어 기다림이 생기면 2장으로 늘리는 것을 검토
 - [x] 비밀값: 환경 변수 주입, 레포·이미지에 포함되지 않았는지 확인 — 이미지에는 없음 (`.env`는 빌드 대상 폴더 밖), 서버 `.env`는 레포 밖·`chmod 600`. 밖에서 `/.env`, `/.git/config`를 요청해도 404 (S4-3)
 - [x] 시간대: 시각은 `Instant`(시간대와 무관한 한 시점)로 저장하고 화면은 코드에서 `Asia/Seoul`로 바꿔 보여 주므로 서버 시간대와 상관없다. 컨테이너 `TZ=Asia/Seoul`은 로그 시각을 한국 시간으로 읽기 위해
-- [x] Docker 로그 로테이션: 컨테이너마다 10MB × 3개. 크기 기준이라 사용자가 적으면 3개월보다 오래 남을 수 있음(배포로 컨테이너를 새로 만들면 지워진다) → S4-6에서 "이용 기록 3개월 보관"과 맞는지 확인
+- [x] 로그 보관 (S4-6, 2026-11-04): app 로그는 **CloudWatch Logs**(로그 그룹 `/macros/server`, 보관 90일 = 처리방침 "이용 기록 3개월")로 보내서 배포로 컨테이너가 바뀌어도 남고 traceId로 검색된다. nginx·certbot 로그는 서버 안 10MB × 3개(배포해도 안 바뀌는 컨테이너라 유지됨). 보는 법은 11절
+- [x] 접속 기록에 IP 안 남기기 (S4-6): nginx access log를 IP 없는 형식(`log_format noip`)으로. 처리방침 "접속 IP는 서버 메모리에만 최대 1일 보관"과 맞춤. nginx error log에는 오류가 났을 때만 IP가 찍힐 수 있고 서버 안 30MB까지만 남는다
 - [x] S3: 버킷(공개 차단 유지) + EC2용 IAM 역할 (`s3:PutObject`, `s3:GetObject`, `s3:ListBucket`). ListBucket이 없으면 없는 사진을 요청할 때 404 대신 403(권한 없음)이 돌아온다 (S4-3: 없는 사진은 404, 버킷 주소로 직접 접근하면 403인 것을 확인)
 - [x] 서버 `.env`: `DB_HOST`(RDS 엔드포인트), `MYSQL_PASSWORD`(RDS 마스터 비밀번호), `APP_S3_BUCKET`, `GEMINI_API_KEY`. 사진 저장소 s3는 prod 프로필이 이미 켠다 (S4-3. 버킷 이름·RDS 주소도 레포가 아니라 서버 `.env`에만 적는다)
 - [x] RDS: 공개 접근 끄기 + 보안 그룹은 EC2에서만 3306 허용, 자동 백업 켜기 (S4-3. 보관 1일은 무료 플랜 제한 → 10절)
@@ -351,10 +352,11 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - 비밀번호 실패, 운영자 상태 변경, rate limit 차단 로그
 
 **배포 단계에서 (S4~)**
-- **JSON 구조화 로그**: 설정 한 줄(`logging.structured.format.console=ecs`)로 켠다. 로컬은 읽기 쉬운 글자 형식 유지
-- **에러 추적 + 알림**: Sentry (프론트 + 백엔드). 새 에러가 나면 메일로 알림
-- **다운 알림**: 외부 업타임 모니터가 `/actuator/health`를 확인, 응답 없으면 알림
-- **백업**: RDS 자동 백업 (10절)
+- **JSON 구조화 로그**: 설정 한 줄(`logging.structured.format.console=ecs`)로 켠다. 로컬은 읽기 쉬운 글자 형식 유지 → 켬 (S4-6, 2026-11-04)
+- **로그 저장·검색** (S4-6): app 컨테이너 로그를 Docker의 `awslogs` 드라이버로 CloudWatch Logs에 보낸다 (`deploy/compose.yaml`). 보는 법: AWS 콘솔 → CloudWatch → 로그 그룹 `/macros/server` → 스트림 `macros-app-1`. 검색은 **Logs Insights**에서, 예: `fields @timestamp, log.level, message | filter traceId = "9dff6979" | sort @timestamp` (사용자가 알려 준 traceId로 그 요청의 로그만 본다). 서버에서 바로 볼 때는 여전히 `docker compose logs app`
+- **에러 알림**: Sentry 대신 **CloudWatch 지표 필터 + SNS 메일**로 단순화 (S4-6). 로그에 `ERROR`가 찍히면 메일. 도구를 더 들이지 않는다
+- **다운 알림**: 외부 업타임 모니터가 `/actuator/health`를 확인, 응답 없으면 알림 → UptimeRobot 무료, 5분 간격, 메일 (S4-6, 2026-11-04)
+- **백업**: RDS 자동 백업 (10절). 복구 연습은 S4-6에서 1회
 
 **장애 기록**: `docs/troubleshooting/YYYY-MM-DD-제목.md` — 현상 / 영향 / 원인 / 해결 / 재발 방지 (개발 중 발견한 문제도 같은 형식으로 남긴다)
 
@@ -583,6 +585,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | HTTPS | Let's Encrypt + certbot 컨테이너(자동 갱신), Nginx 유지. 주소는 `https://jjikmuk.com` 하나로 모음(http·www는 301) | 2026-11-03 |
 | 자동 배포 | GitHub Actions → GHCR 이미지(태그 = 커밋 SHA) → AWS SSM으로 서버에 `deploy.sh`. 서버에서 빌드 안 함. AWS 권한은 OIDC(비밀값 저장 없음), SSH 포트는 계속 내 IP만 | 2026-11-03 |
 | 롤백 | `bash deploy.sh <예전 SHA>` (GHCR에 남은 이미지를 다시 받음). 무중단 배포는 사용자가 늘면 검토 | 2026-11-03 |
+| 로그·알림 | app 로그는 CloudWatch Logs 90일(JSON). 에러 알림은 Sentry 대신 CloudWatch 지표 필터 + SNS 메일, 다운 알림은 UptimeRobot. nginx 접속 기록에 IP를 남기지 않음 | 2026-11-04 |
 
 **미정**
 
@@ -597,6 +600,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-11-04 — S4-6 진행: 다운 알림(UptimeRobot), app 로그를 CloudWatch Logs로(JSON, 90일), nginx 접속 기록에서 IP 제거. 에러 알림(지표 필터 + 메일)과 RDS 복구 연습은 다음
 - 2026-11-04 — S4-5 완료: 첫 자동 배포 성공 (push → 약 5분 뒤 서버 반영). GitHub OIDC 증명서의 `sub` 형식 변경 때문에 두 번 실패 → 신뢰 정책 수정 → `troubleshooting/2026-11-04-github-oidc-sub-claim.md`. 이제부터 작업은 PR → CI → 머지(= 배포)
 - 2026-11-03 — S4-5 자동 배포 설정: main push → 테스트 → GHCR 이미지 → SSM으로 서버에서 `deploy.sh`. Nginx에 `resolver`(재배포 뒤 502 방지). AWS(SSM 권한, OIDC 배포 역할)·GitHub(변수, PR 규칙) 설정은 사용자 작업
 - 2026-11-03 — 서비스 이름 **찍먹**, 도메인 `jjikmuk.com`(가비아) 결정·구입, DNS 연결. HTTPS 적용(Let's Encrypt, certbot 컨테이너, http·www → https 301, 세션 쿠키 Secure) → **S4-4 완료**. 휴대폰(아이폰)에서 `https://jjikmuk.com`으로 갤러리·카메라 사진 업로드, 분석 결과 자동 표시, 삭제, 비밀번호 오류까지 확인
