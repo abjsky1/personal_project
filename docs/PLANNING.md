@@ -296,7 +296,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - 운영 서버의 로컬 디스크에 이미지 저장 금지 — 컨테이너 재배포 시 사라진다.
 - 롤백: Docker 이미지 태그를 커밋 SHA로 남겨 이전 버전으로 즉시 되돌릴 수 있게 한다.
 
-- **배포 파일** (S4-1): `backend/Dockerfile`(2단계 빌드, `amazoncorretto:17-alpine`, root가 아닌 사용자로 실행), `backend/src/main/resources/application-prod.properties`(배포 서버 전용 설정), `deploy/compose.yaml`(nginx·app, DB는 `.env`의 `DB_HOST` = RDS 주소), `deploy/nginx.conf`, `deploy/.env.example`. 내 PC에서 같은 구성을 시험할 때는 `deploy/compose.local.yaml`을 덧씌운다(RDS 대신 mysql 컨테이너, S3 대신 컨테이너 안 폴더).
+- **배포 파일** (S4-1): `backend/Dockerfile`(2단계 빌드, `amazoncorretto:17-alpine`, root가 아닌 사용자로 실행), `backend/src/main/resources/application-prod.properties`(배포 서버 전용 설정), `deploy/compose.yaml`(nginx·app, DB는 `.env`의 `DB_HOST` = RDS 주소), `deploy/nginx/default.conf`(폴더째 mount — 파일 하나를 mount하면 git pull 뒤 컨테이너가 옛 파일을 본다, troubleshooting 11-04), `deploy/.env.example`. 내 PC에서 같은 구성을 시험할 때는 `deploy/compose.local.yaml`을 덧씌운다(RDS 대신 mysql 컨테이너, S3 대신 컨테이너 안 폴더).
 - **서버는 x86(t3 계열)**: 이미지를 내 PC·GitHub Actions(둘 다 x86)에서 그대로 만들 수 있다. ARM(t4g)은 이미지를 따로 만들어야 해서 쓰지 않는다. (RDS는 AWS가 관리하므로 ARM이어도 상관없다)
 - **메모리 실측** (내 PC Docker, 2026-10-31): app 컨테이너 약 650MB(힙 512MB, 4,800만 화소 사진 처리 직후), MySQL 약 460MB, Nginx 약 20MB. → MySQL을 RDS로 빼면 EC2에는 app + Nginx + 운영체제만 남아 2GB 서버(t3.small)에 여유가 생긴다. 1GB 서버는 빠듯해서 쓰지 않는다.
 - **서버** (S4-3, 2026-11-03, `macros-server`): EC2 t3.small(2 vCPU, 2GB), **Amazon Linux 2023**(Ubuntu 대신 — 사용자 결정, AWS가 만든 기본 이미지), 디스크 gp3 20GiB, 서울 리전, 종료 방지 켬. 접속은 `ec2-user` + 키 파일(`macros-key.pem`, 레포 밖 `~/.ssh/`에 보관)
@@ -307,7 +307,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
   - **공인 IP는 서버를 중지했다가 켜면 바뀐다**(재부팅은 안 바뀜) → Elastic IP(`macros-ip`)를 붙여 고정했다 (2026-11-03, S4-4 첫 조각). 요금은 자동 주소와 같지만, 서버를 지울 때는 이 주소도 릴리스해야 요금이 멈춘다
 - **첫 배포** (2026-11-03): 서버에서 레포를 `git clone`하고 `deploy/.env`(레포 밖, `chmod 600`)를 만든 뒤 `docker compose up -d --build`. 이미지를 서버에서 직접 빌드(84초, 앱 기동 17초) — GitHub Actions 빌드 + 레지스트리는 S4-5에서. 확인한 것: 글 3개가 RDS에·사진 6개(글마다 큰 사진 + 썸네일)가 S3 `images/`에 저장, AI 분석 성공, 첫 화면 0.06초·사진 0.2~0.3초, 서버를 재부팅해도 1분 뒤 컨테이너와 스왑이 스스로 돌아옴. 한가할 때 메모리: app 약 570MB, Nginx 약 5MB
 - **도메인** (S4-4, 2026-11-03): 서비스 이름 **찍먹**, 주소 **`jjikmuk.com`**. 가비아에서 구입(첫해 20,900원, 이후 27,500원/년, 만기 2027-11-03, 기관이전 잠금 켬). Route 53은 무료 플랜에서 도메인 구입이 막혀 있어("Free Tier accounts are not supported") 가비아로 했다. DNS도 가비아: A 레코드 `@`와 `www` → Elastic IP. 공개 WHOIS에는 가비아가 소유자 개인정보를 기본으로 가려 준다(조회해서 확인). 이름은 나중에 바꿀 수 있다(새 도메인 + 예전 주소에서 301).
-- **HTTPS** (S4-4): Let's Encrypt 무료 인증서(90일짜리). `deploy/compose.yaml`의 **certbot 컨테이너**가 12시간마다 "만료 30일 전이면 갱신"을 시도하고(webroot 방식: nginx 80번이 `/.well-known/acme-challenge/`를 certbot과 공유하는 볼륨에서 내준다), nginx는 6시간마다 reload해서 갱신된 인증서를 읽는다. http → https, `www.jjikmuk.com` → `jjikmuk.com`으로 301. HSTS 6개월. 세션 쿠키 `Secure`. 내 PC 시험은 `nginx.local.conf`(http만).
+- **HTTPS** (S4-4): Let's Encrypt 무료 인증서(90일짜리). `deploy/compose.yaml`의 **certbot 컨테이너**가 12시간마다 "만료 30일 전이면 갱신"을 시도하고(webroot 방식: nginx 80번이 `/.well-known/acme-challenge/`를 certbot과 공유하는 볼륨에서 내준다), nginx는 6시간마다 reload해서 갱신된 인증서를 읽는다. http → https, `www.jjikmuk.com` → `jjikmuk.com`으로 301. HSTS 6개월. 세션 쿠키 `Secure`. 내 PC 시험은 `nginx-local/default.conf`(http만).
   - **처음 발급 (서버에서 한 번만)**: nginx가 80번을 쓰고 있어서 standalone 방식으로 certbot이 잠깐 80번을 직접 받는다. `docker compose stop nginx` → `docker compose run --rm --entrypoint certbot -p 80:80 certbot certonly --standalone -d jjikmuk.com -d www.jjikmuk.com --agree-tos --register-unsafely-without-email` → `docker compose up -d --build` → 갱신 리허설 `docker compose run --rm --entrypoint certbot certbot renew --dry-run --webroot -w /var/www/certbot`. 인증서는 이름 있는 볼륨 `certbot-etc`에 남는다(`down -v`를 하면 지워지므로 다시 받으면 된다).
 - **자동 배포** (S4-5, 2026-11-03): `main`에 push → GitHub Actions `backend`(테스트) → `image`(Docker 이미지를 GitHub 컴퓨터에서 만들어 **GHCR** `ghcr.io/abjsky1/macros-app`에 올림, 태그 = 커밋 SHA + latest) → `deploy`(AWS **SSM**으로 서버에 명령: `git pull` 뒤 `deploy/deploy.sh <SHA>`). 서버에서는 빌드하지 않고 이미지만 받는다.
   - 서버에 명령을 보내는 길은 SSH 대신 SSM: 22번 포트를 GitHub에 열 필요도, SSH 키를 GitHub에 맡길 필요도 없다. AWS 권한은 **OIDC**(GitHub이 "이 실행은 이 저장소의 main"임을 증명하면 AWS가 임시 권한을 줌) → GitHub에 저장하는 비밀값 0개. 준비물: EC2 역할에 `AmazonSSMManagedInstanceCore`, IAM OIDC 공급자 + 배포 역할 `macros-deploy`(SSM SendCommand를 이 인스턴스에만), 저장소 변수 `AWS_DEPLOY_ROLE_ARN`. 신뢰 정책의 `sub`는 **고유 번호가 붙은 새 형식**(`repo:abjsky1@231160078/personal_project@1437024222:ref:refs/heads/main`)이어야 한다 — 콘솔 마법사가 만든 옛 형식은 거부된다 → `troubleshooting/2026-11-04-github-oidc-sub-claim.md`
@@ -330,7 +330,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - [ ] RDS 백업에서 복구 1회 해보기 (S4-6)
 - [x] RDS 삭제 방지(deletion protection) 켜기 — 실수로 DB를 지우지 않게 (S4-3. EC2도 종료 방지 켬)
 - [x] 서버 재부팅 뒤 자동 복구: 1분 뒤 컨테이너가 스스로 올라오고(`restart: unless-stopped`) 스왑도 유지 (S4-3에서 확인)
-- [x] app 컨테이너를 새로 만든 뒤(재배포)에도 Nginx가 502 없이 연결되는지 확인 (S4-5). Nginx는 켜질 때 app 주소를 한 번만 찾아 두기 때문에, app 주소가 바뀌면 끊길 수 있다 → `resolver 127.0.0.11 valid=10s` + 변수 `proxy_pass`, 그리고 `deploy.sh`가 교체 뒤 nginx reload (2026-11-04 첫 자동 배포에서 교체 직후 nginx를 거친 응답 200 확인)
+- [x] app 컨테이너를 새로 만든 뒤(재배포)에도 Nginx가 502 없이 연결되는지 확인 (S4-5). Nginx는 켜질 때 app 주소를 한 번만 찾아 두기 때문에, app 주소가 바뀌면 끊길 수 있다 → `resolver 127.0.0.11 valid=10s` + 변수 `proxy_pass`, 그리고 `deploy.sh`가 교체 뒤 nginx reload (2026-11-04 첫 자동 배포에서 교체 직후 nginx를 거친 응답 200 확인). ※ 같은 날 저녁 확인: 설정 파일을 파일 단독으로 mount해서 `resolver`는 실제로 적용되지 않았었고, 502를 막은 건 reload였다. 폴더 mount로 고친 뒤부터 둘 다 동작 (troubleshooting/2026-11-04-nginx-bind-mount-stale.md)
 - [x] 배포 때마다 쌓이는 옛 app 이미지 정리 — `deploy.sh`가 교체 뒤 `docker image prune -af` (2026-11-04 확인: 서버에 새 이미지 하나만 남음)
 - [x] 공인 IP 고정(Elastic IP) — 도메인을 붙이기 전에 (S4-4, 2026-11-03. 붙이는 순간 예전 주소는 AWS로 돌아가고 서버는 멈추지 않았다)
 - [x] 세션 쿠키에 `Secure` — HTTPS를 붙인 뒤에 (S4-4, 2026-11-03: https 응답의 `Set-Cookie`에 `Secure; HttpOnly` 확인)
@@ -600,6 +600,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-11-04 — nginx 설정을 폴더째 mount로 변경: 파일 하나를 mount하면 git pull 뒤 컨테이너가 옛 파일을 계속 봐서 설정 변경(resolver, IP 없는 접속 기록)이 적용되지 않던 문제 → `troubleshooting/2026-11-04-nginx-bind-mount-stale.md`
 - 2026-11-04 — S4-6 진행: 다운 알림(UptimeRobot), app 로그를 CloudWatch Logs로(JSON, 90일), nginx 접속 기록에서 IP 제거. 에러 알림(지표 필터 + 메일)과 RDS 복구 연습은 다음
 - 2026-11-04 — S4-5 완료: 첫 자동 배포 성공 (push → 약 5분 뒤 서버 반영). GitHub OIDC 증명서의 `sub` 형식 변경 때문에 두 번 실패 → 신뢰 정책 수정 → `troubleshooting/2026-11-04-github-oidc-sub-claim.md`. 이제부터 작업은 PR → CI → 머지(= 배포)
 - 2026-11-03 — S4-5 자동 배포 설정: main push → 테스트 → GHCR 이미지 → SSM으로 서버에서 `deploy.sh`. Nginx에 `resolver`(재배포 뒤 502 방지). AWS(SSM 권한, OIDC 배포 역할)·GitHub(변수, PR 규칙) 설정은 사용자 작업

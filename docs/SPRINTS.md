@@ -157,7 +157,8 @@
 | `ea6ff7c` `c52aa9b` | S4-4 | 서비스 이름 찍먹·`jjikmuk.com`(가비아) + DNS, HTTPS(Let's Encrypt, certbot 컨테이너, nginx 443). 휴대폰에서 실제 주소로 확인 |
 | `781e852` `2891c0c` `91ae7b2` | S4-5 | 자동 배포: GitHub Actions → GHCR 이미지 → SSM으로 서버에서 `deploy.sh`. AWS OIDC 배포 역할. 첫 자동 배포 성공(11-04) |
 | `bc3f32c` (PR #5) | S4-5 | main 규칙(PR 필수, CI 통과 필수) 켬. 첫 PR → 머지 → 자동 배포 한 바퀴 확인 |
-| (이번 PR) | S4-6 | 업타임 모니터(UptimeRobot), app 로그 → CloudWatch Logs(JSON, 90일), nginx 접속 기록에서 IP 제거 |
+| `21c8e1f` (PR #6) | S4-6 | 업타임 모니터(UptimeRobot), app 로그 → CloudWatch Logs(JSON, 90일), nginx 접속 기록에서 IP 제거 |
+| (이번 PR) | S4-6 | nginx 설정을 폴더째 mount로 (파일 mount가 git pull 뒤 옛 파일을 보던 문제) |
 
 ### 만난 문제
 | 문제 | 원인 | 기록 |
@@ -169,6 +170,7 @@
 | 재부팅했는데 컨테이너가 `Up 4 hours` | `sudo reboot`가 서버가 아니라 내 PC 창에서 실행됨(서버 `uptime`으로 확인) → SSH 창에서 다시 실행, 1분 뒤 자동 복구 확인 | — |
 | Route 53에서 도메인을 못 삼 (`AccessDeniedException`) | 무료 플랜 계정은 Route 53 도메인 등록을 지원하지 않음 → 가비아에서 구입, DNS도 가비아 A 레코드로 | PLANNING 10절 |
 | **자동 배포가 AWS 권한 단계에서 실패** (`Not authorized to perform sts:AssumeRoleWithWebIdentity`) | GitHub이 보내는 증명서의 `sub`가 2026-07-15 이후 저장소부터 고유 번호가 붙은 새 형식인데, 콘솔 마법사가 만든 신뢰 정책은 옛 형식. 증명서 내용을 찍어 비교해서 발견 → 신뢰 정책에 새 형식 추가 | [기록](troubleshooting/2026-11-04-github-oidc-sub-claim.md) |
+| **nginx 설정을 바꿔 배포했는데 컨테이너는 옛 설정 그대로** | 설정 파일 하나를 bind mount → git pull이 파일을 바꿔치기하면 컨테이너는 옛 파일(inode)을 계속 봄. reload해도 옛 내용. S4-5의 resolver도 사실 적용 안 됐었음 → 폴더째 mount로 변경 | [기록](troubleshooting/2026-11-04-nginx-bind-mount-stale.md) |
 
 ### 바뀐 결정
 - 서버 OS: Ubuntu → Amazon Linux 2023
