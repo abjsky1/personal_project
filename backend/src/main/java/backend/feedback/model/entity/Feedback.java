@@ -80,7 +80,12 @@ public class Feedback {
 		this.deletedAt = Instant.now();
 	}
 
-	// ---- 아래 둘은 운영자용. S3-3의 운영자 API가 부른다 ----
+	// ---- 아래는 운영자용. 운영자 API(AdminApiController)가 부른다 ----
+
+	public void deleteByAdmin() {
+		this.status = PostStatus.DELETED_BY_ADMIN;
+		this.deletedAt = Instant.now();
+	}
 
 	public void changeProgress(FeedbackProgress progress) {
 		this.progress = progress;

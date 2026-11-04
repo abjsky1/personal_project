@@ -198,6 +198,16 @@ public class PostService {
 		log.info("Post deleted by author: postId={}", id);
 	}
 
+	// 운영자 삭제 (관리자 API). 비밀번호 확인 없이 상태를 DELETED_BY_ADMIN으로 바꾸고, 위치 정보는 작성자 삭제 때와 같이 완전히 지운다.
+	// 운영자 행동은 로그에 남긴다 (기획서 5.1절)
+	@Transactional
+	public void deleteByAdmin(Long id) {
+		Post post = findActivePost(id);
+		post.deleteByAdmin();
+		postLocationRepository.deleteById(id);
+		log.info("Admin deleted post: postId={}", id);
+	}
+
 	// ACTIVE인 글만 찾고, 없으면 POST_NOT_FOUND 예외를 던진다.
 	// orElseThrow: Optional이 비어 있으면 괄호 안에서 만든 예외를 던지고, 있으면 꺼낸 값을 돌려준다.
 	private Post findActivePost(Long id) {

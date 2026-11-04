@@ -67,6 +67,9 @@ class FeedbackControllerTest {
 
 	@Test
 	void 제목이_비면_저장하지_않고_작성_화면에_메시지를_보여준다() throws Exception {
+		// 개발 DB에 이미 글이 있을 수 있으므로 "0개"가 아니라 "늘지 않았다"로 확인한다
+		long before = feedbackRepository.count();
+
 		mockMvc.perform(post("/feedback")
 				.param("title", " ")
 				.param("content", "내용")
@@ -76,7 +79,7 @@ class FeedbackControllerTest {
 				.andExpect(view().name("feedback/new"))
 				.andExpect(model().attributeHasFieldErrors("form", "title"));
 
-		assertThat(feedbackRepository.count()).isZero();
+		assertThat(feedbackRepository.count()).isEqualTo(before);
 	}
 
 	@Test
@@ -100,9 +103,10 @@ class FeedbackControllerTest {
 
 		FeedbackPage page = pageOf(get("/feedback"));
 
-		assertThat(page.feedbacks()).extracting(FeedbackSummary::id).containsExactly(newer.getId(), older.getId());
+		// 개발 DB에 다른 글이 있어도 되도록, 방금 저장한 둘이 "나중 글 → 먼저 글" 순서로 맨 앞에 오는지와 지운 글이 없는지만 본다
+		assertThat(page.feedbacks()).extracting(FeedbackSummary::id).startsWith(newer.getId(), older.getId());
+		assertThat(page.feedbacks()).extracting(FeedbackSummary::id).doesNotContain(deleted.getId());
 		assertThat(page.feedbacks().get(0).progress()).isEqualTo(FeedbackProgress.RECEIVED);
-		assertThat(page.nextCursor()).isNull();
 	}
 
 	@Test
@@ -111,14 +115,16 @@ class FeedbackControllerTest {
 			save("글 " + i);
 		}
 
+		// 방금 저장한 21개가 가장 최신이라 첫 화면은 그중 20개(글 21 … 글 2)이고, 다음 화면은 글 1부터 시작한다
+		// (개발 DB에 예전 글이 더 있어도 되도록 다음 화면의 개수는 확인하지 않는다)
 		FeedbackPage first = pageOf(get("/feedback"));
 		assertThat(first.feedbacks()).hasSize(20);
+		assertThat(first.feedbacks().get(0).title()).isEqualTo("글 21");
+		assertThat(first.feedbacks().get(19).title()).isEqualTo("글 2");
 		assertThat(first.nextCursor()).isEqualTo(first.feedbacks().get(19).id());
 
 		FeedbackPage second = pageOf(get("/feedback").param("cursor", String.valueOf(first.nextCursor())));
-		assertThat(second.feedbacks()).hasSize(1);
 		assertThat(second.feedbacks().get(0).title()).isEqualTo("글 1");
-		assertThat(second.nextCursor()).isNull();
 	}
 
 	@Test

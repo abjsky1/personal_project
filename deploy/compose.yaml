@@ -90,6 +90,8 @@ services:
       APP_S3_BUCKET: ${APP_S3_BUCKET:-}
       # AI 분석용 키. 비어 있으면 글은 올라가지만 분석은 실패로 저장된다.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # 운영자 API 열쇠. 비어 있으면 운영자 기능이 꺼진다.
+      APP_ADMIN_TOKEN: ${APP_ADMIN_TOKEN:-}
       # JVM 옵션: 자바가 쓸 메모리(힙)를 최대 512MB로 묶는다.
       # 서버 메모리 2GB를 Nginx·운영체제와 나눠 쓰므로(DB는 서버 밖 RDS), 자바가 메모리를 끝없이 늘리지 않게 한다.
       JAVA_TOOL_OPTIONS: -Xmx512m

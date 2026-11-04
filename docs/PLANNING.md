@@ -468,7 +468,18 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 | GET | `/feedback/{id}` | 상세: 내용 + 처리 상태 + 운영자 답변(있을 때) + 삭제 칸 |
 | POST | `/feedback/{id}/delete` | 비밀번호 확인 → `DELETED_BY_AUTHOR` → 목록으로 |
 
-**S3에서 같은 방식으로 정리**: ~~댓글(작성·삭제)~~ ~~피드백 게시판(목록·상세·작성·삭제)~~ 완료, 운영자 API(관리자 토큰, 상태 변경·피드백 답변)
+**운영자 API (S3-3)** — JSON, 화면 없음. 요청 헤더 `X-Admin-Token`이 서버 `.env`의 `APP_ADMIN_TOKEN`과 같아야 한다 (없거나 다르면 401, 서버에 토큰이 없으면 403). 쓰는 법은 16절
+
+| Method | Path | 설명 |
+|---|---|---|
+| POST | `/api/admin/posts/{id}/delete` | 글을 `DELETED_BY_ADMIN`으로. 위치 정보는 작성자 삭제 때와 같이 완전 삭제 → `{"id":12,"status":"DELETED_BY_ADMIN"}` |
+| POST | `/api/admin/comments/{id}/delete` | 댓글 운영자 삭제 |
+| POST | `/api/admin/feedback/{id}/delete` | 피드백 운영자 삭제 |
+| PATCH | `/api/admin/feedback/{id}` | 본문 `{"progress":"DONE","reply":"반영했어요"}` (둘 중 하나만도 됨). progress = RECEIVED / IN_PROGRESS / DONE / ON_HOLD. 바뀐 피드백 내용을 돌려준다 |
+
+운영자 행동은 모두 로그에 남는다 (`Admin deleted post: postId=…`, `Admin updated feedback: …`). 토큰이 틀린 시도도 경고 로그로 남는다.
+
+**S3에서 같은 방식으로 정리**: ~~댓글~~ ~~피드백 게시판~~ ~~운영자 API~~ 모두 완료
 
 에러는 `ErrorCode`(enum)에 모으고, 요청 종류에 따라 두 곳에서 응답한다. 둘 다 HTTP 상태를 그대로 보내고, `traceId`(응답 헤더 `X-Trace-Id`와 같은 값)를 함께 보여 줘서 사용자가 알려 주면 서버 로그를 찾을 수 있다.
 - **화면 요청** (`PageExceptionHandler`): 에러 화면 `common/error.jsp` (상태, 메시지, traceId). 없는 주소·잘못된 방식·너무 큰 사진도 여기로 온다.
@@ -544,7 +555,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 |---|---|---|---|
 | 1 | 댓글 | 상세 화면에서 댓글 달기·보기(오래된 순 20개 + 더 보기)·작성자 삭제, 목록 카드에 댓글 수 | ✅ 2026-11-04 |
 | 2 | 피드백 게시판 | 상단 메뉴 "피드 · 피드백", 목록(제목·처리 상태 배지·닉네임·시간)·상세(내용 + 운영자 답변)·작성·작성자 삭제 | ✅ 2026-11-04 |
-| 3 | 운영자 API | 관리자 토큰(서버 `.env`)으로 글·댓글·피드백 운영자 삭제, 피드백 처리 상태·답변. 운영자 행동은 로그에. 테스트 글 정리 | |
+| 3 | 운영자 API | 관리자 토큰(서버 `.env`)으로 글·댓글·피드백 운영자 삭제, 피드백 처리 상태·답변. 운영자 행동은 로그에. 테스트 글 정리 | ✅ 2026-11-05 (테스트 글 정리는 베타 전에 이 API로) |
 | 4 | 이용약관 + 마무리 | `/terms`, 바닥글 링크 정리, 화면 이름을 찍먹으로 | |
 
 ## 16. 운영 프로세스
@@ -561,6 +572,18 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
   ```
 - **릴리즈 노트**: `CHANGELOG.md`
 - **회고**: 스프린트마다 KPT (Keep / Problem / Try) 3줄 → `docs/SPRINTS.md`에 스프린트 진행 기록(한 일·만난 문제·바뀐 결정)과 함께 남긴다
+- **운영자 작업 (관리자 API, S3-3)**: 화면이 없고 열쇠(토큰)로 부르는 JSON API다 (13절). 열쇠를 어디에도 복사하지 않도록, **서버에 SSH로 들어가 `.env`에서 바로 읽어** 쓴다
+  - 처음 한 번: 서버에서 `openssl rand -hex 24`로 열쇠를 만들어 `deploy/.env`에 `APP_ADMIN_TOKEN=값` 한 줄 추가 → `docker compose up -d app` (환경 변수가 바뀌어 app만 새로 뜬다, 20초)
+  - 명령은 `cd ~/personal_project/deploy` 뒤에 (열쇠는 `.env`에서 읽어 변수에 담는다. 화면에 찍히지 않는다)
+    ```
+    TOKEN=$(grep ^APP_ADMIN_TOKEN= .env | cut -d= -f2)
+    curl -s -X POST https://jjikmuk.com/api/admin/posts/14/delete -H "X-Admin-Token: $TOKEN"
+    curl -s -X POST https://jjikmuk.com/api/admin/comments/3/delete -H "X-Admin-Token: $TOKEN"
+    curl -s -X PATCH https://jjikmuk.com/api/admin/feedback/1 -H "X-Admin-Token: $TOKEN" -H "Content-Type: application/json" -d '{"progress":"DONE","reply":"반영했어요. 고마워요!"}'
+    ```
+  - 피드백으로 들어온 삭제 요청: 글·댓글 번호를 확인하고 위 명령으로 지운 뒤, 그 피드백에 `{"progress":"DONE","reply":"삭제했어요"}`
+  - 열쇠가 샜다고 의심되면: 새 값을 만들어 `.env`를 바꾸고 `docker compose up -d app`. 옛 열쇠는 그 순간 무효. 틀린 열쇠로 온 시도는 로그 `Admin token rejected`로 보인다
+  - 내 PC에서 직접 부를 수도 있다 (Git Bash에서 같은 curl, 열쇠는 직접 입력). PowerShell은 한글 본문이 깨질 수 있어 Git Bash를 쓴다
 - **장애 대응 (런북, S4-6)**: 알림 두 종류가 메일로 온다. 받으면 아래 순서로 본다
   - **"Down" (UptimeRobot)**: ① 브라우저로 `https://jjikmuk.com` 열어 보기 ② SSH → `cd ~/personal_project/deploy && docker compose ps` ③ app이 죽어 있으면 `docker compose logs app --tail 100`으로 원인 보고 `docker compose up -d`로 재시작 ④ SSH 자체가 안 되면 EC2 콘솔에서 인스턴스 상태 확인 → 재부팅 (재부팅하면 1분 뒤 컨테이너가 스스로 올라온다) ⑤ 끝나면 `troubleshooting/`에 기록
   - **"ALARM: macros-app-error" (CloudWatch)**: ① CloudWatch → 로그 관리 → `/macros/server` → Logs Insights: `fields @timestamp, message, traceId | filter log.level = "ERROR" | sort @timestamp desc` ② 그 traceId로 같은 요청의 다른 로그를 보고 재현 ③ 고치면 PR → 머지 → 자동 배포 ④ 기록
@@ -636,6 +659,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-11-05 — S3-3 완료: 운영자 API(토큰 `APP_ADMIN_TOKEN`, 글·댓글·피드백 운영자 삭제, 피드백 처리 상태·답변). 16절에 운영자 작업 런북
 - 2026-11-04 — S3-2 완료: 피드백 게시판(목록·작성·상세·작성자 삭제, 처리 상태 배지, 운영자 답변 표시), 상단 메뉴 "피드 · 피드백". MyBatis는 MVP 이후 학습 과제로(18절)
 - 2026-11-04 — S3 시작, S3-1 완료: 댓글(상세 화면에서 달기·보기·작성자 삭제, 목록 카드에 댓글 수). S3를 4조각으로 나눔(15절). 댓글·피드백에 IP 컬럼을 두지 않기로(12·18절)
 - 2026-11-04 — nginx 설정을 폴더째 mount로 변경: 파일 하나를 mount하면 git pull 뒤 컨테이너가 옛 파일을 계속 봐서 설정 변경(resolver, IP 없는 접속 기록)이 적용되지 않던 문제 → `troubleshooting/2026-11-04-nginx-bind-mount-stale.md`

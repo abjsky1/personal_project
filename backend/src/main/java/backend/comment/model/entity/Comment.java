@@ -72,6 +72,12 @@ public class Comment {
 		this.deletedAt = Instant.now();
 	}
 
+	// 운영자 삭제 (관리자 API)
+	public void deleteByAdmin() {
+		this.status = PostStatus.DELETED_BY_ADMIN;
+		this.deletedAt = Instant.now();
+	}
+
 	public Long getId() {
 		return id;
 	}
