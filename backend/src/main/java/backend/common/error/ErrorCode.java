@@ -37,6 +37,10 @@ public enum ErrorCode {
 	// 404: 없는 댓글이거나 삭제된 댓글 (또는 주소의 글 번호와 맞지 않는 댓글)
 	COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다."),
 
+	// ---- 피드백 ----
+	// 404: 없는 피드백이거나 삭제된 피드백
+	FEEDBACK_NOT_FOUND(HttpStatus.NOT_FOUND, "피드백을 찾을 수 없습니다."),
+
 	// ---- 사진 ----
 	// 400: 파일 내용이 JPEG·PNG가 아니거나, 읽을 수 없는 사진 (확장자만 바꾼 파일, 아이폰 HEIC 등)
 	INVALID_IMAGE(HttpStatus.BAD_REQUEST, "JPEG 또는 PNG 사진만 올릴 수 있습니다."),
