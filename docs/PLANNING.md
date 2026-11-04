@@ -327,7 +327,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - [x] S3: 버킷(공개 차단 유지) + EC2용 IAM 역할 (`s3:PutObject`, `s3:GetObject`, `s3:ListBucket`). ListBucket이 없으면 없는 사진을 요청할 때 404 대신 403(권한 없음)이 돌아온다 (S4-3: 없는 사진은 404, 버킷 주소로 직접 접근하면 403인 것을 확인)
 - [x] 서버 `.env`: `DB_HOST`(RDS 엔드포인트), `MYSQL_PASSWORD`(RDS 마스터 비밀번호), `APP_S3_BUCKET`, `GEMINI_API_KEY`. 사진 저장소 s3는 prod 프로필이 이미 켠다 (S4-3. 버킷 이름·RDS 주소도 레포가 아니라 서버 `.env`에만 적는다)
 - [x] RDS: 공개 접근 끄기 + 보안 그룹은 EC2에서만 3306 허용, 자동 백업 켜기 (S4-3. 보관 1일은 무료 플랜 제한 → 10절)
-- [ ] RDS 백업에서 복구 1회 해보기 (S4-6)
+- [x] ~~RDS 백업에서 복구 1회 해보기~~ → **하지 않기로 결정** (2026-11-04, 18절). 자동 백업(매일)은 켜져 있고 복구 절차는 16절 "장애 대응"에 적어 두었다. 실제로 필요해지면 그 절차대로 한다
 - [x] RDS 삭제 방지(deletion protection) 켜기 — 실수로 DB를 지우지 않게 (S4-3. EC2도 종료 방지 켬)
 - [x] 서버 재부팅 뒤 자동 복구: 1분 뒤 컨테이너가 스스로 올라오고(`restart: unless-stopped`) 스왑도 유지 (S4-3에서 확인)
 - [x] app 컨테이너를 새로 만든 뒤(재배포)에도 Nginx가 502 없이 연결되는지 확인 (S4-5). Nginx는 켜질 때 app 주소를 한 번만 찾아 두기 때문에, app 주소가 바뀌면 끊길 수 있다 → `resolver 127.0.0.11 valid=10s` + 변수 `proxy_pass`, 그리고 `deploy.sh`가 교체 뒤 nginx reload (2026-11-04 첫 자동 배포에서 교체 직후 nginx를 거친 응답 200 확인). ※ 같은 날 저녁 확인: 설정 파일을 파일 단독으로 mount해서 `resolver`는 실제로 적용되지 않았었고, 502를 막은 건 reload였다. 폴더 mount로 고친 뒤부터 둘 다 동작 (troubleshooting/2026-11-04-nginx-bind-mount-stale.md)
@@ -354,9 +354,9 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 **배포 단계에서 (S4~)**
 - **JSON 구조화 로그**: 설정 한 줄(`logging.structured.format.console=ecs`)로 켠다. 로컬은 읽기 쉬운 글자 형식 유지 → 켬 (S4-6, 2026-11-04)
 - **로그 저장·검색** (S4-6): app 컨테이너 로그를 Docker의 `awslogs` 드라이버로 CloudWatch Logs에 보낸다 (`deploy/compose.yaml`). 보는 법: AWS 콘솔 → CloudWatch → 로그 그룹 `/macros/server` → 스트림 `macros-app-1`. 검색은 **Logs Insights**에서, 예: `fields @timestamp, log.level, message | filter traceId = "9dff6979" | sort @timestamp` (사용자가 알려 준 traceId로 그 요청의 로그만 본다). 서버에서 바로 볼 때는 여전히 `docker compose logs app`
-- **에러 알림**: Sentry 대신 **CloudWatch 지표 필터 + SNS 메일**로 단순화 (S4-6). 로그에 `ERROR`가 찍히면 메일. 도구를 더 들이지 않는다
+- **에러 알림**: Sentry 대신 **CloudWatch 지표 필터 + SNS 메일**로 단순화 (S4-6, 2026-11-04 만듦). 로그 그룹의 지표 필터 `app-error`(패턴 `{ $.log.level = "ERROR" }`, 지표 `macros/AppErrors`, 값 1, 기본값 0) → 경보 `macros-app-error`(5분 합계 > 0, 누락 데이터는 양호) → SNS 주제 `macros-alerts` → 메일. 앱에서 ERROR가 한 번이라도 찍히면 5분 안에 메일이 온다. 도구를 더 들이지 않는다
 - **다운 알림**: 외부 업타임 모니터가 `/actuator/health`를 확인, 응답 없으면 알림 → UptimeRobot 무료, 5분 간격, 메일 (S4-6, 2026-11-04)
-- **백업**: RDS 자동 백업 (10절). 복구 연습은 S4-6에서 1회
+- **백업**: RDS 자동 백업 (10절). 복구 연습은 하지 않기로 했다(18절). 절차는 16절에 적어 두고 필요할 때 그대로 따른다
 
 **장애 기록**: `docs/troubleshooting/YYYY-MM-DD-제목.md` — 현상 / 영향 / 원인 / 해결 / 재발 방지 (개발 중 발견한 문제도 같은 형식으로 남긴다)
 
@@ -518,7 +518,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 | 3 | 서버(EC2)·RDS·S3 만들기 + 첫 배포 | 사용자(AWS 화면) + Claude(명령·설정) | 서버 주소로 접속 가능, 글이 RDS에·사진이 S3에 저장, RDS 자동 백업 켜짐 | ✅ 2026-11-03 |
 | 4 | 도메인 + HTTPS | 사용자(도메인 구입) + Claude(Nginx 설정) | `https://도메인`으로 접속 | ✅ 2026-11-03 |
 | 5 | 자동 배포 | Claude + 사용자(GitHub 비밀값 등록) | main에 push하면 몇 분 뒤 서버에 반영 | ✅ 2026-11-04 |
-| 6 | 감시·백업 점검 | 함께 | 다운 알림, 백업 복구 연습, 로그 정리 | |
+| 6 | 감시·백업 점검 | 함께 | 다운 알림, 백업 복구 연습, 로그 정리 | ✅ 2026-11-04 (복구 연습은 하지 않기로, 18절) |
 
 ## 16. 운영 프로세스
 
@@ -534,6 +534,11 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
   ```
 - **릴리즈 노트**: `CHANGELOG.md`
 - **회고**: 스프린트마다 KPT (Keep / Problem / Try) 3줄 → `docs/SPRINTS.md`에 스프린트 진행 기록(한 일·만난 문제·바뀐 결정)과 함께 남긴다
+- **장애 대응 (런북, S4-6)**: 알림 두 종류가 메일로 온다. 받으면 아래 순서로 본다
+  - **"Down" (UptimeRobot)**: ① 브라우저로 `https://jjikmuk.com` 열어 보기 ② SSH → `cd ~/personal_project/deploy && docker compose ps` ③ app이 죽어 있으면 `docker compose logs app --tail 100`으로 원인 보고 `docker compose up -d`로 재시작 ④ SSH 자체가 안 되면 EC2 콘솔에서 인스턴스 상태 확인 → 재부팅 (재부팅하면 1분 뒤 컨테이너가 스스로 올라온다) ⑤ 끝나면 `troubleshooting/`에 기록
+  - **"ALARM: macros-app-error" (CloudWatch)**: ① CloudWatch → 로그 관리 → `/macros/server` → Logs Insights: `fields @timestamp, message, traceId | filter log.level = "ERROR" | sort @timestamp desc` ② 그 traceId로 같은 요청의 다른 로그를 보고 재현 ③ 고치면 PR → 머지 → 자동 배포 ④ 기록
+  - **배포가 잘못됐을 때 (되돌리기)**: GitHub Actions 화면에서 직전 성공 실행의 커밋 SHA 확인 → 서버에서 `cd ~/personal_project/deploy && bash deploy.sh <그 SHA>` (GHCR에 남은 이미지를 다시 받아 교체, 약 1분)
+  - **DB가 망가졌을 때 (복구)**: RDS → `macros-db` → 작업 → 특정 시점으로 복원 → 새 인스턴스(`macros-db-restore`, 같은 클래스, 퍼블릭 아니요, 보안 그룹 `macros-db`) → 사용 가능해지면 서버 `.env`의 `DB_HOST`를 새 엔드포인트로 바꾸고 `docker compose up -d` → 확인 뒤 옛 인스턴스 삭제. 복원 가능한 범위는 백업 보관 기간(무료 플랜 1일, 유료 전환 뒤 7일). 연습 없이 두기로 했으므로(18절) 실제 상황에서는 이 순서를 한 줄씩 그대로 따른다
 
 ## 17. 성공 지표 (공개 후 4주)
 
@@ -586,6 +591,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | 자동 배포 | GitHub Actions → GHCR 이미지(태그 = 커밋 SHA) → AWS SSM으로 서버에 `deploy.sh`. 서버에서 빌드 안 함. AWS 권한은 OIDC(비밀값 저장 없음), SSH 포트는 계속 내 IP만 | 2026-11-03 |
 | 롤백 | `bash deploy.sh <예전 SHA>` (GHCR에 남은 이미지를 다시 받음). 무중단 배포는 사용자가 늘면 검토 | 2026-11-03 |
 | 로그·알림 | app 로그는 CloudWatch Logs 90일(JSON). 에러 알림은 Sentry 대신 CloudWatch 지표 필터 + SNS 메일, 다운 알림은 UptimeRobot. nginx 접속 기록에 IP를 남기지 않음 | 2026-11-04 |
+| 백업 복구 연습 | **하지 않는다**. 자동 백업 + 16절의 복구 절차로 갈음하고, 실제로 필요해질 때 절차대로 한다 | 2026-11-04 |
 
 **미정**
 
@@ -601,7 +607,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 ## 변경 이력
 
 - 2026-11-04 — nginx 설정을 폴더째 mount로 변경: 파일 하나를 mount하면 git pull 뒤 컨테이너가 옛 파일을 계속 봐서 설정 변경(resolver, IP 없는 접속 기록)이 적용되지 않던 문제 → `troubleshooting/2026-11-04-nginx-bind-mount-stale.md`
-- 2026-11-04 — S4-6 진행: 다운 알림(UptimeRobot), app 로그를 CloudWatch Logs로(JSON, 90일), nginx 접속 기록에서 IP 제거. 에러 알림(지표 필터 + 메일)과 RDS 복구 연습은 다음
+- 2026-11-04 — S4-6 완료 → **S4 완료**: 다운 알림(UptimeRobot), app 로그를 CloudWatch Logs로(JSON, 90일), nginx 접속 기록에서 IP 제거, 에러 알림(지표 필터 → 경보 → SNS 메일), 16절에 장애 대응 런북. RDS 복구 연습은 하지 않기로 결정(18절)
 - 2026-11-04 — S4-5 완료: 첫 자동 배포 성공 (push → 약 5분 뒤 서버 반영). GitHub OIDC 증명서의 `sub` 형식 변경 때문에 두 번 실패 → 신뢰 정책 수정 → `troubleshooting/2026-11-04-github-oidc-sub-claim.md`. 이제부터 작업은 PR → CI → 머지(= 배포)
 - 2026-11-03 — S4-5 자동 배포 설정: main push → 테스트 → GHCR 이미지 → SSM으로 서버에서 `deploy.sh`. Nginx에 `resolver`(재배포 뒤 502 방지). AWS(SSM 권한, OIDC 배포 역할)·GitHub(변수, PR 규칙) 설정은 사용자 작업
 - 2026-11-03 — 서비스 이름 **찍먹**, 도메인 `jjikmuk.com`(가비아) 결정·구입, DNS 연결. HTTPS 적용(Let's Encrypt, certbot 컨테이너, http·www → https 301, 세션 쿠키 Secure) → **S4-4 완료**. 휴대폰(아이폰)에서 `https://jjikmuk.com`으로 갤러리·카메라 사진 업로드, 분석 결과 자동 표시, 삭제, 비밀번호 오류까지 확인
