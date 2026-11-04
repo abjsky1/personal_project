@@ -95,6 +95,15 @@ public class CommentService {
 		log.info("Comment deleted by author: commentId={}, postId={}", commentId, postId);
 	}
 
+	// 운영자 삭제 (관리자 API): 비밀번호 없이 상태만 바꾼다
+	@Transactional
+	public void deleteByAdmin(Long commentId) {
+		Comment comment = commentRepository.findByIdAndStatus(commentId, PostStatus.ACTIVE)
+				.orElseThrow(() -> new BusinessException(ErrorCode.COMMENT_NOT_FOUND));
+		comment.deleteByAdmin();
+		log.info("Admin deleted comment: commentId={}, postId={}", commentId, comment.getPostId());
+	}
+
 	// ACTIVE인 글이 아니면 POST_NOT_FOUND
 	private void requireActivePost(Long postId) {
 		if (postRepository.findByIdAndStatus(postId, PostStatus.ACTIVE).isEmpty()) {

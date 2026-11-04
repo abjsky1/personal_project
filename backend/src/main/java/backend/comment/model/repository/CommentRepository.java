@@ -24,6 +24,9 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 	// 삭제할 댓글 찾기: 번호·글 번호·상태가 모두 맞아야 한다 (다른 글의 댓글 번호를 넣어도 찾지 못하게)
 	Optional<Comment> findByIdAndPostIdAndStatus(Long id, Long postId, PostStatus status);
 
+	// 운영자 삭제용: 글 번호 없이 댓글 번호와 상태로 찾는다
+	Optional<Comment> findByIdAndStatus(Long id, PostStatus status);
+
 	// 한 글의 댓글 수 (상세 화면의 "댓글 N개")
 	long countByPostIdAndStatus(Long postId, PostStatus status);
 

@@ -41,6 +41,12 @@ public enum ErrorCode {
 	// 404: 없는 피드백이거나 삭제된 피드백
 	FEEDBACK_NOT_FOUND(HttpStatus.NOT_FOUND, "피드백을 찾을 수 없습니다."),
 
+	// ---- 운영자 API ----
+	// 401: X-Admin-Token 헤더가 없거나 서버의 토큰과 다름
+	ADMIN_UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "운영자 인증에 실패했습니다."),
+	// 403: 서버에 운영자 토큰이 설정되어 있지 않아 운영자 기능이 꺼져 있음 (개발 PC 등)
+	ADMIN_DISABLED(HttpStatus.FORBIDDEN, "운영자 기능이 꺼져 있습니다."),
+
 	// ---- 사진 ----
 	// 400: 파일 내용이 JPEG·PNG가 아니거나, 읽을 수 없는 사진 (확장자만 바꾼 파일, 아이폰 HEIC 등)
 	INVALID_IMAGE(HttpStatus.BAD_REQUEST, "JPEG 또는 PNG 사진만 올릴 수 있습니다."),

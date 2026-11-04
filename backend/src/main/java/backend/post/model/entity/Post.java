@@ -96,6 +96,12 @@ public class Post {
 		this.deletedAt = Instant.now();
 	}
 
+	// 운영자 삭제 (관리자 API). 누가 지웠는지 상태로 구분된다.
+	public void deleteByAdmin() {
+		this.status = PostStatus.DELETED_BY_ADMIN;
+		this.deletedAt = Instant.now();
+	}
+
 	// 값을 꺼내는 메서드(getter)만 두고 값을 바꾸는 메서드(setter)는 두지 않는다.
 	// → 상태 변경은 위의 deleteByAuthor()처럼 이름이 분명한 메서드로만 하게 한다.
 	public Long getId() {

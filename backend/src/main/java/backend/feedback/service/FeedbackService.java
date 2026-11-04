@@ -14,6 +14,7 @@ import backend.feedback.model.dto.FeedbackDetail;
 import backend.feedback.model.dto.FeedbackPage;
 import backend.feedback.model.dto.FeedbackSummary;
 import backend.feedback.model.entity.Feedback;
+import backend.feedback.model.entity.FeedbackProgress;
 import backend.feedback.model.repository.FeedbackRepository;
 import backend.post.model.entity.PostStatus;
 import lombok.RequiredArgsConstructor;
@@ -71,6 +72,34 @@ public class FeedbackService {
 		}
 		feedback.deleteByAuthor();
 		log.info("Feedback deleted by author: feedbackId={}", id);
+	}
+
+	// ---- 운영자용 (관리자 API) ----
+
+	@Transactional
+	public void deleteByAdmin(Long id) {
+		Feedback feedback = findActive(id);
+		feedback.deleteByAdmin();
+		log.info("Admin deleted feedback: feedbackId={}", id);
+	}
+
+	// 처리 상태 바꾸기와 답변 달기. null인 쪽은 건드리지 않는다. 둘 다 없으면 INVALID_REQUEST(400)
+	@Transactional
+	public FeedbackDetail updateByAdmin(Long id, FeedbackProgress progress, String reply) {
+		boolean hasReply = reply != null && !reply.isBlank();
+		if (progress == null && !hasReply) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST);
+		}
+
+		Feedback feedback = findActive(id);
+		if (progress != null) {
+			feedback.changeProgress(progress);
+		}
+		if (hasReply) {
+			feedback.reply(reply.strip());
+		}
+		log.info("Admin updated feedback: feedbackId={}, progress={}, replied={}", id, feedback.getProgress(), hasReply);
+		return FeedbackDetail.from(feedback);
 	}
 
 	private Feedback findActive(Long id) {
