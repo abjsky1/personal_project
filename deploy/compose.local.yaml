@@ -21,6 +21,12 @@ services:
     environment:
       APP_IMAGE_STORAGE: local
       APP_UPLOAD_DIR: /app/uploads
+    # 내 PC에는 AWS 권한이 없으므로 CloudWatch 대신 서버 안 파일로 (compose.yaml의 awslogs를 통째로 덮어쓴다)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       # MySQL이 접속을 받을 준비가 된 뒤에 켠다 (안 그러면 DB 연결 실패로 켜지자마자 꺼진다)
       mysql:

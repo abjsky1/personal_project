@@ -155,7 +155,9 @@
 | `7d6c3b4` `f2a2121` | S4-2 | 배포 구성 EC2 + RDS 확정(월 약 45달러), AWS 계정(무료 플랜, 서울, IAM 사용자 + 패스키, 요금 알림 50달러) |
 | `14c6117` `17b2c05` | S4-3 | EC2(Amazon Linux 2023, t3.small)·RDS(db.t4g.micro)·S3 만들고 첫 배포, 공인 IP 고정. 서버 구성은 PLANNING 10절 |
 | `ea6ff7c` `c52aa9b` | S4-4 | 서비스 이름 찍먹·`jjikmuk.com`(가비아) + DNS, HTTPS(Let's Encrypt, certbot 컨테이너, nginx 443). 휴대폰에서 실제 주소로 확인 |
-| `781e852` `2891c0c` (이번 커밋) | S4-5 | 자동 배포: GitHub Actions → GHCR 이미지 → SSM으로 서버에서 `deploy.sh`. AWS OIDC 배포 역할. 첫 자동 배포 성공(11-04) |
+| `781e852` `2891c0c` `91ae7b2` | S4-5 | 자동 배포: GitHub Actions → GHCR 이미지 → SSM으로 서버에서 `deploy.sh`. AWS OIDC 배포 역할. 첫 자동 배포 성공(11-04) |
+| `bc3f32c` (PR #5) | S4-5 | main 규칙(PR 필수, CI 통과 필수) 켬. 첫 PR → 머지 → 자동 배포 한 바퀴 확인 |
+| (이번 PR) | S4-6 | 업타임 모니터(UptimeRobot), app 로그 → CloudWatch Logs(JSON, 90일), nginx 접속 기록에서 IP 제거 |
 
 ### 만난 문제
 | 문제 | 원인 | 기록 |
@@ -176,7 +178,7 @@
 - 도메인 구입처: Route 53 → 가비아 (무료 플랜 제한. 가격은 연 2만 원대로 비슷)
 
 ### 남은 조각
-- S4-6 감시·백업 복구 연습·로그 정리 (PR 규칙은 11-04에 켰고, 이 변경이 첫 PR)
+- S4-6 나머지: 에러 알림(CloudWatch 지표 필터 + SNS 메일), RDS 백업 복구 연습, 운영 런북 정리
 - 지인 베타 전: 테스트 글 삭제, 화면의 서비스 이름을 찍먹으로
 
 회고(KPT)는 S4가 끝나면 쓴다.
