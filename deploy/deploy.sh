@@ -42,8 +42,9 @@ for i in $(seq 1 24); do
   sleep 5
 done
 
-# nginx가 설정 파일(nginx.conf)을 다시 읽게 한다 (끊김 없음).
+# nginx가 설정 파일(nginx/default.conf)을 다시 읽게 한다 (끊김 없음).
 # 파일 내용만 바뀐 경우 compose는 nginx 컨테이너를 새로 만들지 않기 때문에, 여기서 직접 reload해야 바뀐 설정이 적용된다.
+# (설정은 폴더째 mount되어 있어서 git pull로 바뀐 파일을 컨테이너도 본다)
 docker compose exec -T nginx nginx -s reload
 
 # 어떤 컨테이너도 쓰지 않는 이미지(교체된 예전 app 이미지 등)를 지워 디스크가 차는 것을 막는다.
