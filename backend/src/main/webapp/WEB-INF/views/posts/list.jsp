@@ -15,7 +15,14 @@
 <body>
 <main>
 	<header class="top">
-		<h1>음식 칼로리 게시판</h1>
+		<div>
+			<h1>음식 칼로리 게시판</h1>
+			<%-- 상단 메뉴: 피드(이 화면)와 피드백 게시판을 오간다 --%>
+			<nav class="site-nav">
+				<a href="/" class="active">피드</a>
+				<a href="/feedback">피드백</a>
+			</nav>
+		</div>
 		<a class="button" href="/posts/new">사진 올리기</a>
 	</header>
 

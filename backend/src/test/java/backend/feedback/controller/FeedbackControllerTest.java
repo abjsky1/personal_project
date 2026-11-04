@@ -1,0 +1,195 @@
+package backend.feedback.controller;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.data.domain.Sort;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Transactional;
+
+import backend.common.error.ErrorCode;
+import backend.feedback.model.dto.FeedbackDetail;
+import backend.feedback.model.dto.FeedbackPage;
+import backend.feedback.model.dto.FeedbackSummary;
+import backend.feedback.model.entity.Feedback;
+import backend.feedback.model.entity.FeedbackProgress;
+import backend.feedback.model.repository.FeedbackRepository;
+import backend.post.model.entity.PostStatus;
+
+// 피드백 게시판의 작성·목록·상세·삭제 요청을 실제로 보내 보는 테스트 (PostControllerTest와 같은 방식)
+@SpringBootTest
+@AutoConfigureMockMvc
+@Transactional
+class FeedbackControllerTest {
+
+	@Autowired
+	private MockMvc mockMvc;
+
+	@Autowired
+	private FeedbackRepository feedbackRepository;
+
+	@Autowired
+	private PasswordEncoder passwordEncoder;
+
+	@Test
+	void 피드백을_남기면_저장되고_상세_화면으로_이동한다() throws Exception {
+		MvcResult result = mockMvc.perform(post("/feedback")
+				.param("title", "  사진이 안 올라가요  ")
+				.param("content", "아이폰에서 올리면 멈춰요")
+				.param("nickname", "사용자")
+				.param("password", "1234"))
+				.andExpect(status().is3xxRedirection())
+				.andReturn();
+
+		Feedback saved = latest();
+		assertThat(result.getResponse().getRedirectedUrl()).isEqualTo("/feedback/" + saved.getId());
+		assertThat(saved.getTitle()).isEqualTo("사진이 안 올라가요");
+		assertThat(saved.getContent()).isEqualTo("아이폰에서 올리면 멈춰요");
+		assertThat(saved.getNickname()).isEqualTo("사용자");
+		assertThat(saved.getStatus()).isEqualTo(PostStatus.ACTIVE);
+		// 처음 상태는 "접수", 답변은 아직 없다
+		assertThat(saved.getProgress()).isEqualTo(FeedbackProgress.RECEIVED);
+		assertThat(saved.getAdminReply()).isNull();
+		assertThat(passwordEncoder.matches("1234", saved.getPasswordHash())).isTrue();
+	}
+
+	@Test
+	void 제목이_비면_저장하지_않고_작성_화면에_메시지를_보여준다() throws Exception {
+		mockMvc.perform(post("/feedback")
+				.param("title", " ")
+				.param("content", "내용")
+				.param("nickname", "사용자")
+				.param("password", "1234"))
+				.andExpect(status().isOk())
+				.andExpect(view().name("feedback/new"))
+				.andExpect(model().attributeHasFieldErrors("form", "title"));
+
+		assertThat(feedbackRepository.count()).isZero();
+	}
+
+	@Test
+	void 비밀번호가_짧으면_작성_화면으로_돌아간다() throws Exception {
+		mockMvc.perform(post("/feedback")
+				.param("title", "제목")
+				.param("content", "내용")
+				.param("nickname", "사용자")
+				.param("password", "123"))
+				.andExpect(view().name("feedback/new"))
+				.andExpect(model().attributeHasFieldErrors("form", "password"));
+	}
+
+	@Test
+	void 목록은_최신순이고_삭제된_글은_빠진다() throws Exception {
+		Feedback older = save("먼저 쓴 글");
+		Feedback newer = save("나중에 쓴 글");
+		Feedback deleted = save("지운 글");
+		deleted.deleteByAuthor();
+		feedbackRepository.save(deleted);
+
+		FeedbackPage page = pageOf(get("/feedback"));
+
+		assertThat(page.feedbacks()).extracting(FeedbackSummary::id).containsExactly(newer.getId(), older.getId());
+		assertThat(page.feedbacks().get(0).progress()).isEqualTo(FeedbackProgress.RECEIVED);
+		assertThat(page.nextCursor()).isNull();
+	}
+
+	@Test
+	void 글이_21개면_20개와_더_보기_위치를_넘기고_이어서_볼_수_있다() throws Exception {
+		for (int i = 1; i <= 21; i++) {
+			save("글 " + i);
+		}
+
+		FeedbackPage first = pageOf(get("/feedback"));
+		assertThat(first.feedbacks()).hasSize(20);
+		assertThat(first.nextCursor()).isEqualTo(first.feedbacks().get(19).id());
+
+		FeedbackPage second = pageOf(get("/feedback").param("cursor", String.valueOf(first.nextCursor())));
+		assertThat(second.feedbacks()).hasSize(1);
+		assertThat(second.feedbacks().get(0).title()).isEqualTo("글 1");
+		assertThat(second.nextCursor()).isNull();
+	}
+
+	@Test
+	void 상세_화면은_내용과_처리_상태와_운영자_답변을_보여준다() throws Exception {
+		Feedback feedback = save("답변 받은 글");
+		feedback.changeProgress(FeedbackProgress.DONE);
+		feedback.reply("반영했어요. 고마워요!");
+		feedbackRepository.save(feedback);
+
+		MvcResult result = mockMvc.perform(get("/feedback/" + feedback.getId()))
+				.andExpect(status().isOk())
+				.andExpect(view().name("feedback/detail"))
+				.andReturn();
+		FeedbackDetail detail = (FeedbackDetail) result.getModelAndView().getModel().get("feedback");
+
+		assertThat(detail.title()).isEqualTo("답변 받은 글");
+		assertThat(detail.progress()).isEqualTo(FeedbackProgress.DONE);
+		assertThat(detail.adminReply()).isEqualTo("반영했어요. 고마워요!");
+		assertThat(detail.repliedAt()).isNotNull();
+		// 목록에도 "답변 있음"이 표시된다
+		FeedbackPage page = pageOf(get("/feedback"));
+		assertThat(page.feedbacks().get(0).hasReply()).isTrue();
+	}
+
+	@Test
+	void 없는_피드백의_상세는_404_에러_화면을_보여준다() throws Exception {
+		mockMvc.perform(get("/feedback/999999999"))
+				.andExpect(status().isNotFound())
+				.andExpect(view().name("common/error"));
+	}
+
+	@Test
+	void 비밀번호가_맞으면_상태만_바꿔_삭제하고_목록으로_이동한다() throws Exception {
+		Feedback feedback = save("지울 글");
+
+		mockMvc.perform(post("/feedback/" + feedback.getId() + "/delete").param("password", "1234"))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/feedback"));
+
+		Feedback deleted = feedbackRepository.findById(feedback.getId()).orElseThrow();
+		assertThat(deleted.getStatus()).isEqualTo(PostStatus.DELETED_BY_AUTHOR);
+		assertThat(deleted.getDeletedAt()).isNotNull();
+
+		mockMvc.perform(get("/feedback/" + feedback.getId()))
+				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void 비밀번호가_틀리면_삭제하지_않고_상세로_돌아가_메시지를_보여준다() throws Exception {
+		Feedback feedback = save("안 지워질 글");
+
+		mockMvc.perform(post("/feedback/" + feedback.getId() + "/delete").param("password", "0000"))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/feedback/" + feedback.getId()))
+				.andExpect(flash().attribute("deleteError", ErrorCode.INVALID_PASSWORD.getMessage()));
+
+		assertThat(feedbackRepository.findById(feedback.getId()).orElseThrow().getStatus()).isEqualTo(PostStatus.ACTIVE);
+	}
+
+	// 목록 요청을 보내고 Model의 FeedbackPage를 꺼낸다
+	private FeedbackPage pageOf(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request) throws Exception {
+		MvcResult result = mockMvc.perform(request).andExpect(status().isOk()).andReturn();
+		return (FeedbackPage) result.getModelAndView().getModel().get("page");
+	}
+
+	// 비밀번호 1234인 테스트용 피드백을 DB에 바로 저장한다
+	private Feedback save(String title) {
+		return feedbackRepository.save(new Feedback("사용자", passwordEncoder.encode("1234"), title, "내용"));
+	}
+
+	private Feedback latest() {
+		return feedbackRepository.findAll(Sort.by(Sort.Direction.DESC, "id")).get(0);
+	}
+}
