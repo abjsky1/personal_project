@@ -14,6 +14,7 @@ import backend.post.model.entity.Post;
 // record: 값을 담기만 하는 클래스를 짧게 만드는 문법. JSP에서는 ${post.nickname}처럼 꺼내 쓴다.
 // imageUrl: 상세 화면용 큰 사진 / thumbnailUrl: 목록용 정사각형 썸네일
 // analysisStatus, totalKcal: 목록 카드에 보여 줄 분석 상태와 칼로리. 분석 기록이 없으면 null
+// commentCount: 목록 카드의 "댓글 3" (상세 화면은 댓글 목록 쪽에서 따로 세므로 0으로 둔다)
 public record PostSummary(
 		Long id,
 		String nickname,
@@ -22,14 +23,15 @@ public record PostSummary(
 		String thumbnailUrl,
 		String createdAt,
 		AnalysisStatus analysisStatus,
-		BigDecimal totalKcal) {
+		BigDecimal totalKcal,
+		long commentCount) {
 
 	// 작성 시각을 한국 시간으로 바꿔 "10월 29일 14:05" 모양으로 보여 준다.
 	private static final DateTimeFormatter TIME_FORMAT =
 			DateTimeFormatter.ofPattern("M월 d일 HH:mm").withZone(ZoneId.of("Asia/Seoul"));
 
-	// Post 엔티티를 화면용 PostSummary로 바꾼다. analysis: 그 글의 분석 기록 (없으면 null)
-	public static PostSummary from(Post post, FoodAnalysis analysis) {
+	// Post 엔티티를 화면용 PostSummary로 바꾼다. analysis: 그 글의 분석 기록 (없으면 null), commentCount: 댓글 수
+	public static PostSummary from(Post post, FoodAnalysis analysis, long commentCount) {
 		return new PostSummary(
 				post.getId(),
 				post.getNickname(),
@@ -39,6 +41,7 @@ public record PostSummary(
 				"/images/" + post.getThumbnailKey(),
 				TIME_FORMAT.format(post.getCreatedAt()),
 				analysis == null ? null : analysis.getStatus(),
-				analysis == null ? null : analysis.getTotalKcal());
+				analysis == null ? null : analysis.getTotalKcal(),
+				commentCount);
 	}
 }

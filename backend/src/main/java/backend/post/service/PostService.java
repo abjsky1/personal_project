@@ -16,6 +16,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import backend.analysis.model.entity.FoodAnalysis;
 import backend.analysis.model.repository.FoodAnalysisRepository;
 import backend.analysis.service.FoodAnalysisService;
+import backend.comment.service.CommentService;
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
 import backend.image.ImageProcessor;
@@ -53,6 +54,7 @@ public class PostService {
 	private final PostLocationRepository postLocationRepository;
 	private final FoodAnalysisRepository foodAnalysisRepository;
 	private final FoodAnalysisService foodAnalysisService;
+	private final CommentService commentService;
 	private final ImageProcessor imageProcessor;
 	// 사진 저장소: 내 PC에서는 폴더(LocalImageStorage), 배포 서버에서는 S3(S3ImageStorage)가 들어온다
 	private final ImageStorage imageStorage;
@@ -159,19 +161,21 @@ public class PostService {
 		List<Long> postIds = pagePosts.stream().map(Post::getId).toList();
 		Map<Long, FoodAnalysis> analyses = foodAnalysisRepository.findAllById(postIds).stream()
 				.collect(Collectors.toMap(FoodAnalysis::getPostId, Function.identity()));
+		// 댓글 수도 글 20개 치를 쿼리 한 번으로 (댓글이 없는 글은 지도에 없으므로 0으로 본다)
+		Map<Long, Long> commentCounts = commentService.countByPostIds(postIds);
 
 		// stream().map(...).toList(): 목록의 Post 하나하나를 PostSummary로 바꿔 새 목록을 만든다.
 		List<PostSummary> summaries = pagePosts.stream()
-				.map(post -> PostSummary.from(post, analyses.get(post.getId())))
+				.map(post -> PostSummary.from(post, analyses.get(post.getId()), commentCounts.getOrDefault(post.getId(), 0L)))
 				.toList();
 		return new FeedPage(summaries, nextCursor);
 	}
 
 	// 상세 조회. 없거나 삭제된 글이면 POST_NOT_FOUND 예외를 던진다 → 에러 화면(404)이 나온다.
-	// 글 내용은 목록과 같은 값이라 PostSummary를 함께 쓴다. (분석 결과는 Controller가 FoodAnalysisService에서 따로 받는다)
+	// 글 내용은 목록과 같은 값이라 PostSummary를 함께 쓴다. (분석 결과와 댓글은 Controller가 각 Service에서 따로 받는다)
 	@Transactional(readOnly = true)
 	public PostSummary getDetail(Long id) {
-		return PostSummary.from(findActivePost(id), null);
+		return PostSummary.from(findActivePost(id), null, 0);
 	}
 
 	// 작성자 삭제: 비밀번호가 맞으면 상태를 DELETED_BY_AUTHOR로 바꾼다. (DB에서 지우지 않는다)

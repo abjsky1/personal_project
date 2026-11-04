@@ -3,6 +3,8 @@
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 <%-- fmt:formatNumber: 숫자를 보기 좋게 바꾼다 (1650.0 → 1,650) --%>
 <%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
+<%-- Spring의 form 태그: 댓글 입력칸을 commentForm과 연결하고 검사 메시지를 칸마다 보여 준다 (new.jsp와 같음) --%>
+<%@ taglib prefix="form" uri="http://www.springframework.org/tags/form" %>
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -89,6 +91,61 @@
 		</div>
 	</div>
 
+	<%-- 댓글: 사진·내용 아래에 전체 폭으로. id="comments"는 댓글을 달거나 지운 뒤 이 자리로 바로 내려오기 위한 표시 --%>
+	<section class="comments" id="comments">
+		<h2>댓글 ${comments.totalCount}개</h2>
+
+		<c:if test="${empty comments.comments}">
+			<p class="hint">첫 댓글을 남겨 보세요.</p>
+		</c:if>
+
+		<c:forEach var="comment" items="${comments.comments}">
+			<%-- id="comment-번호": 비밀번호가 틀렸을 때 그 댓글 자리로 돌아오기 위한 표시 --%>
+			<article class="comment" id="comment-${comment.id}">
+				<p class="meta"><strong><c:out value="${comment.nickname}" /></strong> · <c:out value="${comment.createdAt}" /></p>
+				<%-- 댓글 내용은 사용자 입력이라 c:out (XSS 방지). 줄바꿈은 CSS(white-space)로 살린다. --%>
+				<p class="comment-content"><c:out value="${comment.content}" /></p>
+
+				<%-- details/summary: "삭제"를 누르면 비밀번호 칸이 그 자리에서 펼쳐진다 (JavaScript 없이 되는 HTML 기본 기능) --%>
+				<%-- 비밀번호가 틀려 돌아온 경우에는 그 댓글의 칸을 펼친 채로 보여 준다 (open) --%>
+				<details class="comment-delete"<c:if test="${commentDeleteErrorId == comment.id}"> open</c:if>>
+					<summary>삭제</summary>
+					<form action="/posts/${post.id}/comments/${comment.id}/delete" method="post">
+						<input type="password" name="password" maxlength="20" placeholder="비밀번호" aria-label="비밀번호" required>
+						<button type="submit" class="danger">삭제</button>
+						<c:if test="${commentDeleteErrorId == comment.id}">
+							<p class="error"><c:out value="${commentDeleteError}" /></p>
+						</c:if>
+					</form>
+				</details>
+			</article>
+		</c:forEach>
+
+		<%-- 더 볼 댓글이 있을 때만. 누르면 마지막 댓글 번호 다음부터 이어서 보여 준다. --%>
+		<c:if test="${comments.nextCursor != null}">
+			<a class="more" href="/posts/${post.id}?commentCursor=${comments.nextCursor}#comments">댓글 더 보기</a>
+		</c:if>
+
+		<%-- 댓글 쓰기. 검사에 걸리면 CommentController가 입력값과 메시지를 flash로 보내고, 여기서 칸을 채우고 메시지를 보여 준다. --%>
+		<%-- 칸 id에 comment-를 붙이는 이유: 위의 글 삭제 form에도 password 칸이 있어서 id가 겹치지 않게 --%>
+		<form:form modelAttribute="commentForm" action="/posts/${post.id}/comments" method="post" cssClass="comment-form">
+			<label for="comment-nickname">닉네임</label>
+			<form:input path="nickname" id="comment-nickname" maxlength="20" />
+			<form:errors path="nickname" cssClass="error" element="p" />
+
+			<label for="comment-password">비밀번호</label>
+			<form:password path="password" id="comment-password" maxlength="20" />
+			<p class="hint">댓글을 지울 때 필요해요. 잊으면 직접 지울 수 없어요.</p>
+			<form:errors path="password" cssClass="error" element="p" />
+
+			<label for="comment-content">댓글</label>
+			<form:textarea path="content" id="comment-content" maxlength="500" rows="3" />
+			<form:errors path="content" cssClass="error" element="p" />
+
+			<button type="submit">댓글 남기기</button>
+		</form:form>
+	</section>
+
 	<%-- 공통 바닥글 (개인정보처리방침 링크) --%>
 	<%@ include file="/WEB-INF/views/common/footer.jspf" %>
 </main>
@@ -108,10 +165,21 @@
 		deleteButton.textContent = '삭제하는 중…';
 	});
 
+	// 댓글 쓰기도 연속으로 누르면 같은 댓글이 여러 개 달리므로, 첫 번째 누름에서 버튼을 막는다.
+	const commentForm = document.querySelector('.comment-form');
+	const commentButton = commentForm.querySelector('button[type="submit"]');
+
+	commentForm.addEventListener('submit', function () {
+		commentButton.disabled = true;
+		commentButton.textContent = '남기는 중…';
+	});
+
 	// "뒤로 가기"로 이 화면이 되살아났을 때 버튼이 막힌 채로 남지 않게 원래대로 돌려놓는다.
 	window.addEventListener('pageshow', function () {
 		deleteButton.disabled = false;
 		deleteButton.textContent = '삭제';
+		commentButton.disabled = false;
+		commentButton.textContent = '댓글 남기기';
 	});
 </script>
 

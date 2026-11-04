@@ -12,6 +12,8 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import backend.analysis.service.FoodAnalysisService;
+import backend.comment.model.dto.CommentCreateForm;
+import backend.comment.service.CommentService;
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
 import backend.post.model.dto.PostCreateForm;
@@ -29,6 +31,7 @@ public class PostController {
 
 	private final PostService postService;
 	private final FoodAnalysisService foodAnalysisService;
+	private final CommentService commentService;
 
 	// 첫 화면 = 게시글 목록
 	// @RequestParam(required = false): 주소의 ?cursor=값 을 받는다. 없으면 null (첫 화면)
@@ -83,10 +86,16 @@ public class PostController {
 	// 상세 화면
 	// @PathVariable: 주소 안의 {id} 자리 값을 받는다. (/posts/3 → id = 3)
 	// 없거나 삭제된 글이면 Service가 POST_NOT_FOUND 예외를 던지고, PageExceptionHandler가 에러 화면(404)을 보여 준다.
+	// commentCursor: 댓글 "더 보기"를 눌렀을 때 이어서 볼 위치 (없으면 첫 댓글부터)
 	@GetMapping("/posts/{id}")
-	public String detail(@PathVariable Long id, Model model) {
+	public String detail(@PathVariable Long id, @RequestParam(required = false) Long commentCursor, Model model) {
 		model.addAttribute("post", postService.getDetail(id));
 		model.addAttribute("analysis", foodAnalysisService.getView(id));
+		model.addAttribute("comments", commentService.getComments(id, commentCursor));
+		// 댓글 입력칸과 연결할 빈 form. 검사에 걸려 돌아온 경우에는 CommentController가 flash로 보낸 입력값이 이미 들어 있어서 덮어쓰지 않는다.
+		if (!model.containsAttribute("commentForm")) {
+			model.addAttribute("commentForm", new CommentCreateForm());
+		}
 		return "posts/detail";
 	}
 
