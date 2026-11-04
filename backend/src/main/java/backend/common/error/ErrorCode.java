@@ -33,6 +33,10 @@ public enum ErrorCode {
 	// (제한 숫자는 설정으로 바뀔 수 있어서 메시지에 숫자를 넣지 않는다)
 	TOO_MANY_UPLOADS(HttpStatus.TOO_MANY_REQUESTS, "업로드가 너무 잦습니다. 잠시 후 다시 올려 주세요."),
 
+	// ---- 댓글 ----
+	// 404: 없는 댓글이거나 삭제된 댓글 (또는 주소의 글 번호와 맞지 않는 댓글)
+	COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다."),
+
 	// ---- 사진 ----
 	// 400: 파일 내용이 JPEG·PNG가 아니거나, 읽을 수 없는 사진 (확장자만 바꾼 파일, 아이폰 HEIC 등)
 	INVALID_IMAGE(HttpStatus.BAD_REQUEST, "JPEG 또는 PNG 사진만 올릴 수 있습니다."),

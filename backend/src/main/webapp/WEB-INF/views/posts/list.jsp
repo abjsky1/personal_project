@@ -44,7 +44,11 @@
 					</c:when>
 				</c:choose>
 				<%-- 닉네임·메모는 사용자가 쓴 값이라 반드시 c:out으로 출력한다 (XSS 방지) --%>
-				<p class="meta"><strong><c:out value="${post.nickname}" /></strong> · <c:out value="${post.createdAt}" /></p>
+				<%-- 댓글 수는 있을 때만 보여 준다 (0개는 표시하지 않는다) --%>
+				<p class="meta">
+					<strong><c:out value="${post.nickname}" /></strong> · <c:out value="${post.createdAt}" />
+					<c:if test="${post.commentCount > 0}"> · 댓글 ${post.commentCount}</c:if>
+				</p>
 				<c:if test="${not empty post.memo}">
 					<p class="memo"><c:out value="${post.memo}" /></p>
 				</c:if>

@@ -172,6 +172,77 @@ button.danger {
 	background: #c62828;
 }
 
+/* ---- 댓글 (상세 화면 아래) ---- */
+/* 긴 글이 읽기 좋은 폭으로 제한한다 (개인정보처리방침과 같은 760px) */
+.comments {
+	max-width: 760px;
+	margin-top: 40px;
+	padding-top: 16px;
+	border-top: 1px solid #eee;
+}
+
+.comments h2 {
+	margin: 0;
+	font-size: 1.1rem;
+}
+
+.comment {
+	padding: 12px 0;
+	border-bottom: 1px solid #eee;
+}
+
+.comment .meta {
+	margin: 0;
+}
+
+/* 댓글 내용: 사용자가 넣은 줄바꿈을 그대로 보여 준다 */
+.comment-content {
+	margin: 4px 0 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+/* "삭제"를 누르면 펼쳐지는 비밀번호 칸. 글자는 작고 흐리게 */
+.comment-delete {
+	margin-top: 4px;
+}
+
+.comment-delete summary {
+	color: #999;
+	font-size: 0.85rem;
+	cursor: pointer;
+}
+
+/* 펼쳐진 뒤: 비밀번호 칸과 작은 삭제 버튼을 한 줄에 */
+.comment-delete form {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+	margin-top: 8px;
+}
+
+.comment-delete input[type="password"] {
+	width: 160px;
+}
+
+/* 댓글 삭제 버튼은 form button의 "가득 채우기" 규칙 대신 작게 */
+.comment-delete button {
+	width: auto;
+	margin-top: 0;
+	padding: 6px 12px;
+	font-size: 0.85rem;
+}
+
+.comment-delete .error {
+	width: 100%;
+	margin: 0;
+}
+
+.comment-form {
+	margin-top: 24px;
+}
+
 /* ---- 글쓰기 ---- */
 /* 입력칸이 1280px까지 길어지면 쓰기 불편해서, 글쓰기 영역만 가운데 560px로 좁힌다. */
 .narrow {
