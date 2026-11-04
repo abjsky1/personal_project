@@ -146,7 +146,7 @@
 ## S4. 배포 (2026-10-31 ~ 진행 중)
 
 **목표**: 칼로리 분석이 되는 상태로 AWS에 올리고, 도메인·HTTPS·자동 배포·감시까지 갖춘다.
-**완료 기준**: `https://도메인`으로 접속, main에 push하면 자동 반영, 다운 알림과 백업 복구 연습 → 진행 중 (6조각 중 4조각 끝남, 2026-11-03)
+**완료 기준**: `https://도메인`으로 접속, main에 push하면 자동 반영, 다운 알림과 백업 복구 연습 → 진행 중 (6조각 중 5조각 끝남, 2026-11-04)
 
 ### 한 일 (지금까지)
 | 커밋 | 조각 | 내용 |
@@ -155,7 +155,7 @@
 | `7d6c3b4` `f2a2121` | S4-2 | 배포 구성 EC2 + RDS 확정(월 약 45달러), AWS 계정(무료 플랜, 서울, IAM 사용자 + 패스키, 요금 알림 50달러) |
 | `14c6117` `17b2c05` | S4-3 | EC2(Amazon Linux 2023, t3.small)·RDS(db.t4g.micro)·S3 만들고 첫 배포, 공인 IP 고정. 서버 구성은 PLANNING 10절 |
 | `ea6ff7c` `c52aa9b` | S4-4 | 서비스 이름 찍먹·`jjikmuk.com`(가비아) + DNS, HTTPS(Let's Encrypt, certbot 컨테이너, nginx 443). 휴대폰에서 실제 주소로 확인 |
-| (이번 커밋) | S4-5 | 자동 배포: GitHub Actions → GHCR 이미지 → SSM으로 서버에서 `deploy.sh`. AWS OIDC 배포 역할, PR 규칙 |
+| `781e852` `2891c0c` (이번 커밋) | S4-5 | 자동 배포: GitHub Actions → GHCR 이미지 → SSM으로 서버에서 `deploy.sh`. AWS OIDC 배포 역할. 첫 자동 배포 성공(11-04) |
 
 ### 만난 문제
 | 문제 | 원인 | 기록 |
@@ -166,6 +166,7 @@
 | `docker compose`가 없음 | Amazon Linux 2023 저장소에 Compose 플러그인이 없다. 함께 깔린 Buildx 0.12도 Compose가 요구하는 것보다 낮음 → 둘 다 GitHub 릴리스에서 직접 설치 | PLANNING 10절 |
 | 재부팅했는데 컨테이너가 `Up 4 hours` | `sudo reboot`가 서버가 아니라 내 PC 창에서 실행됨(서버 `uptime`으로 확인) → SSH 창에서 다시 실행, 1분 뒤 자동 복구 확인 | — |
 | Route 53에서 도메인을 못 삼 (`AccessDeniedException`) | 무료 플랜 계정은 Route 53 도메인 등록을 지원하지 않음 → 가비아에서 구입, DNS도 가비아 A 레코드로 | PLANNING 10절 |
+| **자동 배포가 AWS 권한 단계에서 실패** (`Not authorized to perform sts:AssumeRoleWithWebIdentity`) | GitHub이 보내는 증명서의 `sub`가 2026-07-15 이후 저장소부터 고유 번호가 붙은 새 형식인데, 콘솔 마법사가 만든 신뢰 정책은 옛 형식. 증명서 내용을 찍어 비교해서 발견 → 신뢰 정책에 새 형식 추가 | [기록](troubleshooting/2026-11-04-github-oidc-sub-claim.md) |
 
 ### 바뀐 결정
 - 서버 OS: Ubuntu → Amazon Linux 2023
@@ -175,7 +176,8 @@
 - 도메인 구입처: Route 53 → 가비아 (무료 플랜 제한. 가격은 연 2만 원대로 비슷)
 
 ### 남은 조각
-- S4-5 자동 배포, S4-6 감시·백업 복구 연습·로그 정리
+- PR 규칙 켜기(PR 없이 main push 금지, CI 통과해야 머지) → 이때부터 PR 흐름
+- S4-6 감시·백업 복구 연습·로그 정리
 - 지인 베타 전: 테스트 글 삭제, 화면의 서비스 이름을 찍먹으로
 
 회고(KPT)는 S4가 끝나면 쓴다.
