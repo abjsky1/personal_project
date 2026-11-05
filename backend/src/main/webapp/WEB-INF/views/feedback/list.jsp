@@ -23,7 +23,7 @@
 		<a class="button" href="/feedback/new">피드백 남기기</a>
 	</header>
 
-	<p class="hint">불편한 점, 바라는 점, 글·댓글 삭제 요청을 남겨 주세요. 운영자가 보고 처리 상태와 답변을 남깁니다.</p>
+	<p class="hint">불편한 점, 바라는 점, 글 · 댓글 삭제 요청을 남겨 주세요. 운영자가 보고 처리 상태와 답변을 남깁니다.</p>
 
 	<c:if test="${empty page.feedbacks}">
 		<p class="empty">아직 피드백이 없어요.</p>
