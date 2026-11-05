@@ -22,7 +22,7 @@ public record GeoPoint(BigDecimal latitude, BigDecimal longitude) {
 	// 여기서 값을 바꾸면(latitude = ...) 바뀐 값이 필드에 들어간다.
 	public GeoPoint {
 		if (latitude == null || longitude == null) {
-			throw new IllegalArgumentException("위도·경도가 비어 있습니다.");
+			throw new IllegalArgumentException("위도 · 경도가 비어 있습니다.");
 		}
 		// 위도는 -90 ~ 90 (남극 ~ 북극), 경도는 -180 ~ 180
 		// compareTo: BigDecimal끼리 크기를 비교한다 (작으면 음수, 같으면 0, 크면 양수)

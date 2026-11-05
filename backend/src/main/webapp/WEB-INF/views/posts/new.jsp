@@ -27,7 +27,7 @@
 		<%-- accept: 고를 수 있는 파일 형식. 아이폰은 이 설정을 보고 HEIC 사진을 JPEG로 바꿔서 올린다. --%>
 		<label for="image">사진</label>
 		<input type="file" id="image" name="image" accept="image/jpeg,image/png">
-		<p class="hint">JPEG·PNG, 10MB까지. 올린 사진의 위치 정보(EXIF)는 지우고 저장해요.</p>
+		<p class="hint">JPEG · PNG, 10MB까지. 올린 사진의 위치 정보(EXIF)는 지우고 저장해요.</p>
 		<p class="hint">칼로리 분석을 위해 위치 정보를 지운 사진을 Google(Gemini)로 보내요.</p>
 		<%-- form:errors: 이 칸에 검사 메시지가 있을 때만 <p class="error">메시지</p>를 만든다. --%>
 		<form:errors path="image" cssClass="error" element="p" />
@@ -52,10 +52,10 @@
 		<%-- 무엇을, 왜, 얼마나 보관하는지와 거부해도 불이익이 없다는 것을 체크박스 옆에 알린다. (기획서 8절) --%>
 		<label class="checkbox">
 			<form:checkbox path="locationConsent" />
-			위치·촬영 시각 제공에 동의해요 (선택)
+			위치 · 촬영 시각 제공에 동의해요 (선택)
 		</label>
 		<p class="hint">
-			사진에 담긴 위치(GPS)와 찍은 시각을 지역·시간대별 음식 통계에 써요.
+			사진에 담긴 위치(GPS)와 찍은 시각을 지역 · 시간대별 음식 통계에 써요.
 			위치는 다른 사람에게 공개되지 않고, 글을 지우면 함께 지워져요. 동의하지 않아도 글을 올릴 수 있어요.
 			<%-- target="_blank": 새 탭에서 연다 → 쓰던 글이 사라지지 않는다 --%>
 			<a href="/privacy" target="_blank">개인정보처리방침</a>

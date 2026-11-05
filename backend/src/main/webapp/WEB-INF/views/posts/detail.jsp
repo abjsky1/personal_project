@@ -60,7 +60,7 @@
 							<c:if test="${not empty analysis.confidenceLabel}">
 								<p class="hint">AI의 확신 정도: <c:out value="${analysis.confidenceLabel}" /></p>
 							</c:if>
-							<p class="hint">AI 추정치이며 실제와 다를 수 있습니다. 의료·영양 상담을 대신하지 않습니다.</p>
+							<p class="hint">AI 추정치이며 실제와 다를 수 있습니다. 의료 · 영양 상담을 대신하지 않습니다.</p>
 						</c:when>
 						<c:when test="${analysis.status == 'NOT_FOOD'}">
 							<p>사진에서 음식을 찾지 못했어요.</p>
