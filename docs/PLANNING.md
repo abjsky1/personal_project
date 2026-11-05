@@ -1,6 +1,6 @@
-# 음식 사진 칼로리 분석 게시판 — MVP 기획서
+# 찍먹 — 음식 사진 칼로리 분석 게시판 MVP 기획서
 
-> v0.4 · 2026-10-27 · 서비스명 미정
+> v0.4 · 2026-10-27 · 서비스명 찍먹 (jjikmuk.com, 2026-11-03)
 > 이 문서는 살아있는 문서다. 스프린트가 끝날 때마다 갱신하고, 바뀐 결정은 지우지 말고 "변경 이력"에 남긴다.
 
 ---
@@ -41,7 +41,7 @@
 | 댓글 | 비회원 닉네임 + 비밀번호로 작성·삭제. 대댓글 없는 평면 구조 |
 | 피드백 게시판 | 비회원 닉네임 + 비밀번호로 건의·버그 제보 작성·삭제. 운영자가 처리 상태(접수 / 진행 중 / 반영 완료 / 보류)와 답변을 남김 |
 | 운영자 기능 | 관리자 API(토큰 인증, 화면 없음)로 게시글·댓글·피드백 **상태 변경**, 피드백 처리 상태·답변 등록 |
-| 정책 페이지 | 이용약관·개인정보처리방침 한 페이지 (위치정보, 외부 AI 전송, 면책 포함) |
+| 정책 페이지 | 이용약관 `/terms`·개인정보처리방침 `/privacy` 두 페이지, 모든 화면의 바닥글에서 연결 (위치정보, 외부 AI 전송, 면책 포함) |
 
 ### 4.2 제외 (백로그 — 사용자 반응 보고 우선순위 결정)
 
@@ -468,6 +468,13 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 | GET | `/feedback/{id}` | 상세: 내용 + 처리 상태 + 운영자 답변(있을 때) + 삭제 칸 |
 | POST | `/feedback/{id}/delete` | 비밀번호 확인 → `DELETED_BY_AUTHOR` → 목록으로 |
 
+**정책 페이지** (S3-4) — 글은 JSP에 그대로 적혀 있다 (`common/terms.jsp`, `common/privacy.jsp`). 모든 화면의 바닥글 "이용약관 · 개인정보처리방침"에서 연결
+
+| Method | Path | 설명 |
+|---|---|---|
+| GET | `/terms` | 이용약관: 서비스 내용, 이용 조건(만 14세, 비밀번호를 잊으면 피드백으로 삭제 요청), 게시물의 책임과 운영자 삭제, AI 추정 결과 면책, 위치 정보, 변경·중단, 문의 |
+| GET | `/privacy` | 개인정보처리방침: 수집 항목(게시글·댓글·피드백), 보관 기간, 위탁(AWS)·국외 이전(Google Gemini), 이용자의 권리, 쿠키. 기능이 바뀌면 같이 고치고 시행일을 바꾼다 |
+
 **운영자 API (S3-3)** — JSON, 화면 없음. 요청 헤더 `X-Admin-Token`이 서버 `.env`의 `APP_ADMIN_TOKEN`과 같아야 한다 (없거나 다르면 401, 서버에 토큰이 없으면 403). 쓰는 법은 16절
 
 | Method | Path | 설명 |
@@ -556,7 +563,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 | 1 | 댓글 | 상세 화면에서 댓글 달기·보기(오래된 순 20개 + 더 보기)·작성자 삭제, 목록 카드에 댓글 수 | ✅ 2026-11-04 |
 | 2 | 피드백 게시판 | 상단 메뉴 "피드 · 피드백", 목록(제목·처리 상태 배지·닉네임·시간)·상세(내용 + 운영자 답변)·작성·작성자 삭제 | ✅ 2026-11-04 |
 | 3 | 운영자 API | 관리자 토큰(서버 `.env`)으로 글·댓글·피드백 운영자 삭제, 피드백 처리 상태·답변. 운영자 행동은 로그에. 테스트 글 정리 | ✅ 2026-11-05 (테스트 글 정리는 베타 전에 이 API로) |
-| 4 | 이용약관 + 마무리 | `/terms`, 바닥글 링크 정리, 화면 이름을 찍먹으로 | |
+| 4 | 이용약관 + 마무리 | `/terms`, 바닥글 링크 정리, 화면 이름을 찍먹으로 | ✅ 2026-11-05 (처리방침에 댓글·피드백 반영도 함께) |
 
 ## 16. 운영 프로세스
 
@@ -574,13 +581,14 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 - **회고**: 스프린트마다 KPT (Keep / Problem / Try) 3줄 → `docs/SPRINTS.md`에 스프린트 진행 기록(한 일·만난 문제·바뀐 결정)과 함께 남긴다
 - **운영자 작업 (관리자 API, S3-3)**: 화면이 없고 열쇠(토큰)로 부르는 JSON API다 (13절). 열쇠를 어디에도 복사하지 않도록, **서버에 SSH로 들어가 `.env`에서 바로 읽어** 쓴다
   - 처음 한 번: 서버에서 `openssl rand -hex 24`로 열쇠를 만들어 `deploy/.env`에 `APP_ADMIN_TOKEN=값` 한 줄 추가 → `docker compose up -d app` (환경 변수가 바뀌어 app만 새로 뜬다, 20초)
-  - 명령은 `cd ~/personal_project/deploy` 뒤에 (열쇠는 `.env`에서 읽어 변수에 담는다. 화면에 찍히지 않는다)
+  - 순서: ① PC에서 PowerShell을 열고 `ssh -i <키 파일 경로> ec2-user@3.39.120.213` (프롬프트가 `[ec2-user@…]$`로 바뀐다. `Connection timed out`이면 아래 장애 대응의 SSH 항목) ② `cd ~/personal_project/deploy` (막 들어오면 홈 폴더라서 `.env`가 없다고 나온다) ③ 아래 상자의 첫 줄로 열쇠를 변수에 담는다 (화면에 찍히지 않는다. 창을 닫으면 사라지므로 접속할 때마다 다시) ④ 필요한 명령 **한 줄만** 복사해 실행한다 — 삭제 줄을 그대로 붙여 넣으면 그 번호의 글·댓글이 지워진다 (피드백 1번은 예시) ⑤ 브라우저로 결과 확인 ⑥ `exit`로 나온다
     ```
     TOKEN=$(grep ^APP_ADMIN_TOKEN= .env | cut -d= -f2)
-    curl -s -X POST https://jjikmuk.com/api/admin/posts/14/delete -H "X-Admin-Token: $TOKEN"
-    curl -s -X POST https://jjikmuk.com/api/admin/comments/3/delete -H "X-Admin-Token: $TOKEN"
+    curl -s -X POST https://jjikmuk.com/api/admin/posts/<글 번호>/delete -H "X-Admin-Token: $TOKEN"
+    curl -s -X POST https://jjikmuk.com/api/admin/comments/<댓글 번호>/delete -H "X-Admin-Token: $TOKEN"
     curl -s -X PATCH https://jjikmuk.com/api/admin/feedback/1 -H "X-Admin-Token: $TOKEN" -H "Content-Type: application/json" -d '{"progress":"DONE","reply":"반영했어요. 고마워요!"}'
     ```
+  - 피드백 읽기: 브라우저로 `https://jjikmuk.com/feedback` (번호는 주소 끝의 숫자). 터미널에서 보려면 `curl -s https://jjikmuk.com/feedback/<번호> | sed 's/<[^>]*>//g' | grep -v '^[[:space:]]*$'` (HTML 태그를 지우고 글자만 남긴다). 진행 상태만 바꾸려면 PATCH 본문에 `{"progress":"IN_PROGRESS"}`처럼 progress만, 답변만 달려면 reply만 보내도 된다
   - 피드백으로 들어온 삭제 요청: 글·댓글 번호를 확인하고 위 명령으로 지운 뒤, 그 피드백에 `{"progress":"DONE","reply":"삭제했어요"}`
   - 열쇠가 샜다고 의심되면: 새 값을 만들어 `.env`를 바꾸고 `docker compose up -d app`. 옛 열쇠는 그 순간 무효. 틀린 열쇠로 온 시도는 로그 `Admin token rejected`로 보인다
   - 내 PC에서 직접 부를 수도 있다 (Git Bash에서 같은 curl, 열쇠는 직접 입력). PowerShell은 한글 본문이 깨질 수 있어 Git Bash를 쓴다
@@ -589,6 +597,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
   - **"ALARM: macros-app-error" (CloudWatch)**: ① CloudWatch → 로그 관리 → `/macros/server` → Logs Insights: `fields @timestamp, message, traceId | filter log.level = "ERROR" | sort @timestamp desc` ② 그 traceId로 같은 요청의 다른 로그를 보고 재현 ③ 고치면 PR → 머지 → 자동 배포 ④ 기록
   - **배포가 잘못됐을 때 (되돌리기)**: GitHub Actions 화면에서 직전 성공 실행의 커밋 SHA 확인 → 서버에서 `cd ~/personal_project/deploy && bash deploy.sh <그 SHA>` (GHCR에 남은 이미지를 다시 받아 교체, 약 1분)
   - **DB가 망가졌을 때 (복구)**: RDS → `macros-db` → 작업 → 특정 시점으로 복원 → 새 인스턴스(`macros-db-restore`, 같은 클래스, 퍼블릭 아니요, 보안 그룹 `macros-db`) → 사용 가능해지면 서버 `.env`의 `DB_HOST`를 새 엔드포인트로 바꾸고 `docker compose up -d` → 확인 뒤 옛 인스턴스 삭제. 복원 가능한 범위는 백업 보관 기간(무료 플랜 1일, 유료 전환 뒤 7일). 연습 없이 두기로 했으므로(18절) 실제 상황에서는 이 순서를 한 줄씩 그대로 따른다
+  - **SSH가 갑자기 안 될 때** (`Connection timed out`인데 사이트는 멀쩡): 내 PC의 공인 IP가 바뀐 경우가 대부분이다 (집 인터넷은 공유기를 다시 켜거나 통신사 사정으로 IP가 바뀔 수 있다). EC2 → 보안 그룹 `macros-web` → 인바운드 규칙 편집 → SSH(22) 규칙을 "규칙 추가"로 하나 더 만들어 소스를 "내 IP"로 저장한다 (옛 규칙은 지우지 않는다. 집 IP가 두 값 사이를 오가서, 둘 다 열어 두면 다시 겪지 않는다) → 바로 접속된다. 서버 쪽 문제인지 헷갈리면 먼저 브라우저로 사이트가 열리는지 본다 (2026-11-05 실제로 겪음)
 
 ## 17. 성공 지표 (공개 후 4주)
 
@@ -659,6 +668,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-11-05 — S3-4 완료: 이용약관 `/terms`, 바닥글 "이용약관 · 개인정보처리방침", 화면 이름 찍먹. 처리방침에 댓글·피드백 반영(시행일 11-05). **S3 끝 = 기능 기준 MVP 완성**, 다음은 테스트 글 정리 뒤 지인 베타
 - 2026-11-05 — S3-3 완료: 운영자 API(토큰 `APP_ADMIN_TOKEN`, 글·댓글·피드백 운영자 삭제, 피드백 처리 상태·답변). 16절에 운영자 작업 런북
 - 2026-11-04 — S3-2 완료: 피드백 게시판(목록·작성·상세·작성자 삭제, 처리 상태 배지, 운영자 답변 표시), 상단 메뉴 "피드 · 피드백". MyBatis는 MVP 이후 학습 과제로(18절)
 - 2026-11-04 — S3 시작, S3-1 완료: 댓글(상세 화면에서 달기·보기·작성자 삭제, 목록 카드에 댓글 수). S3를 4조각으로 나눔(15절). 댓글·피드백에 IP 컬럼을 두지 않기로(12·18절)

@@ -8,7 +8,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>사진 올리기</title>
+<title>사진 올리기 · 찍먹</title>
 <link rel="stylesheet" href="<c:url value='/css/app.css' />">
 </head>
 <body>
