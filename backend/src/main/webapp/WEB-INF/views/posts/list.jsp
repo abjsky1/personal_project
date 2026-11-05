@@ -14,7 +14,7 @@
 </head>
 <body>
 <main>
-	<header class="top">
+	<header class="top top-home">
 		<div>
 			<h1>찍먹</h1>
 			<%-- 상단 메뉴: 피드(이 화면)와 피드백 게시판을 오간다 --%>
@@ -23,6 +23,8 @@
 				<a href="/feedback">피드백</a>
 			</nav>
 		</div>
+		<%-- 한 줄 소개: 처음 온 사람이 뭘 하는 곳인지 바로 알게. PC에서는 제목과 버튼 사이 가운데, 휴대폰에서는 둘째 줄 (app.css의 .top-home) --%>
+		<p class="slogan">찍고 먹자 !<small>먹은 사진을 올리면 AI가 칼로리를 알려 줘요</small></p>
 		<a class="button" href="/posts/new">사진 올리기</a>
 	</header>
 
