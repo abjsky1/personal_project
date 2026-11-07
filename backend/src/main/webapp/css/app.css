@@ -77,7 +77,7 @@ button {
 /* ---- 목록: 카드 격자 ---- */
 /* grid: 칸을 바둑판처럼 나눈다. */
 /* repeat(auto-fill, minmax(260px, 1fr)): 한 칸을 최소 260px로 잡고, 화면 폭에 들어가는 만큼 칸 수를 자동으로 정한다. */
-/* → PC(1280px)는 4칸, 태블릿은 2~3칸, 휴대폰은 1칸이 된다. 칸 수를 따로 정하지 않아도 된다. */
+/* → PC(1280px)는 4칸, 태블릿은 2~3칸이 된다. 휴대폰은 아래 "좁은 화면" 규칙에서 3칸으로 고정한다 (지인 피드백 3번, JM-50). */
 .feed {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -480,8 +480,33 @@ form button {
 		font-size: 1.2rem;
 	}
 
+	/* 피드: 휴대폰에서는 한 줄에 세 장 (지인 피드백 3번, JM-50). 위의 "최소 260px" 규칙대로면 한 장만 들어가서 여기서 3칸으로 못 박는다 */
 	.feed {
-		gap: 20px;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 14px 8px;
+	}
+
+	/* 카드 폭이 110px쯤이라 글자를 줄이고, 닉네임 줄과 메모는 한 줄에서 자른다(…). 날짜는 숨긴다(상세 화면에서 보인다) */
+	.card-kcal {
+		margin-top: 6px;
+		font-size: 0.95rem;
+	}
+
+	.card .meta,
+	.card .memo {
+		margin-top: 2px;
+		font-size: 0.75rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.card .memo {
+		display: block;
+	}
+
+	.card .card-when {
+		display: none;
 	}
 
 	/* 상세를 두 칸에서 한 칸(위: 사진, 아래: 내용)으로 바꾼다 */
