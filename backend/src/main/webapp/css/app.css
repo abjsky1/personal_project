@@ -133,6 +133,41 @@ button {
 	text-align: center;
 }
 
+/* ---- 쪽 번호 줄: 이전 · 1 2 3 · 다음 (JM-57, common/pager.jspf) ---- */
+/* 현재 쪽은 초록 바탕, 못 가는 쪽(첫 쪽의 이전, 마지막 쪽의 다음)은 흐리게 */
+.pager {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 40px 0 24px;
+}
+
+.pager a,
+.pager strong,
+.pager .disabled {
+	min-width: 36px;
+	padding: 8px 10px;
+	text-align: center;
+	border-radius: 8px;
+}
+
+.pager a {
+	color: inherit;
+	text-decoration: none;
+	background: #f2f2f2;
+}
+
+.pager strong {
+	background: #2f7d32;
+	color: #fff;
+}
+
+.pager .disabled {
+	color: #bbb;
+}
+
 /* ---- 상세: PC에서는 사진 | 내용 두 칸, 휴대폰에서는 위아래 ---- */
 /* 3fr / 2fr: 남는 폭을 3:2로 나눈다. minmax(0, ...)는 긴 내용 때문에 칸이 넘치지 않게 하는 관용구 */
 .detail {

@@ -66,10 +66,10 @@
 		</c:forEach>
 	</div>
 
-	<%-- 더 볼 글이 있을 때만 "더 보기" 링크를 보여 준다. 누르면 마지막 글 번호(cursor) 다음부터 이어서 보여 준다. --%>
-	<c:if test="${feed.nextCursor != null}">
-		<a class="more" href="/?cursor=${feed.nextCursor}">더 보기</a>
-	</c:if>
+	<%-- 쪽 번호 줄: 이전 · 1 2 3 · 다음 (JM-57). 2쪽 이상일 때만 보인다. 그리는 법은 common/pager.jspf --%>
+	<c:set var="nav" value="${feed.nav}" />
+	<c:set var="pagerBase" value="/?page=" />
+	<%@ include file="/WEB-INF/views/common/pager.jspf" %>
 
 	<%-- 공통 바닥글 (개인정보처리방침 링크) --%>
 	<%@ include file="/WEB-INF/views/common/footer.jspf" %>

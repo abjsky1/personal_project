@@ -33,12 +33,12 @@ public class PostController {
 	private final FoodAnalysisService foodAnalysisService;
 	private final CommentService commentService;
 
-	// 첫 화면 = 게시글 목록
-	// @RequestParam(required = false): 주소의 ?cursor=값 을 받는다. 없으면 null (첫 화면)
+	// 첫 화면 = 게시글 목록 (쪽 번호 방식, JM-57)
+	// @RequestParam(defaultValue = "1"): 주소의 ?page=값 을 받는다. 없으면 1쪽. 숫자가 아니면 400 에러 화면
 	// Model: JSP로 넘겨줄 값을 담는 상자. 여기서 넣은 "feed"를 JSP에서 ${feed}로 꺼낸다.
 	@GetMapping("/")
-	public String list(@RequestParam(required = false) Long cursor, Model model) {
-		model.addAttribute("feed", postService.getFeed(cursor));
+	public String list(@RequestParam(defaultValue = "1") int page, Model model) {
+		model.addAttribute("feed", postService.getFeed(page));
 		return "posts/list";
 	}
 

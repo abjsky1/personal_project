@@ -42,9 +42,10 @@
 		</c:forEach>
 	</ul>
 
-	<c:if test="${page.nextCursor != null}">
-		<a class="more" href="/feedback?cursor=${page.nextCursor}">더 보기</a>
-	</c:if>
+	<%-- 쪽 번호 줄 (JM-57): 피드와 같은 common/pager.jspf를 쓴다 --%>
+	<c:set var="nav" value="${page.nav}" />
+	<c:set var="pagerBase" value="/feedback?page=" />
+	<%@ include file="/WEB-INF/views/common/pager.jspf" %>
 
 	<%@ include file="/WEB-INF/views/common/footer.jspf" %>
 </main>

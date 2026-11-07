@@ -7,7 +7,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.core.task.TaskRejectedException;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +21,7 @@ import backend.analysis.service.FoodAnalysisService;
 import backend.comment.service.CommentService;
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
+import backend.common.web.PageNav;
 import backend.image.ImageProcessor;
 import backend.image.ImageStorage;
 import backend.image.PhotoMetadata;
@@ -47,8 +50,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class PostService {
 
-	// 목록 한 번에 보여 줄 글 수
-	private static final int PAGE_SIZE = 20;
+	// 목록 한 쪽에 보여 줄 글 수. 24 = PC 4칸·휴대폰 3칸 어디서든 줄이 딱 맞는 수 (JM-57)
+	private static final int PAGE_SIZE = 24;
 
 	private final PostRepository postRepository;
 	private final PostLocationRepository postLocationRepository;
@@ -140,21 +143,19 @@ public class PostService {
 		log.info("Location saved: postId={}", post.getId());
 	}
 
-	// 목록 조회. cursor가 없으면 첫 화면, 있으면 그 번호 다음 글부터 가져온다.
+	// 목록 조회 (쪽 번호 방식, JM-57). 주소의 ?page=2 처럼 쪽 번호로 부른다.
+	// 처음엔 "더 보기"(커서) 방식이었는데 화면에 "이전"이 없어 앞 쪽으로 돌아가기 어렵다는 의견으로 바꿨다 (기획서 18절).
+	// 댓글의 "더 보기"는 그대로 커서 방식이다.
 	// readOnly = true: 읽기만 하는 작업이라고 알려서 불필요한 변경 확인을 건너뛴다.
 	@Transactional(readOnly = true)
-	public FeedPage getFeed(Long cursor) {
-		// 첫 화면이면 "아주 큰 번호보다 작은 글" = 가장 최신 글부터
-		long before = (cursor == null) ? Long.MAX_VALUE : cursor;
-
-		// 20개가 아니라 21개를 가져와 본다. 21번째가 있으면 "더 보기"를 보여 주고, 화면에는 20개만 쓴다.
-		List<Post> posts = postRepository.findByStatusAndIdLessThanOrderByIdDesc(
-				PostStatus.ACTIVE, before, Limit.of(PAGE_SIZE + 1));
-
-		boolean hasNext = posts.size() > PAGE_SIZE;
-		List<Post> pagePosts = hasNext ? posts.subList(0, PAGE_SIZE) : posts;
-		// 다음에 이어서 볼 위치 = 이번 화면의 마지막 글 번호
-		Long nextCursor = hasNext ? pagePosts.get(pagePosts.size() - 1).getId() : null;
+	public FeedPage getFeed(int requestedPage) {
+		// 0이나 음수가 오면 1쪽으로
+		Page<Post> page = loadPage(Math.max(1, requestedPage));
+		// 범위를 넘는 쪽(글이 2쪽뿐인데 ?page=9)을 부르면 마지막 쪽을 다시 읽는다
+		if (!page.hasContent() && page.getTotalPages() > 0) {
+			page = loadPage(page.getTotalPages());
+		}
+		List<Post> pagePosts = page.getContent();
 
 		// 이번 화면의 글들의 분석 기록을 한 번에 읽어 온다. 글마다 따로 읽으면 글 20개에 쿼리가 20번 더 나간다 (N+1 문제).
 		// toMap: 글 번호로 바로 찾을 수 있게 "글 번호 → 분석 기록" 지도로 만든다.
@@ -168,7 +169,14 @@ public class PostService {
 		List<PostSummary> summaries = pagePosts.stream()
 				.map(post -> PostSummary.from(post, analyses.get(post.getId()), commentCounts.getOrDefault(post.getId(), 0L)))
 				.toList();
-		return new FeedPage(summaries, nextCursor);
+		// 화면의 쪽 번호는 1부터, Spring Data의 getNumber()는 0부터 세므로 1을 더한다
+		return new FeedPage(summaries, PageNav.of(page.getNumber() + 1, page.getTotalPages()));
+	}
+
+	// 최신 글(번호 큰 순)부터 PAGE_SIZE개. Page로 받으면 전체 글 수도 세어 와서 전체 쪽 수를 알 수 있다 (쿼리 2번: 목록 + 개수)
+	private Page<Post> loadPage(int pageNumber) {
+		return postRepository.findByStatus(PostStatus.ACTIVE,
+				PageRequest.of(pageNumber - 1, PAGE_SIZE, Sort.by(Sort.Direction.DESC, "id")));
 	}
 
 	// 상세 조회. 없거나 삭제된 글이면 POST_NOT_FOUND 예외를 던진다 → 에러 화면(404)이 나온다.

@@ -110,21 +110,25 @@ class FeedbackControllerTest {
 	}
 
 	@Test
-	void 글이_21개면_20개와_더_보기_위치를_넘기고_이어서_볼_수_있다() throws Exception {
+	void 글이_21개면_20개씩_쪽으로_나뉘고_둘째_쪽은_21번째_글부터다() throws Exception {
 		for (int i = 1; i <= 21; i++) {
 			save("글 " + i);
 		}
 
-		// 방금 저장한 21개가 가장 최신이라 첫 화면은 그중 20개(글 21 … 글 2)이고, 다음 화면은 글 1부터 시작한다
-		// (개발 DB에 예전 글이 더 있어도 되도록 다음 화면의 개수는 확인하지 않는다)
+		// 방금 저장한 21개가 가장 최신이라 첫 쪽은 그중 20개(글 21 … 글 2)이고, 둘째 쪽은 글 1부터 시작한다
+		// (개발 DB에 예전 글이 더 있어도 되도록 둘째 쪽의 개수는 확인하지 않는다)
 		FeedbackPage first = pageOf(get("/feedback"));
 		assertThat(first.feedbacks()).hasSize(20);
 		assertThat(first.feedbacks().get(0).title()).isEqualTo("글 21");
 		assertThat(first.feedbacks().get(19).title()).isEqualTo("글 2");
-		assertThat(first.nextCursor()).isEqualTo(first.feedbacks().get(19).id());
+		assertThat(first.nav().page()).isEqualTo(1);
+		assertThat(first.nav().hasPrev()).isFalse();
+		assertThat(first.nav().hasNext()).isTrue();
 
-		FeedbackPage second = pageOf(get("/feedback").param("cursor", String.valueOf(first.nextCursor())));
+		FeedbackPage second = pageOf(get("/feedback").param("page", "2"));
 		assertThat(second.feedbacks().get(0).title()).isEqualTo("글 1");
+		assertThat(second.nav().page()).isEqualTo(2);
+		assertThat(second.nav().hasPrev()).isTrue();
 	}
 
 	@Test

@@ -25,6 +25,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 
 import backend.analysis.model.dto.FoodAnalysisResult;
@@ -238,6 +239,39 @@ class PostControllerTest {
 		assertThat(summaryOf(feed, pending).analysisStatus()).isEqualTo(AnalysisStatus.PENDING);
 		assertThat(summaryOf(feed, pending).totalKcal()).isNull();
 		assertThat(summaryOf(feed, old).analysisStatus()).isNull();
+	}
+
+	@Test
+	void 목록은_24개씩_쪽_번호로_넘기고_범위_밖_번호는_끝_쪽으로_맞춘다() throws Exception {
+		// 개발 DB에 글이 이미 있어도 되도록, 지금 ACTIVE인 전체 글 수로 기대값을 계산한다
+		for (int i = 0; i < 25; i++) {
+			savePost("1234");
+		}
+		long active = postRepository.findAll().stream().filter(post -> post.getStatus() == PostStatus.ACTIVE).count();
+		int lastPage = (int) Math.ceil(active / 24.0);
+
+		// 첫 쪽: 24개, 가장 최신 글이 맨 앞, 이전은 없고 다음은 있다
+		FeedPage first = feedOf(get("/"));
+		assertThat(first.posts()).hasSize(24);
+		assertThat(first.posts().get(0).id()).isEqualTo(latestPost().getId());
+		assertThat(first.nav().page()).isEqualTo(1);
+		assertThat(first.nav().totalPages()).isEqualTo(lastPage);
+		assertThat(first.nav().hasPrev()).isFalse();
+		assertThat(first.nav().hasNext()).isTrue();
+
+		// 마지막 쪽: 나머지 글만, 다음은 없다
+		FeedPage last = feedOf(get("/").param("page", String.valueOf(lastPage)));
+		assertThat(last.posts()).hasSize((int) (active - 24L * (lastPage - 1)));
+		assertThat(last.nav().hasNext()).isFalse();
+
+		// 범위 밖: 너무 큰 번호는 마지막 쪽으로, 0은 첫 쪽으로
+		assertThat(feedOf(get("/").param("page", "999")).nav().page()).isEqualTo(lastPage);
+		assertThat(feedOf(get("/").param("page", "0")).nav().page()).isEqualTo(1);
+	}
+
+	private FeedPage feedOf(MockHttpServletRequestBuilder request) throws Exception {
+		MvcResult result = mockMvc.perform(request).andExpect(status().isOk()).andReturn();
+		return (FeedPage) result.getModelAndView().getModel().get("feed");
 	}
 
 	private PostSummary summaryOf(FeedPage feed, Post post) {

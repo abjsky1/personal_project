@@ -2,13 +2,16 @@ package backend.feedback.service;
 
 import java.util.List;
 
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
+import backend.common.web.PageNav;
 import backend.feedback.model.dto.FeedbackCreateForm;
 import backend.feedback.model.dto.FeedbackDetail;
 import backend.feedback.model.dto.FeedbackPage;
@@ -43,17 +46,21 @@ public class FeedbackService {
 		return saved.getId();
 	}
 
-	// 목록: 최신순 20개 + 더 보기 (PostService.getFeed와 같은 커서 방식)
+	// 목록: 최신순 20개씩 쪽 번호 방식 (PostService.getFeed와 같은 방식, JM-57)
 	@Transactional(readOnly = true)
-	public FeedbackPage getPage(Long cursor) {
-		long before = (cursor == null) ? Long.MAX_VALUE : cursor;
-		List<Feedback> feedbacks = feedbackRepository.findByStatusAndIdLessThanOrderByIdDesc(
-				PostStatus.ACTIVE, before, Limit.of(PAGE_SIZE + 1));
+	public FeedbackPage getPage(int requestedPage) {
+		Page<Feedback> page = loadPage(Math.max(1, requestedPage));
+		// 범위를 넘는 쪽 번호면 마지막 쪽을 다시 읽는다
+		if (!page.hasContent() && page.getTotalPages() > 0) {
+			page = loadPage(page.getTotalPages());
+		}
+		return new FeedbackPage(page.getContent().stream().map(FeedbackSummary::from).toList(),
+				PageNav.of(page.getNumber() + 1, page.getTotalPages()));
+	}
 
-		boolean hasNext = feedbacks.size() > PAGE_SIZE;
-		List<Feedback> page = hasNext ? feedbacks.subList(0, PAGE_SIZE) : feedbacks;
-		Long nextCursor = hasNext ? page.get(page.size() - 1).getId() : null;
-		return new FeedbackPage(page.stream().map(FeedbackSummary::from).toList(), nextCursor);
+	private Page<Feedback> loadPage(int pageNumber) {
+		return feedbackRepository.findByStatus(PostStatus.ACTIVE,
+				PageRequest.of(pageNumber - 1, PAGE_SIZE, Sort.by(Sort.Direction.DESC, "id")));
 	}
 
 	// 상세. 없거나 삭제된 글이면 FEEDBACK_NOT_FOUND (404 화면)
