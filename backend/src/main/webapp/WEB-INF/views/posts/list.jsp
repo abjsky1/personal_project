@@ -33,7 +33,7 @@
 		<p class="empty">아직 올라온 사진이 없어요.</p>
 	</c:if>
 
-	<%-- 카드 격자: PC에서는 한 줄에 여러 장, 휴대폰에서는 한 줄에 두 장 (칸 수는 app.css의 .feed가 화면 폭을 보고 정한다. 두 장은 지인 피드백 3번, JM-50) --%>
+	<%-- 카드 격자: PC에서는 한 줄에 여러 장, 휴대폰에서는 한 줄에 세 장 (칸 수는 app.css의 .feed가 화면 폭을 보고 정한다. 세 장은 지인 피드백 3번, JM-50) --%>
 	<div class="feed">
 		<%-- c:forEach: feed.posts의 글을 하나씩 post라는 이름으로 꺼내 반복한다. --%>
 		<c:forEach var="post" items="${feed.posts}">
@@ -55,7 +55,8 @@
 				<%-- 닉네임·메모는 사용자가 쓴 값이라 반드시 c:out으로 출력한다 (XSS 방지) --%>
 				<%-- 댓글 수는 있을 때만 보여 준다 (0개는 표시하지 않는다) --%>
 				<p class="meta">
-					<strong><c:out value="${post.nickname}" /></strong> · <c:out value="${post.createdAt}" />
+					<%-- 날짜는 span으로 감싸서 휴대폰(3칸)에서는 숨긴다 (app.css의 .card-when) --%>
+					<strong><c:out value="${post.nickname}" /></strong><span class="card-when"> · <c:out value="${post.createdAt}" /></span>
 					<c:if test="${post.commentCount > 0}"> · 댓글 ${post.commentCount}</c:if>
 				</p>
 				<c:if test="${not empty post.memo}">
