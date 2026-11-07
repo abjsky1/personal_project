@@ -88,6 +88,9 @@ button {
 	display: block;
 	color: inherit;
 	text-decoration: none;
+	/* min-width: 0 — 격자 칸은 기본적으로 "안의 내용보다 좁아질 수 없다". 한 줄로 자르는(nowrap) 긴 닉네임·메모가 있으면
+	   그 카드가 자기 칸을 밀어 넓혀서 휴대폰에서 왼쪽 칸만 커지는 문제가 있었다 (지인 베타). 0으로 두면 칸 폭을 따른다 */
+	min-width: 0;
 }
 
 /* 사진을 정사각형으로 맞춘다. 비율이 다른 사진은 가운데를 기준으로 잘라서 채운다(cover). */
@@ -516,8 +519,9 @@ form button {
 	}
 
 	/* 피드: 휴대폰에서는 한 줄에 세 장 (지인 피드백 3번, JM-50). 위의 "최소 260px" 규칙대로면 한 장만 들어가서 여기서 3칸으로 못 박는다 */
+	/* minmax(0, 1fr): 1fr만 쓰면 최소 폭이 내용 크기라서 긴 글자가 칸을 넓힌다. 0으로 두면 세 칸이 항상 같은 폭 */
 	.feed {
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 14px 8px;
 	}
 
