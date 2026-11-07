@@ -24,10 +24,10 @@ public class FeedbackController {
 
 	private final FeedbackService feedbackService;
 
-	// 목록 (최신순, "더 보기"는 ?cursor=마지막 번호)
+	// 목록 (최신순, 쪽 번호 방식 ?page=2. 없으면 1쪽)
 	@GetMapping("/feedback")
-	public String list(@RequestParam(required = false) Long cursor, Model model) {
-		model.addAttribute("page", feedbackService.getPage(cursor));
+	public String list(@RequestParam(defaultValue = "1") int page, Model model) {
+		model.addAttribute("page", feedbackService.getPage(page));
 		return "feedback/list";
 	}
 
