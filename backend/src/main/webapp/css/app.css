@@ -77,7 +77,7 @@ button {
 /* ---- 목록: 카드 격자 ---- */
 /* grid: 칸을 바둑판처럼 나눈다. */
 /* repeat(auto-fill, minmax(260px, 1fr)): 한 칸을 최소 260px로 잡고, 화면 폭에 들어가는 만큼 칸 수를 자동으로 정한다. */
-/* → PC(1280px)는 4칸, 태블릿은 2~3칸, 휴대폰은 1칸이 된다. 칸 수를 따로 정하지 않아도 된다. */
+/* → PC(1280px)는 4칸, 태블릿은 2~3칸이 된다. 휴대폰은 아래 "좁은 화면" 규칙에서 2칸으로 고정한다 (지인 피드백 3번, JM-50). */
 .feed {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -480,8 +480,23 @@ form button {
 		font-size: 1.2rem;
 	}
 
+	/* 피드: 휴대폰에서도 한 줄에 두 장 (지인 피드백 3번, JM-50). 위의 "최소 260px" 규칙대로면 한 장만 들어가서 여기서 2칸으로 못 박는다 */
 	.feed {
-		gap: 20px;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 16px 12px;
+	}
+
+	/* 칸이 절반으로 좁아진 만큼 카드 글자도 한 단계 줄인다 */
+	.card-kcal {
+		font-size: 1rem;
+	}
+
+	.card .meta {
+		font-size: 0.8rem;
+	}
+
+	.card .memo {
+		font-size: 0.9rem;
 	}
 
 	/* 상세를 두 칸에서 한 칸(위: 사진, 아래: 내용)으로 바꾼다 */

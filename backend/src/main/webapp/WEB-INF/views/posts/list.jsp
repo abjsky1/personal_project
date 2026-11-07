@@ -33,7 +33,7 @@
 		<p class="empty">아직 올라온 사진이 없어요.</p>
 	</c:if>
 
-	<%-- 카드 격자: PC에서는 한 줄에 여러 장, 휴대폰에서는 한 줄에 한 장 (칸 수는 app.css의 .feed가 화면 폭을 보고 정한다) --%>
+	<%-- 카드 격자: PC에서는 한 줄에 여러 장, 휴대폰에서는 한 줄에 두 장 (칸 수는 app.css의 .feed가 화면 폭을 보고 정한다. 두 장은 지인 피드백 3번, JM-50) --%>
 	<div class="feed">
 		<%-- c:forEach: feed.posts의 글을 하나씩 post라는 이름으로 꺼내 반복한다. --%>
 		<c:forEach var="post" items="${feed.posts}">
