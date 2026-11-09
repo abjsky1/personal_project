@@ -239,8 +239,8 @@
 | 커밋 | 조각 | 내용 |
 |---|---|---|
 | `84ff0f0` (PR #15) | 비용 점검 | 첫 3일 청구서 확인: 남은 자원 없음, 월 약 45달러. PLANNING 16절에 월 1회 점검 요령 |
-| `4c3b50f` (PR #16) `8b1bda6` (PR #18) | JM-50 | 휴대폰 피드를 한 줄 한 장 → 세 장 (지인 피드백 3번). 카드 글자를 줄이고 닉네임·메모는 한 줄로, 날짜는 휴대폰에서 숨김. PR #18은 칸 폭 수정. 변경 전·후: [before](screenshots/JM-50-before.jpg) · [after](screenshots/JM-50-after.jpg) · [피드백 글](screenshots/feedback-3.jpg) |
-| `60c7468` (PR #17) | JM-57 | 피드·피드백 목록 "더 보기" → 쪽 번호(이전 · 1 2 3 · 다음). 피드 24개씩(PC 4칸·폰 3칸 줄 맞춤), 피드백 20개씩, 댓글 더 보기는 커서 그대로. 공통 `common/pager.jspf` + `PageNav`. 테스트 104 → 105개. 변경 전·후: [before](screenshots/JM-57-before.jpg) · [after](screenshots/JM-57-after.jpg) |
+| `4c3b50f` (PR #16) `8b1bda6` (PR #18) | JM-50 | 휴대폰 피드를 한 줄 한 장 → 세 장 (지인 피드백 3번). 카드 글자를 줄이고 닉네임·메모는 한 줄로, 날짜는 휴대폰에서 숨김. PR #18은 칸 폭 수정. 변경 전·후: [before](https://github.com/abjsky1/jjikmuk_update_picture/blob/main/update_picture/JM-50-before.jpg) · [after](https://github.com/abjsky1/jjikmuk_update_picture/blob/main/update_picture/JM-50-after.jpg) · [피드백 글](https://github.com/abjsky1/jjikmuk_update_picture/blob/main/update_picture/feedback-3.jpg) |
+| `60c7468` (PR #17) | JM-57 | 피드·피드백 목록 "더 보기" → 쪽 번호(이전 · 1 2 3 · 다음). 피드 24개씩(PC 4칸·폰 3칸 줄 맞춤), 피드백 20개씩, 댓글 더 보기는 커서 그대로. 공통 `common/pager.jspf` + `PageNav`. 테스트 104 → 105개. 변경 전·후: [before](https://github.com/abjsky1/jjikmuk_update_picture/blob/main/update_picture/JM-57-before.jpg) · [after](https://github.com/abjsky1/jjikmuk_update_picture/blob/main/update_picture/JM-57-after.jpg) |
 
 ### 만난 문제
 | 문제 | 원인 | 기록 |
@@ -248,6 +248,7 @@
 | 휴대폰 3칸 피드에서 왼쪽 칸만 넓게 나옴 (배포 뒤 사용자 발견) | 격자의 `1fr`은 최소 폭이 "내용 크기"라서, 한 줄로 자르는(nowrap) 긴 닉네임·메모가 있는 카드가 자기 칸을 밀어 넓힘. 로컬 데이터에는 긴 글이 없어 못 봄 → `minmax(0, 1fr)` + `.card { min-width: 0 }`. 로컬에서 긴 글자를 넣어 세 칸이 109px로 같은지 확인 | `8b1bda6` (PR #18) |
 
 ### 메모
+- 캡처 사진은 11-09부터 비공개 저장소 `jjikmuk_update_picture`의 `update_picture/`에 둔다. 위 표의 before · after 링크는 저장소 주인만 열린다 (공개 저장소에는 사진을 넣지 않는다)
 - 11-05 베타 첫날: 글 15개, 첫 화면 조회 505회, 피드백 4건, 서버 에러 0건
 - 11-06 기록 체계 정리: Jira JM 보드(에픽 = 스프린트 S0~S4 + 지인 베타, 피드백 요청 = JM-50~56, 브랜치 이름에 이슈 키), 노션 "찍먹 운영 노트"(배포·피드백 답글·장애 대응·비용 점검·로컬 환경 순서). 결정·이력은 이 문서들에, 순서는 노션에, 진행은 Jira에
 - 11-06 피드백 3·5·6·7번에 운영자 답변. 상태를 실수로 "반영 완료"로 보냈다가 "접수"로 되돌림 (`progress`만 다시 보내면 답변은 그대로 남는다)
