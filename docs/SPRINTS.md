@@ -239,8 +239,9 @@
 | 커밋 | 조각 | 내용 |
 |---|---|---|
 | `84ff0f0` (PR #15) | 비용 점검 | 첫 3일 청구서 확인: 남은 자원 없음, 월 약 45달러. PLANNING 16절에 월 1회 점검 요령 |
-| `4c3b50f` (PR #16) `8b1bda6` (PR #18) | JM-50 | 휴대폰 피드를 한 줄 한 장 → 세 장 (지인 피드백 3번). 카드 글자를 줄이고 닉네임·메모는 한 줄로, 날짜는 휴대폰에서 숨김. PR #18은 칸 폭 수정. 변경 전·후: [before](https://github.com/abjsky1/jjikmuk_update_picture/blob/main/update_picture/JM-50-before.jpg) · [after](https://github.com/abjsky1/jjikmuk_update_picture/blob/main/update_picture/JM-50-after.jpg) · [피드백 글](https://github.com/abjsky1/jjikmuk_update_picture/blob/main/update_picture/feedback-3.jpg) |
-| `60c7468` (PR #17) | JM-57 | 피드·피드백 목록 "더 보기" → 쪽 번호(이전 · 1 2 3 · 다음). 피드 24개씩(PC 4칸·폰 3칸 줄 맞춤), 피드백 20개씩, 댓글 더 보기는 커서 그대로. 공통 `common/pager.jspf` + `PageNav`. 테스트 104 → 105개. 변경 전·후: [before](https://github.com/abjsky1/jjikmuk_update_picture/blob/main/update_picture/JM-57-before.jpg) · [after](https://github.com/abjsky1/jjikmuk_update_picture/blob/main/update_picture/JM-57-after.jpg) |
+| `4c3b50f` (PR #16) `8b1bda6` (PR #18) | JM-50 | 휴대폰 피드를 한 줄 한 장 → 세 장 (지인 피드백 3번). 카드 글자를 줄이고 닉네임·메모는 한 줄로, 날짜는 휴대폰에서 숨김. PR #18은 칸 폭 수정. 변경 전·후 사진(폰·PC, 첫 화면·전체): [JM-50 폴더](https://github.com/abjsky1/jjikmuk_update_picture/tree/main/update_picture/JM-50) — 바꾸기 전, PR #16 첫 버전(왼쪽 칸만 넓던 문제), 고친 뒤, 피드백 3번 글 |
+| `60c7468` (PR #17) | JM-57 | 피드·피드백 목록 "더 보기" → 쪽 번호(이전 · 1 2 3 · 다음). 피드 24개씩(PC 4칸·폰 3칸 줄 맞춤), 피드백 20개씩, 댓글 더 보기는 커서 그대로. 공통 `common/pager.jspf` + `PageNav`. 테스트 104 → 105개. 변경 전·후 사진(폰·PC, 첫 화면·전체): [JM-57 폴더](https://github.com/abjsky1/jjikmuk_update_picture/tree/main/update_picture/JM-57) — 더 보기, 더 보기를 누른 뒤, 쪽 번호 1쪽·2쪽, 피드백 8번 글 |
+| (JM-60 PR) | JM-60 | 상단 메뉴 "피드 · 피드백"을 알약 모양 버튼으로, 피드 첫 화면 머리 아래에 안내 띠 + "💬 개발자에게 피드백 보내기"(바로 작성 화면). 메뉴 글자를 못 알아보고 피드백을 못 남기는 지인이 많다는 운영자 관찰. 변경 전·후 사진(폰·PC, 첫 화면·전체): [JM-60 폴더](https://github.com/abjsky1/jjikmuk_update_picture/tree/main/update_picture/JM-60) — 피드·피드백 목록 |
 
 ### 만난 문제
 | 문제 | 원인 | 기록 |
