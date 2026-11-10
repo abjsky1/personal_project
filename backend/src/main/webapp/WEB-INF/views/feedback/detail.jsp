@@ -6,7 +6,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>피드백 · 찍먹</title>
+<title>피드백 - 찍먹</title>
 <link rel="stylesheet" href="<c:url value='/css/app.css' />">
 </head>
 <body>
@@ -19,7 +19,7 @@
 		<%-- 처리 상태 배지 + 제목 --%>
 		<span class="badge ${feedback.progress.cssClass}"><c:out value="${feedback.progress.label}" /></span>
 		<h1 class="feedback-title"><c:out value="${feedback.title}" /></h1>
-		<p class="meta"><strong><c:out value="${feedback.nickname}" /></strong> · <c:out value="${feedback.createdAt}" /></p>
+		<p class="meta"><strong><c:out value="${feedback.nickname}" /></strong><span><c:out value="${feedback.createdAt}" /></span></p>
 
 		<%-- 내용: 사용자 입력이라 c:out, 줄바꿈은 CSS로 --%>
 		<p class="feedback-content"><c:out value="${feedback.content}" /></p>
@@ -27,7 +27,7 @@
 		<%-- 운영자 답변: 있을 때만 (S3-3의 운영자 API로 단다) --%>
 		<c:if test="${not empty feedback.adminReply}">
 			<section class="admin-reply">
-				<p class="meta"><strong>운영자 답변</strong> · <c:out value="${feedback.repliedAt}" /></p>
+				<p class="meta"><strong>운영자 답변</strong><span><c:out value="${feedback.repliedAt}" /></span></p>
 				<p class="feedback-content"><c:out value="${feedback.adminReply}" /></p>
 			</section>
 		</c:if>

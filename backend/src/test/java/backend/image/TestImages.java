@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
 import javax.imageio.ImageIO;
 
 // 테스트에서 쓸 사진 파일을 코드로 만드는 도구
-// 실제 사진 파일을 저장소에 넣어 두지 않고, 필요한 크기·형식의 사진을 그때그때 만든다.
+// 실제 사진 파일을 저장소에 넣어 두지 않고, 필요한 크기, 형식의 사진을 그때그때 만든다.
 public final class TestImages {
 
 	private TestImages() {
@@ -72,7 +72,7 @@ public final class TestImages {
 		return out.toByteArray();
 	}
 
-	// TIFF 구조: 머리말 → 첫 목록(IFD0) → EXIF 목록(촬영 시각) → GPS 목록(위도·경도) → 긴 값들이 들어가는 칸
+	// TIFF 구조: 머리말 → 첫 목록(IFD0) → EXIF 목록(촬영 시각) → GPS 목록(위도, 경도) → 긴 값들이 들어가는 칸
 	// 숫자는 큰 자리부터 저장한다(MM). ByteBuffer의 기본 순서와 같다.
 	private static byte[] buildTiff(Integer orientation, Double latitude, Double longitude, String dateTime) {
 		boolean hasDate = dateTime != null;
@@ -144,7 +144,7 @@ public final class TestImages {
 		tiff.putShort((short) tag).putShort((short) type).putInt(count).putInt(valueOrOffset);
 	}
 
-	// GPS 좌표는 십진수(37.566535)가 아니라 도·분·초 세 개의 분수로 저장한다. (37도 33분 59.53초)
+	// GPS 좌표는 십진수(37.566535)가 아니라 도, 분, 초 세 개의 분수로 저장한다. (37도 33분 59.53초)
 	private static void putDegreesMinutesSeconds(ByteBuffer tiff, double value) {
 		double abs = Math.abs(value);
 		int degrees = (int) abs;

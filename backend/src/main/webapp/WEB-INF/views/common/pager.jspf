@@ -1,5 +1,5 @@
 <%@ page pageEncoding="UTF-8" %>
-<%-- 쪽 번호 줄: 이전 · 1 2 3 · 다음 (JM-57). 피드와 피드백 목록이 함께 쓴다.
+<%-- 쪽 번호 줄: 이전 1 2 3 다음 (JM-57). 피드와 피드백 목록이 함께 쓴다.
      쓰는 쪽에서 먼저 두 값을 둔다: <c:set var="nav" value="${feed.nav}"/> (PageNav), <c:set var="pagerBase" value="/?page="/> (번호 앞에 붙일 주소)
      2쪽 이상일 때만 보이고, 첫 쪽의 "이전"과 마지막 쪽의 "다음"은 누를 수 없게 흐리게 둔다 --%>
 <c:if test="${nav.totalPages > 1}">

@@ -36,7 +36,7 @@ import net.coobird.thumbnailator.Thumbnails;
 import net.coobird.thumbnailator.geometry.Positions;
 
 // 올린 사진을 저장하기 전에 다듬는다. (기획서 6.2절)
-// 순서: 1. 진짜 사진인지 검사 → 2. 화소 수 검사 → 3. 위치·촬영 시각 꺼내기 → 4. 방향 바로잡기(회전 보정)
+// 순서: 1. 진짜 사진인지 검사 → 2. 화소 수 검사 → 3. 위치, 촬영 시각 꺼내기 → 4. 방향 바로잡기(회전 보정)
 //       → 5. 크기 줄이기 + JPEG로 새로 저장(EXIF 제거)
 //
 // EXIF: 사진 파일 안에 숨어 있는 정보(촬영 시각, 카메라 기종, GPS 위치, 사진 방향 등)
@@ -74,14 +74,14 @@ public class ImageProcessor {
 	public synchronized ProcessedImage process(MultipartFile file) {
 		byte[] original = readBytes(file);
 
-		// 1. 파일 내용이 진짜 JPEG·PNG인지 검사한다.
+		// 1. 파일 내용이 진짜 JPEG, PNG인지 검사한다.
 		if (!startsWith(original, JPEG_SIGNATURE) && !startsWith(original, PNG_SIGNATURE)) {
 			// 어떤 형식이 얼마나 들어오는지(예: 아이폰 HEIC) 나중에 로그로 세어 볼 수 있게 남긴다.
 			log.warn("Unsupported image: contentType={}, bytes={}", file.getContentType(), original.length);
 			throw new BusinessException(ErrorCode.INVALID_IMAGE);
 		}
 
-		// 2. 사진 전체를 펼치기 전에 가로·세로 크기만 먼저 읽어서, 너무 큰 사진을 거절한다.
+		// 2. 사진 전체를 펼치기 전에 가로, 세로 크기만 먼저 읽어서, 너무 큰 사진을 거절한다.
 		checkPixelCount(original);
 
 		// 3. EXIF를 지우기 전에, 원본에서 위치와 촬영 시각을 꺼내 둔다. (EXIF를 지운 뒤에는 읽을 수 없다)
@@ -154,7 +154,7 @@ public class ImageProcessor {
 			// Metadata: 사진 안의 정보 묶음. 그 안에 GPS, EXIF 같은 "디렉터리"(정보 종류별 칸)가 들어 있다.
 			Metadata metadata = ImageMetadataReader.readMetadata(new ByteArrayInputStream(original));
 
-			// GPS 칸에서 위도·경도를 꺼낸다. 칸이 없거나, 값이 0,0(위치를 못 잡은 사진에 가끔 들어가는 값)이면 위치 없음
+			// GPS 칸에서 위도, 경도를 꺼낸다. 칸이 없거나, 값이 0,0(위치를 못 잡은 사진에 가끔 들어가는 값)이면 위치 없음
 			GpsDirectory gps = metadata.getFirstDirectoryOfType(GpsDirectory.class);
 			GeoLocation location = (gps == null) ? null : gps.getGeoLocation();
 			boolean hasLocation = location != null && !location.isZero();
@@ -164,8 +164,8 @@ public class ImageProcessor {
 			ExifSubIFDDirectory exif = metadata.getFirstDirectoryOfType(ExifSubIFDDirectory.class);
 			Date takenAt = (exif == null) ? null : exif.getDateOriginal(KOREA);
 
-			// 사진에 어떤 정보가 들어 있었는지 남긴다. 값(좌표·시각)은 남기지 않고, 정보의 종류와 있음/없음만 남긴다.
-			// → 기기·브라우저마다 무엇이 지워진 채로 올라오는지(예: 아이폰 Safari) 로그로 확인하는 운영 지표
+			// 사진에 어떤 정보가 들어 있었는지 남긴다. 값(좌표, 시각)은 남기지 않고, 정보의 종류와 있음/없음만 남긴다.
+			// → 기기, 브라우저마다 무엇이 지워진 채로 올라오는지(예: 아이폰 Safari) 로그로 확인하는 운영 지표
 			// directories 예: [JPEG, Exif IFD0, Exif SubIFD, GPS, ...] — 이름만 있는 목록이라 개인정보가 아니다.
 			log.info("Photo metadata: directories={}, gps={}, takenAt={}",
 					directoryNames(metadata), hasLocation, takenAt != null);
@@ -210,7 +210,7 @@ public class ImageProcessor {
 		return Thumbnails.of(image).scale(1.0);
 	}
 
-	// 정해 둔 크기·자르기 설정대로 JPEG 파일 내용(바이트)을 만든다.
+	// 정해 둔 크기, 자르기 설정대로 JPEG 파일 내용(바이트)을 만든다.
 	private byte[] toJpeg(Thumbnails.Builder<BufferedImage> builder) throws IOException {
 		ByteArrayOutputStream output = new ByteArrayOutputStream();
 		builder.outputFormat("jpg").outputQuality(JPEG_QUALITY).toOutputStream(output);

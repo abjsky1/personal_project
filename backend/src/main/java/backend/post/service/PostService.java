@@ -39,7 +39,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 // 게시글 기능의 실제 처리(비즈니스 로직)를 맡는 클래스
-// Controller는 요청을 받고 화면을 고르는 일만 하고, 저장·조회 같은 실제 일은 여기서 한다.
+// Controller는 요청을 받고 화면을 고르는 일만 하고, 저장, 조회 같은 실제 일은 여기서 한다.
 //
 // @Service: Spring이 이 객체를 만들어 관리한다 (@Component와 같고, 역할을 이름으로 드러낸다)
 // @RequiredArgsConstructor(Lombok): final 필드를 모두 받는 생성자를 컴파일할 때 자동으로 만들어 준다.
@@ -50,7 +50,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class PostService {
 
-	// 목록 한 쪽에 보여 줄 글 수. 24 = PC 4칸·휴대폰 3칸 어디서든 줄이 딱 맞는 수 (JM-57)
+	// 목록 한 쪽에 보여 줄 글 수. 24 = PC 4칸, 휴대폰 3칸 어디서든 줄이 딱 맞는 수 (JM-57)
 	private static final int PAGE_SIZE = 24;
 
 	private final PostRepository postRepository;
@@ -70,7 +70,7 @@ public class PostService {
 	// 사진 처리는 수백 ms가 걸리는데, 트랜잭션 안에서 하면 그동안 DB 연결을 붙잡고 있게 된다. (기획서 9.2절, LLM 호출과 같은 이유)
 	// 그래서 사진 처리를 먼저 끝내고, DB에 저장하는 부분만 트랜잭션으로 묶는다(아래 transactionTemplate).
 	public Long create(PostCreateForm form) {
-		// 사진 검사·위치 읽기·회전 보정·EXIF 제거·크기 줄이기. 사진이 아니거나 너무 크면 BusinessException이 난다.
+		// 사진 검사, 위치 읽기, 회전 보정, EXIF 제거, 크기 줄이기. 사진이 아니거나 너무 크면 BusinessException이 난다.
 		ProcessedImage image = imageProcessor.process(form.getImage());
 
 		// 큰 사진과 썸네일을 저장하고, 파일 이름(key)을 받는다.
@@ -78,7 +78,7 @@ public class PostService {
 		String imageKey = imageStorage.saveJpeg(image.main());
 		String thumbnailKey = imageStorage.saveJpeg(image.thumbnail());
 
-		// 위치·촬영 시각은 사용자가 동의했을 때만 쓴다. 동의하지 않았으면 사진에 있었더라도 빈 값으로 취급한다.
+		// 위치, 촬영 시각은 사용자가 동의했을 때만 쓴다. 동의하지 않았으면 사진에 있었더라도 빈 값으로 취급한다.
 		boolean consent = form.isLocationConsent();
 		PhotoMetadata metadata = consent ? image.metadata() : PhotoMetadata.EMPTY;
 

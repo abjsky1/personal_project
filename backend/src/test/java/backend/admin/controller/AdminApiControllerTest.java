@@ -32,7 +32,7 @@ import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
 import backend.post.model.repository.PostRepository;
 
-// 운영자 API의 토큰 검사와 삭제·피드백 처리를 확인하는 테스트
+// 운영자 API의 토큰 검사와 삭제, 피드백 처리를 확인하는 테스트
 // @TestPropertySource: 이 테스트에서만 운영자 토큰을 정해 둔다 (기본값은 비어 있어서 운영자 기능이 꺼져 있다 → AdminApiDisabledTest)
 @SpringBootTest
 @AutoConfigureMockMvc

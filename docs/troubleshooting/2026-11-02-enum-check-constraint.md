@@ -17,7 +17,7 @@ Hibernate가 테이블을 만들 때 enum 컬럼에 허용 값 목록을 CHECK �
 check (status in ('PENDING', 'DONE', 'NOT_FOOD', 'FAILED'))
 ```
 
-`ddl-auto=update`는 없는 테이블·컬럼만 추가하고, 이미 있는 제약은 고치지 않는다. 그래서 enum에 값을 추가해도 DB는 예전 목록으로 새 값을 거절한다.
+`ddl-auto=update`는 없는 테이블, 컬럼만 추가하고, 이미 있는 제약은 고치지 않는다. 그래서 enum에 값을 추가해도 DB는 예전 목록으로 새 값을 거절한다.
 
 S1에서 비슷한 문제(MySQL ENUM 타입)를 `@JdbcTypeCode(SqlTypes.VARCHAR)`로 막았지만, 컬럼 타입만 VARCHAR로 바뀔 뿐 CHECK 제약은 그대로 만들어지고 있었다. `posts.status`에도 같은 제약이 있었다.
 
@@ -36,7 +36,7 @@ ALTER TABLE food_analyses DROP CHECK food_analyses_chk_1;
 
 ## 재발 방지
 - `NoColumnCheckMySQLDialectTest`: DB에 CHECK 제약이 없는지 확인한다. Hibernate를 올리다 설정이 풀리면 CI에서 바로 알 수 있다.
-- `ddl-auto=update`는 **추가만** 한다. 컬럼 변경·삭제나 제약 변경이 필요해지면 그 SQL은 직접 실행해야 한다 (기획서 18절).
+- `ddl-auto=update`는 **추가만** 한다. 컬럼 변경, 삭제나 제약 변경이 필요해지면 그 SQL은 직접 실행해야 한다 (기획서 18절).
 
 ## 배운 것
 - 뒤에서 도는 작업의 실패는 화면에 드러나지 않는다. 저장 자체가 실패하면 실패 기록도 남지 않으므로 로그를 봐야 한다.

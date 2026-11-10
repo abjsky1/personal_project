@@ -1,4 +1,4 @@
-// 사진 저장·처리와 관련된 코드를 두는 패키지
+// 사진 저장, 처리와 관련된 코드를 두는 패키지
 package backend.image;
 
 import java.io.IOException;

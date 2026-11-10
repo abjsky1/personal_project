@@ -28,7 +28,7 @@ import backend.feedback.model.entity.FeedbackProgress;
 import backend.feedback.model.repository.FeedbackRepository;
 import backend.post.model.entity.PostStatus;
 
-// 피드백 게시판의 작성·목록·상세·삭제 요청을 실제로 보내 보는 테스트 (PostControllerTest와 같은 방식)
+// 피드백 게시판의 작성, 목록, 상세, 삭제 요청을 실제로 보내 보는 테스트 (PostControllerTest와 같은 방식)
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional

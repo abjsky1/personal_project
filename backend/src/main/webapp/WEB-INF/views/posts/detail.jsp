@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>사진 상세 · 찍먹</title>
+<title>사진 상세 - 찍먹</title>
 <link rel="stylesheet" href="<c:url value='/css/app.css' />">
 </head>
 <body>
@@ -25,7 +25,7 @@
 		<img src="${post.imageUrl}" alt="음식 사진">
 
 		<div>
-			<p class="meta"><strong><c:out value="${post.nickname}" /></strong> · <c:out value="${post.createdAt}" /></p>
+			<p class="meta"><strong><c:out value="${post.nickname}" /></strong><span><c:out value="${post.createdAt}" /></span></p>
 			<c:if test="${not empty post.memo}">
 				<p class="memo"><c:out value="${post.memo}" /></p>
 			</c:if>
@@ -38,8 +38,8 @@
 						<c:when test="${analysis.status == 'DONE'}">
 							<p class="total-kcal"><fmt:formatNumber value="${analysis.totalKcal}" maxFractionDigits="0" /> kcal</p>
 							<p class="meta">
-								탄수화물 <fmt:formatNumber value="${analysis.carbsG}" maxFractionDigits="0" />g ·
-								단백질 <fmt:formatNumber value="${analysis.proteinG}" maxFractionDigits="0" />g ·
+								탄수화물 <fmt:formatNumber value="${analysis.carbsG}" maxFractionDigits="0" />g,
+								단백질 <fmt:formatNumber value="${analysis.proteinG}" maxFractionDigits="0" />g,
 								지방 <fmt:formatNumber value="${analysis.fatG}" maxFractionDigits="0" />g
 							</p>
 							<table>
@@ -60,7 +60,7 @@
 							<c:if test="${not empty analysis.confidenceLabel}">
 								<p class="hint">AI의 확신 정도: <c:out value="${analysis.confidenceLabel}" /></p>
 							</c:if>
-							<p class="hint">AI 추정치이며 실제와 다를 수 있습니다. 의료 · 영양 상담을 대신하지 않습니다.</p>
+							<p class="hint">AI 추정치이며 실제와 다를 수 있습니다. 의료나 영양 상담을 대신하지 않습니다.</p>
 						</c:when>
 						<c:when test="${analysis.status == 'NOT_FOOD'}">
 							<p>사진에서 음식을 찾지 못했어요.</p>
@@ -91,7 +91,7 @@
 		</div>
 	</div>
 
-	<%-- 댓글: 사진·내용 아래에 전체 폭으로. id="comments"는 댓글을 달거나 지운 뒤 이 자리로 바로 내려오기 위한 표시 --%>
+	<%-- 댓글: 사진, 내용 아래에 전체 폭으로. id="comments"는 댓글을 달거나 지운 뒤 이 자리로 바로 내려오기 위한 표시 --%>
 	<section class="comments" id="comments">
 		<h2>댓글 ${comments.totalCount}개</h2>
 
@@ -102,7 +102,7 @@
 		<c:forEach var="comment" items="${comments.comments}">
 			<%-- id="comment-번호": 비밀번호가 틀렸을 때 그 댓글 자리로 돌아오기 위한 표시 --%>
 			<article class="comment" id="comment-${comment.id}">
-				<p class="meta"><strong><c:out value="${comment.nickname}" /></strong> · <c:out value="${comment.createdAt}" /></p>
+				<p class="meta"><strong><c:out value="${comment.nickname}" /></strong><span><c:out value="${comment.createdAt}" /></span></p>
 				<%-- 댓글 내용은 사용자 입력이라 c:out (XSS 방지). 줄바꿈은 CSS(white-space)로 살린다. --%>
 				<p class="comment-content"><c:out value="${comment.content}" /></p>
 

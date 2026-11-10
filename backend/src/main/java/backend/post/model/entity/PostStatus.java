@@ -2,7 +2,7 @@
 package backend.post.model.entity;
 
 // 게시글 상태. 삭제해도 DB에서 지우지 않고 상태만 바꾼다. (기획서 5.1절)
-// 목록·상세 화면에는 ACTIVE인 글만 보여 준다.
+// 목록, 상세 화면에는 ACTIVE인 글만 보여 준다.
 public enum PostStatus {
 	// 정상 노출 (글을 쓰면 이 상태로 시작)
 	ACTIVE,

@@ -1,5 +1,5 @@
-# 배포 서버(EC2)에서 실행하는 구성: [사용자] → nginx(80·443번) → app(Spring, 8080) → RDS(MySQL, 서버 밖)
-#                                                └ certbot: https 인증서 발급·갱신 (nginx와 볼륨을 공유)
+# 배포 서버(EC2)에서 실행하는 구성: [사용자] → nginx(80, 443번) → app(Spring, 8080) → RDS(MySQL, 서버 밖)
+#                                                └ certbot: https 인증서 발급, 갱신 (nginx와 볼륨을 공유)
 # DB는 이 파일에 없다: AWS가 관리하는 RDS를 쓰고, app이 .env의 DB_HOST(RDS 주소)로 접속한다.
 # 평소 배포: main에 push하면 GitHub Actions가 이미지를 만들고 서버에서 deploy.sh를 실행한다 (사람이 할 일 없음)
 # 처음 올리거나 비상시(서버에서 직접 빌드): deploy 폴더에서  docker compose up -d --build
@@ -36,7 +36,7 @@ services:
   nginx:
     image: nginx:1.28-alpine
     restart: unless-stopped
-    # 서버의 80번(http)·443번(https) → 컨테이너의 같은 번호. 밖에 열리는 것은 nginx뿐이다.
+    # 서버의 80번(http), 443번(https) → 컨테이너의 같은 번호. 밖에 열리는 것은 nginx뿐이다.
     ports: ["80:80", "443:443"]
     volumes:
       # 우리가 쓴 설정(nginx/default.conf)을 Nginx 설정 폴더 자리에 끼워 넣는다. :ro = 읽기 전용
@@ -63,7 +63,7 @@ services:
     image: certbot/certbot:v5.9.0
     restart: unless-stopped
     volumes:
-      # 인증서·계정 정보 / 확인용 파일 (둘 다 nginx와 공유)
+      # 인증서, 계정 정보 / 확인용 파일 (둘 다 nginx와 공유)
       - certbot-etc:/etc/letsencrypt
       - certbot-www:/var/www/certbot
     # trap exit TERM: 컨테이너를 끌 때 바로 끝나게. --quiet: 갱신할 게 없으면 아무것도 찍지 않는다.
@@ -75,7 +75,7 @@ services:
     # 평소에는 GitHub Actions가 만들어 GHCR(GitHub 컨테이너 저장소)에 올린 이미지를 받는다.
     # 태그 = 커밋 SHA. .env의 APP_IMAGE_TAG에 적혀 있고(deploy.sh가 바꾼다), 없으면 latest
     image: ghcr.io/abjsky1/macros-app:${APP_IMAGE_TAG:-latest}
-    # build는 내 PC 시험용·비상용으로 남겨 둔다: docker compose up -d --build 를 하면 서버에서 직접 만든다
+    # build는 내 PC 시험용, 비상용으로 남겨 둔다: docker compose up -d --build 를 하면 서버에서 직접 만든다
     build: ../backend
     restart: unless-stopped
     # ports가 없다: app은 밖에 열지 않고, 같은 Compose 안의 nginx만 접속할 수 있다.
@@ -93,7 +93,7 @@ services:
       # 운영자 API 열쇠. 비어 있으면 운영자 기능이 꺼진다.
       APP_ADMIN_TOKEN: ${APP_ADMIN_TOKEN:-}
       # JVM 옵션: 자바가 쓸 메모리(힙)를 최대 512MB로 묶는다.
-      # 서버 메모리 2GB를 Nginx·운영체제와 나눠 쓰므로(DB는 서버 밖 RDS), 자바가 메모리를 끝없이 늘리지 않게 한다.
+      # 서버 메모리 2GB를 Nginx, 운영체제와 나눠 쓰므로(DB는 서버 밖 RDS), 자바가 메모리를 끝없이 늘리지 않게 한다.
       JAVA_TOOL_OPTIONS: -Xmx512m
       TZ: Asia/Seoul
     # 컨테이너 전체 메모리 한도 (힙 512MB + 자바 자체가 쓰는 메모리). 넘으면 이 컨테이너만 꺼졌다가 다시 켜진다.

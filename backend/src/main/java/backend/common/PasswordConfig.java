@@ -6,7 +6,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 // 비밀번호 해시 도구를 Spring에 등록한다.
-// 게시글·댓글·피드백이 모두 비밀번호를 쓰므로, 한 번 등록해 두고 필요한 곳에서 주입받아 쓴다.
+// 게시글, 댓글, 피드백이 모두 비밀번호를 쓰므로, 한 번 등록해 두고 필요한 곳에서 주입받아 쓴다.
 @Configuration
 public class PasswordConfig {
 

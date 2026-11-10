@@ -12,7 +12,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import backend.admin.AdminTokenInterceptor;
 
-// 운영자 토큰이 설정되어 있지 않을 때(기본값 = 개발 PC·CI)는 어떤 토큰을 보내도 운영자 기능이 닫혀 있어야 한다.
+// 운영자 토큰이 설정되어 있지 않을 때(기본값 = 개발 PC, CI)는 어떤 토큰을 보내도 운영자 기능이 닫혀 있어야 한다.
 @SpringBootTest
 @AutoConfigureMockMvc
 class AdminApiDisabledTest {

@@ -31,7 +31,7 @@ import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
 import backend.post.model.repository.PostRepository;
 
-// 댓글 달기·보기·지우기 요청을 실제로 보내 보고 저장과 검사가 제대로 되는지 확인하는 테스트 (PostControllerTest와 같은 방식)
+// 댓글 달기, 보기, 지우기 요청을 실제로 보내 보고 저장과 검사가 제대로 되는지 확인하는 테스트 (PostControllerTest와 같은 방식)
 // @Transactional: 테스트마다 DB에 저장한 내용을 되돌린다.
 @SpringBootTest
 @AutoConfigureMockMvc

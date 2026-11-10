@@ -6,7 +6,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>피드백 · 찍먹</title>
+<title>피드백 - 찍먹</title>
 <link rel="stylesheet" href="<c:url value='/css/app.css' />">
 </head>
 <body>
@@ -22,7 +22,7 @@
 		</nav>
 	</header>
 
-	<p class="hint">불편한 점, 바라는 점, 글 · 댓글 삭제 요청을 남겨 주세요. 운영자가 보고 처리 상태와 답변을 남깁니다.</p>
+	<p class="hint">불편한 점, 바라는 점, 글이나 댓글 삭제 요청을 남겨 주세요. 운영자가 보고 처리 상태와 답변을 남깁니다.</p>
 
 	<c:if test="${empty page.feedbacks}">
 		<p class="empty">아직 피드백이 없어요.</p>
@@ -33,10 +33,10 @@
 			<li>
 				<%-- 처리 상태 배지: 글자와 색은 FeedbackProgress에서 가져온다 --%>
 				<span class="badge ${feedback.progress.cssClass}"><c:out value="${feedback.progress.label}" /></span>
-				<%-- 제목·닉네임은 사용자 입력이라 c:out (XSS 방지) --%>
+				<%-- 제목, 닉네임은 사용자 입력이라 c:out (XSS 방지) --%>
 				<a href="/feedback/${feedback.id}"><c:out value="${feedback.title}" /></a>
 				<c:if test="${feedback.hasReply}"><span class="reply-mark">답변 있음</span></c:if>
-				<p class="meta"><strong><c:out value="${feedback.nickname}" /></strong> · <c:out value="${feedback.createdAt}" /></p>
+				<p class="meta"><strong><c:out value="${feedback.nickname}" /></strong><span><c:out value="${feedback.createdAt}" /></span></p>
 			</li>
 		</c:forEach>
 	</ul>

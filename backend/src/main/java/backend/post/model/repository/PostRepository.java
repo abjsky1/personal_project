@@ -24,6 +24,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 
 	// 번호와 상태가 모두 맞는 글 하나 → SELECT ... FROM posts WHERE id = ? AND status = ?
 	// Optional: 결과가 없을 수도 있다는 표시. 없으면 비어 있는 Optional이 돌아온다 (null 대신)
-	// 삭제된 글을 실수로 보여 주지 않도록, 상세·삭제는 항상 이 메서드로 ACTIVE인 글만 찾는다.
+	// 삭제된 글을 실수로 보여 주지 않도록, 상세, 삭제는 항상 이 메서드로 ACTIVE인 글만 찾는다.
 	Optional<Post> findByIdAndStatus(Long id, PostStatus status);
 }

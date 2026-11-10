@@ -28,7 +28,7 @@ public class Comment {
 	private Long id;
 
 	// 어느 글의 댓글인지. 글 객체(Post)를 통째로 잇지 않고 번호만 둔다.
-	// 댓글을 보여 줄 때 글의 다른 정보는 필요 없고, 객체로 이으면 지연 로딩·N+1 같은 신경 쓸 거리만 늘기 때문이다.
+	// 댓글을 보여 줄 때 글의 다른 정보는 필요 없고, 객체로 이으면 지연 로딩, N+1 같은 신경 쓸 거리만 늘기 때문이다.
 	@Column(nullable = false)
 	private Long postId;
 

@@ -37,7 +37,7 @@ public class ImageController {
 				.map(bytes -> ResponseEntity.ok()
 						.contentType(MediaType.IMAGE_JPEG)
 						// 파일 이름이 매번 새로 만든 무작위 이름이라, 같은 이름의 내용이 바뀌는 일이 없다.
-						// → 브라우저가 1년 동안 저장해 두고 다시 받지 않게 한다 (서버 부담·휴대폰 데이터 절약)
+						// → 브라우저가 1년 동안 저장해 두고 다시 받지 않게 한다 (서버 부담, 휴대폰 데이터 절약)
 						.cacheControl(CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable())
 						.body(bytes))
 				.orElseGet(() -> ResponseEntity.notFound().build());

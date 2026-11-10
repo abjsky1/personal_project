@@ -16,7 +16,7 @@ import jakarta.servlet.FilterChain;
 
 // TraceIdFilter 하나만 떼어서 검사하는 테스트 (단위 테스트)
 // Spring 서버를 띄우지 않고 DB도 쓰지 않아서 빠르다.
-// 진짜 요청 대신 Spring이 제공하는 가짜 요청·응답 객체(MockHttpServlet...)를 만들어 필터에 직접 넣어 본다.
+// 진짜 요청 대신 Spring이 제공하는 가짜 요청, 응답 객체(MockHttpServlet...)를 만들어 필터에 직접 넣어 본다.
 class TraceIdFilterTest {
 
 	private final TraceIdFilter filter = new TraceIdFilter();

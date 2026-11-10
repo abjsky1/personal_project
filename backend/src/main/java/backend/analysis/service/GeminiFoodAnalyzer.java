@@ -74,7 +74,7 @@ public class GeminiFoodAnalyzer implements FoodAnalyzer {
 
 	@Override
 	public FoodAnalyzerResponse analyze(byte[] jpeg) {
-		// 키가 없으면(CI·테스트) 보내 봤자 거절당하므로 바로 실패로 처리한다.
+		// 키가 없으면(CI, 테스트) 보내 봤자 거절당하므로 바로 실패로 처리한다.
 		if (apiKey.isBlank()) {
 			throw new FoodAnalysisException("NO_API_KEY");
 		}

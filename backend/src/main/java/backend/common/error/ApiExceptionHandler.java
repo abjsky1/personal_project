@@ -15,7 +15,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 // JSON API(@RestController)에서 난 예외를 한곳에서 받아, ErrorResponse 모양의 JSON으로 바꿔 응답한다.
-// → Controller·Service마다 try-catch로 에러 응답을 만들 필요가 없다.
+// → Controller, Service마다 try-catch로 에러 응답을 만들 필요가 없다.
 // (JSP 화면을 만드는 @Controller의 예외는 PageExceptionHandler가 에러 화면으로 보여 준다)
 //
 // @RestControllerAdvice(annotations = RestController.class): @RestController가 붙은 Controller에만 적용한다.
@@ -30,7 +30,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 // 3. 그 밖의 모든 예외: 예상하지 못한 오류 → 500으로 응답하고, 원인을 로그에 남긴다
 //
 // ResponseEntityExceptionHandler를 상속하는 이유 (2번):
-// Exception 전체를 받는 3번만 있으면, Spring의 기본 예외까지 3번이 먼저 가로채서 404·405가 전부 500으로 바뀐다.
+// Exception 전체를 받는 3번만 있으면, Spring의 기본 예외까지 3번이 먼저 가로채서 404, 405가 전부 500으로 바뀐다.
 // 이 부모 클래스에는 Spring 기본 예외마다 알맞은 상태를 정해 둔 처리 메서드가 이미 들어 있다.
 // 그 메서드들이 마지막에 공통으로 부르는 handleExceptionInternal()만 바꿔서, 응답 모양만 우리 형식으로 맞춘다.
 @RestControllerAdvice(annotations = RestController.class)

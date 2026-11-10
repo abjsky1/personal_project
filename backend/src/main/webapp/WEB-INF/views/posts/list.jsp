@@ -52,12 +52,13 @@
 						<p class="meta">칼로리 분석 중</p>
 					</c:when>
 				</c:choose>
-				<%-- 닉네임·메모는 사용자가 쓴 값이라 반드시 c:out으로 출력한다 (XSS 방지) --%>
+				<%-- 닉네임, 메모는 사용자가 쓴 값이라 반드시 c:out으로 출력한다 (XSS 방지) --%>
 				<%-- 댓글 수는 있을 때만 보여 준다 (0개는 표시하지 않는다) --%>
 				<p class="meta">
-					<%-- 날짜는 span으로 감싸서 휴대폰(3칸)에서는 숨긴다 (app.css의 .card-when) --%>
-					<strong><c:out value="${post.nickname}" /></strong><span class="card-when"> · <c:out value="${post.createdAt}" /></span>
-					<c:if test="${post.commentCount > 0}"> · 댓글 ${post.commentCount}</c:if>
+					<%-- 닉네임, 날짜, 댓글 수는 중앙점 없이 띄어서 구분한다 (app.css의 .meta span, JM-61).
+					     줄을 바꾸면 그 자리에 빈칸이 하나 더 생겨 간격이 달라지므로 한 줄로 이어 쓴다.
+					     날짜는 휴대폰(3칸)에서는 숨긴다 (app.css의 .card-when) --%>
+					<strong><c:out value="${post.nickname}" /></strong><span class="card-when"><c:out value="${post.createdAt}" /></span><c:if test="${post.commentCount > 0}"><span>댓글 ${post.commentCount}</span></c:if>
 				</p>
 				<c:if test="${not empty post.memo}">
 					<p class="memo"><c:out value="${post.memo}" /></p>
@@ -66,7 +67,7 @@
 		</c:forEach>
 	</div>
 
-	<%-- 쪽 번호 줄: 이전 · 1 2 3 · 다음 (JM-57). 2쪽 이상일 때만 보인다. 그리는 법은 common/pager.jspf --%>
+	<%-- 쪽 번호 줄: 이전 1 2 3 다음 (JM-57). 2쪽 이상일 때만 보인다. 그리는 법은 common/pager.jspf --%>
 	<c:set var="nav" value="${feed.nav}" />
 	<c:set var="pagerBase" value="/?page=" />
 	<%@ include file="/WEB-INF/views/common/pager.jspf" %>

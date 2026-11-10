@@ -1,4 +1,4 @@
-# 2026-10-30 · 위치 제공에 동의했는데 휴대폰 사진의 위치가 저장되지 않음 (아이폰·안드로이드)
+# 2026-10-30, 위치 제공에 동의했는데 휴대폰 사진의 위치가 저장되지 않음 (아이폰, 안드로이드)
 
 | 항목 | 내용 |
 |---|---|
@@ -14,7 +14,7 @@
 1. **우리가 못 읽은 것인지, 처음부터 없었던 것인지**부터 구분해야 했다.
    - 정보를 읽다가 실패하면 남도록 해 둔 `Unreadable photo metadata` 경고는 없었다 → 읽기는 성공했다.
    - 그런데 GPS뿐 아니라 **촬영 시각까지** 없었다. 아이폰이 정보를 통째로 지운 건지, 일부는 왔는데 우리가 놓친 건지는 이 로그만으로 알 수 없었다.
-2. 사진에 **어떤 정보 칸이 들어 있었는지**를 남기는 로그를 추가했다. 좌표·시각 값은 남기지 않고 종류와 있음/없음만 남긴다.
+2. 사진에 **어떤 정보 칸이 들어 있었는지**를 남기는 로그를 추가했다. 좌표, 시각 값은 남기지 않고 종류와 있음/없음만 남긴다.
    ```
    Photo metadata: directories=[...], gps=..., takenAt=...
    ```
@@ -22,7 +22,7 @@
 
 | 올린 방법 | 로그 | 결과 |
 |---|---|---|
-| 사진 보관함에서 고르기 | `[JPEG, Exif IFD0, Exif SubIFD, Apple Makernote, Apple Run Time, GPS, Exif Thumbnail, ICC Profile, ...]` `gps=true, takenAt=true` | 위치·촬영 시각 저장됨 (40번) |
+| 사진 보관함에서 고르기 | `[JPEG, Exif IFD0, Exif SubIFD, Apple Makernote, Apple Run Time, GPS, Exif Thumbnail, ICC Profile, ...]` `gps=true, takenAt=true` | 위치, 촬영 시각 저장됨 (40번) |
 | 올리기 화면에서 바로 찍기 | `[JPEG, JFIF, Exif IFD0, Exif SubIFD, ICC Profile, Photoshop, IPTC, ...]` `gps=false, takenAt=false` | 없음 |
 
 ## 원인
@@ -32,14 +32,14 @@
 
 ## 해결
 - 코드 수정은 없다. 기획서 6.2절에 "iOS Safari 등 일부 브라우저는 업로드할 때 위치 정보를 지워서 보내기도 한다. 수집률을 지표로 측정한다"로 미리 적어 둔 경우였다.
-- 조사용으로 넣은 `Photo metadata` 로그는 운영 지표로 남긴다. 배포 후에는 이 로그로 "동의한 사람 중 실제로 위치가 들어오는 비율"을 기기·방법별로 셀 수 있다.
+- 조사용으로 넣은 `Photo metadata` 로그는 운영 지표로 남긴다. 배포 후에는 이 로그로 "동의한 사람 중 실제로 위치가 들어오는 비율"을 기기, 방법별로 셀 수 있다.
 
 ## 추가: 안드로이드(삼성) 결과
 같은 날 안드로이드 Chrome으로도 올려 봤다 (53~56번).
 
 | 로그 | 결과 |
 |---|---|
-| `[JPEG, Exif IFD0, Exif SubIFD, Samsung Makernote, Exif Thumbnail, XMP, ICC Profile, ...]` `gps=false, takenAt=true` | 촬영 시각은 저장됨(동의한 53·54·56번), 위치는 없음 |
+| `[JPEG, Exif IFD0, Exif SubIFD, Samsung Makernote, Exif Thumbnail, XMP, ICC Profile, ...]` `gps=false, takenAt=true` | 촬영 시각은 저장됨(동의한 53, 54, 56번), 위치는 없음 |
 
 - `Samsung Makernote`가 있으므로 삼성 카메라가 만든 **원본 파일**이 왔다. 그런데 `GPS` 칸만 없다.
 - 가능한 원인 두 가지:

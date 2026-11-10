@@ -66,7 +66,7 @@ public class FoodAnalysis {
 	@Column(length = MAX_COMMENT_LENGTH)
 	private String comment;
 
-	// 어떤 모델로, 토큰을 얼마나 써서, 몇 ms 걸렸는지 (비용·성능 확인용)
+	// 어떤 모델로, 토큰을 얼마나 써서, 몇 ms 걸렸는지 (비용, 성능 확인용)
 	@Column(length = 50)
 	private String model;
 

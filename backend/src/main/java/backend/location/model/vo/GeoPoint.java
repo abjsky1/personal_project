@@ -4,7 +4,7 @@ package backend.location.model.vo;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-// VO(값 객체): 위도·경도 한 쌍 = "지구 위의 한 지점"
+// VO(값 객체): 위도, 경도 한 쌍 = "지구 위의 한 지점"
 // 1. 만들 때 스스로 검사한다 → 범위를 벗어난 좌표는 아예 만들어질 수 없다.
 // 2. 값이 같으면 같은 지점이다 → record가 equals()를 값 전체로 비교해 준다.
 // 3. 바뀌지 않는다 → record의 필드는 final이라 만든 뒤에 값을 바꿀 수 없다.
@@ -18,11 +18,11 @@ public record GeoPoint(BigDecimal latitude, BigDecimal longitude) {
 	private static final BigDecimal MAX_LATITUDE = BigDecimal.valueOf(90);
 	private static final BigDecimal MAX_LONGITUDE = BigDecimal.valueOf(180);
 
-	// compact 생성자: record의 생성자에 검사·정리 코드를 넣는 문법. 괄호 안 매개변수를 다시 적지 않는다.
+	// compact 생성자: record의 생성자에 검사, 정리 코드를 넣는 문법. 괄호 안 매개변수를 다시 적지 않는다.
 	// 여기서 값을 바꾸면(latitude = ...) 바뀐 값이 필드에 들어간다.
 	public GeoPoint {
 		if (latitude == null || longitude == null) {
-			throw new IllegalArgumentException("위도 · 경도가 비어 있습니다.");
+			throw new IllegalArgumentException("위도와 경도가 비어 있습니다.");
 		}
 		// 위도는 -90 ~ 90 (남극 ~ 북극), 경도는 -180 ~ 180
 		// compareTo: BigDecimal끼리 크기를 비교한다 (작으면 음수, 같으면 0, 크면 양수)

@@ -6,7 +6,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>문제가 생겼어요 · 찍먹</title>
+<title>문제가 생겼어요 - 찍먹</title>
 <link rel="stylesheet" href="<c:url value='/css/app.css' />">
 </head>
 <body>
@@ -21,7 +21,7 @@
 
 	<a class="button" href="/">목록으로</a>
 
-	<%-- 공통 바닥글 (이용약관·개인정보처리방침 링크) --%>
+	<%-- 공통 바닥글 (이용약관, 개인정보처리방침 링크) --%>
 	<%@ include file="/WEB-INF/views/common/footer.jspf" %>
 </main>
 </body>
