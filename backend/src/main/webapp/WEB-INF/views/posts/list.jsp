@@ -14,26 +14,21 @@
 </head>
 <body>
 <main>
-	<header class="top top-home">
-		<div>
-			<h1>찍먹</h1>
-			<%-- 상단 메뉴: 피드(이 화면)와 피드백 게시판을 오간다 --%>
+	<%-- 머리 (JM-60): 첫 줄은 제목과 사진 올리기 버튼, 둘째 줄은 한 줄 소개 + 메뉴 버튼 줄을 한 덩어리로 (app.css의 .top-menu)
+	     PC에서는 그 덩어리가 왼쪽 위(사진 바로 위)에, 휴대폰에서는 가로를 꽉 채운다 --%>
+	<header class="top top-menu">
+		<h1>찍먹</h1>
+		<a class="button" href="/posts/new">사진 올리기</a>
+		<div class="top-intro">
+			<%-- 한 줄 소개: 처음 온 사람이 뭘 하는 곳인지 바로 알게 (문구는 11-05에 정한 그대로) --%>
+			<p class="slogan">찍고 먹자 !<small>먹은 사진을 올리면 AI가 칼로리를 알려 줘요</small></p>
+			<%-- 메뉴 버튼 줄: 피드(이 화면)와 피드백 게시판. 피드백은 무엇을 하는 곳인지 바로 알게 "개발자에게 피드백 보내기"로 적는다 --%>
 			<nav class="site-nav">
 				<a href="/" class="active">피드</a>
-				<a href="/feedback">피드백</a>
+				<a href="/feedback" class="nav-feedback">개발자에게 피드백 보내기</a>
 			</nav>
 		</div>
-		<%-- 한 줄 소개: 처음 온 사람이 뭘 하는 곳인지 바로 알게. PC에서는 제목과 버튼 사이 가운데, 휴대폰에서는 둘째 줄 (app.css의 .top-home) --%>
-		<p class="slogan">찍고 먹자 !<small>먹은 사진을 올리면 AI가 칼로리를 알려 줘요</small></p>
-		<a class="button" href="/posts/new">사진 올리기</a>
 	</header>
-
-	<%-- 피드백 안내 띠 (JM-60): 상단 메뉴만으로는 피드백 게시판이 있는 줄 모르는 사람이 많아서, 첫 화면에 눈에 띄는 버튼을 둔다.
-	     누르면 목록을 거치지 않고 바로 작성 화면으로 간다 --%>
-	<div class="feedback-banner">
-		<p>불편한 점이나 바라는 점이 있으면 알려 주세요!</p>
-		<a class="button button-outline" href="/feedback/new">💬 개발자에게 피드백 보내기</a>
-	</div>
 
 	<%-- empty: 목록이 비어 있으면 true --%>
 	<c:if test="${empty feed.posts}">
