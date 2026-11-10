@@ -21,9 +21,10 @@
 		<%-- 한 줄 소개: 처음 온 사람이 뭘 하는 곳인지 바로 알게 (11-05). "알려줘요"는 운영자 요청으로 붙여 쓴다 (11-10) --%>
 		<p class="slogan">찍고 먹자 !<small>먹은 사진을 올리면 AI가 칼로리를 알려줘요</small></p>
 		<a class="button" href="/posts/new">사진 올리기</a>
-		<%-- 메뉴 링크: 피드(이 화면)와 피드백 게시판. 피드백은 무엇을 하는 곳인지 바로 알게 "개발자에게 피드백 보내기"로 적는다 --%>
+		<%-- 메뉴 링크: 피드(이 화면)와 피드백 게시판. 피드백은 무엇을 하는 곳인지 바로 알게 "개발자에게 피드백 보내기"로 적는다.
+		     지금 화면 링크에는 active(초록 굵은 글자, app.css)와 aria-current="page"(화면 읽기 프로그램이 "지금 화면"이라고 읽는다)를 단다 (JM-63) --%>
 		<nav class="site-nav">
-			<a href="/" class="active">피드</a>
+			<a href="/" class="active" aria-current="page">피드</a>
 			<a href="/feedback">개발자에게 피드백 보내기</a>
 		</nav>
 	</header>

@@ -39,11 +39,11 @@ h1 {
 	font-size: 1.4rem;
 }
 
-/* 메뉴 링크 (피드 | 개발자에게 피드백 보내기), JM-60
+/* 메뉴 링크 (피드 | 개발자에게 피드백 보내기), JM-60, JM-63
    처음엔 제목 아래 작은 회색 글자 "피드", "피드백"이라 메뉴인 줄 모르고 지나치는 사람이 많았다.
    알약 모양 버튼으로도 해 봤지만 모서리가 너무 둥글고 두껍다는 운영자 검토(11-10)로, 상자 없는 링크로 바꿨다.
-   다른 화면으로 가는 링크는 초록 글자에 밑줄, 지금 있는 화면은 검은 굵은 글자(밑줄 없음).
-   피드백은 무엇을 하는 곳인지 바로 알게 "개발자에게 피드백 보내기"로 적는다 */
+   밑줄은 운영자 요청으로 뺐다 (JM-63). 지금 있는 화면은 초록 굵은 글자, 다른 화면으로 가는 링크는 진한 회색이고
+   마우스를 올리면 초록으로 바뀐다. 피드백은 무엇을 하는 곳인지 바로 알게 "개발자에게 피드백 보내기"로 적는다 */
 .site-nav {
 	display: flex;
 	flex-wrap: wrap;
@@ -51,16 +51,18 @@ h1 {
 }
 
 .site-nav a {
-	color: #2f7d32;
+	color: #444;
 	font-weight: 600;
-	text-decoration: underline;
-	text-underline-offset: 4px;
+	text-decoration: none;
+}
+
+.site-nav a:hover {
+	color: #2f7d32;
 }
 
 .site-nav a.active {
-	color: #222;
+	color: #2f7d32;
 	font-weight: 700;
-	text-decoration: none;
 }
 
 a {

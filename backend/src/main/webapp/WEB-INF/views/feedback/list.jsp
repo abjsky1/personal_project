@@ -15,10 +15,10 @@
 	<header class="top top-menu">
 		<h1>피드백</h1>
 		<a class="button" href="/feedback/new">피드백 남기기</a>
-		<%-- 메뉴 링크: 피드(사진 목록)와 피드백 게시판(이 화면)을 오간다. 지금 있는 화면에 active --%>
+		<%-- 메뉴 링크: 피드(사진 목록)와 피드백 게시판(이 화면)을 오간다. 지금 있는 화면에 active와 aria-current (JM-63) --%>
 		<nav class="site-nav">
 			<a href="/">피드</a>
-			<a href="/feedback" class="active">개발자에게 피드백 보내기</a>
+			<a href="/feedback" class="active" aria-current="page">개발자에게 피드백 보내기</a>
 		</nav>
 	</header>
 
