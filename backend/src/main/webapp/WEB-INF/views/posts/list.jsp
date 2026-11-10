@@ -14,20 +14,18 @@
 </head>
 <body>
 <main>
-	<%-- 머리 (JM-60): 첫 줄은 제목과 사진 올리기 버튼, 둘째 줄은 한 줄 소개 + 메뉴 버튼 줄을 한 덩어리로 (app.css의 .top-menu)
-	     PC에서는 그 덩어리가 왼쪽 위(사진 바로 위)에, 휴대폰에서는 가로를 꽉 채운다 --%>
+	<%-- 머리 (JM-60): PC는 첫 줄에 제목 | 한 줄 소개(가운데) | 사진 올리기, 둘째 줄 왼쪽에 메뉴 버튼 줄 (사진 바로 위)
+	     휴대폰은 첫 줄에 제목과 버튼, 둘째 줄에 한 줄 소개, 셋째 줄에 메뉴 버튼 줄 (자리는 app.css의 .top-menu) --%>
 	<header class="top top-menu">
 		<h1>찍먹</h1>
+		<%-- 한 줄 소개: 처음 온 사람이 뭘 하는 곳인지 바로 알게 (11-05). "알려줘요"는 운영자 요청으로 붙여 쓴다 (11-10) --%>
+		<p class="slogan">찍고 먹자 !<small>먹은 사진을 올리면 AI가 칼로리를 알려줘요</small></p>
 		<a class="button" href="/posts/new">사진 올리기</a>
-		<div class="top-intro">
-			<%-- 한 줄 소개: 처음 온 사람이 뭘 하는 곳인지 바로 알게 (문구는 11-05에 정한 그대로) --%>
-			<p class="slogan">찍고 먹자 !<small>먹은 사진을 올리면 AI가 칼로리를 알려 줘요</small></p>
-			<%-- 메뉴 버튼 줄: 피드(이 화면)와 피드백 게시판. 피드백은 무엇을 하는 곳인지 바로 알게 "개발자에게 피드백 보내기"로 적는다 --%>
-			<nav class="site-nav">
-				<a href="/" class="active">피드</a>
-				<a href="/feedback" class="nav-feedback">개발자에게 피드백 보내기</a>
-			</nav>
-		</div>
+		<%-- 메뉴 버튼 줄: 피드(이 화면)와 피드백 게시판. 피드백은 무엇을 하는 곳인지 바로 알게 "개발자에게 피드백 보내기"로 적는다 --%>
+		<nav class="site-nav">
+			<a href="/" class="active">피드</a>
+			<a href="/feedback" class="nav-feedback">개발자에게 피드백 보내기</a>
+		</nav>
 	</header>
 
 	<%-- empty: 목록이 비어 있으면 true --%>

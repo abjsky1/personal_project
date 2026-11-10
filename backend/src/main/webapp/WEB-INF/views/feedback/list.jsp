@@ -11,17 +11,15 @@
 </head>
 <body>
 <main>
-	<%-- 머리 (JM-60): 피드 첫 화면과 같은 모양. 첫 줄은 제목과 피드백 남기기 버튼, 둘째 줄은 메뉴 버튼 줄 (app.css의 .top-menu) --%>
+	<%-- 머리 (JM-60): 피드 첫 화면과 같은 틀. 첫 줄은 제목과 피드백 남기기 버튼, 둘째 줄은 메뉴 버튼 줄 (app.css의 .top-menu) --%>
 	<header class="top top-menu">
 		<h1>피드백</h1>
 		<a class="button" href="/feedback/new">피드백 남기기</a>
-		<div class="top-intro">
-			<%-- 메뉴 버튼 줄: 피드(사진 목록)와 피드백 게시판(이 화면)을 오간다. 지금 있는 화면에 active --%>
-			<nav class="site-nav">
-				<a href="/">피드</a>
-				<a href="/feedback" class="nav-feedback active">개발자에게 피드백 보내기</a>
-			</nav>
-		</div>
+		<%-- 메뉴 버튼 줄: 피드(사진 목록)와 피드백 게시판(이 화면)을 오간다. 지금 있는 화면에 active --%>
+		<nav class="site-nav">
+			<a href="/">피드</a>
+			<a href="/feedback" class="nav-feedback active">개발자에게 피드백 보내기</a>
+		</nav>
 	</header>
 
 	<p class="hint">불편한 점, 바라는 점, 글 · 댓글 삭제 요청을 남겨 주세요. 운영자가 보고 처리 상태와 답변을 남깁니다.</p>
