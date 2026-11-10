@@ -4,7 +4,7 @@
 # 두 단계로 나눈다 (multi-stage build)
 #   1단계(build): JDK와 Gradle로 war 파일을 만든다.
 #   2단계(실행):  만든 war 파일만 새 이미지에 복사해서 실행한다.
-#   → 소스 코드·Gradle·빌드 중에 받은 라이브러리 캐시는 최종 이미지에 남지 않아서 이미지가 가볍고, 서버에 소스가 올라가지 않는다.
+#   → 소스 코드, Gradle, 빌드 중에 받은 라이브러리 캐시는 최종 이미지에 남지 않아서 이미지가 가볍고, 서버에 소스가 올라가지 않는다.
 
 # ---- 1단계: war 만들기 ----
 # amazoncorretto:17-alpine: build.gradle의 toolchain과 같은 Amazon Corretto 17. alpine = 아주 작은 리눅스
@@ -12,7 +12,7 @@
 FROM amazoncorretto:17-alpine AS build
 # 컨테이너 안의 작업 폴더 (없으면 만든다)
 WORKDIR /src
-# backend 폴더를 통째로 복사한다 (.dockerignore에 적은 build·테스트 코드 등은 빼고)
+# backend 폴더를 통째로 복사한다 (.dockerignore에 적은 build, 테스트 코드 등은 빼고)
 COPY . .
 # bootWar: 실행 가능한 war 하나만 만든다 (테스트는 CI가 push마다 이미 돌린다)
 # --mount=type=cache: Gradle이 내려받은 라이브러리를 빌드가 끝나도 지우지 않고 보관한다

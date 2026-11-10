@@ -23,7 +23,7 @@ import lombok.RequiredArgsConstructor;
 
 // 게시글 화면을 담당하는 Controller
 // @Controller: 메서드가 돌려준 문자열을 JSP 이름으로 보고 그 화면을 보여 준다.
-// (앞뒤에 prefix·suffix가 붙는다: "posts/list" → /WEB-INF/views/posts/list.jsp)
+// (앞뒤에 prefix, suffix가 붙는다: "posts/list" → /WEB-INF/views/posts/list.jsp)
 // @RequiredArgsConstructor(Lombok): final 필드(postService)를 받는 생성자를 자동으로 만들어, Spring이 PostService를 넣어 준다.
 @Controller
 @RequiredArgsConstructor
@@ -58,7 +58,7 @@ public class PostController {
 	public String create(@Valid @ModelAttribute("form") PostCreateForm form, BindingResult bindingResult) {
 		validateImage(form.getImage(), bindingResult);
 
-		// 어긋난 칸이 있으면 저장하지 않고 글쓰기 화면을 다시 보여 준다. (입력한 닉네임·메모는 그대로 남고, 각 칸 아래에 메시지가 나온다)
+		// 어긋난 칸이 있으면 저장하지 않고 글쓰기 화면을 다시 보여 준다. (입력한 닉네임, 메모는 그대로 남고, 각 칸 아래에 메시지가 나온다)
 		// 사진 칸은 브라우저 보안 규칙 때문에 다시 채울 수 없어서 사진은 다시 골라야 한다.
 		if (bindingResult.hasErrors()) {
 			return "posts/new";
@@ -99,7 +99,7 @@ public class PostController {
 		return "posts/detail";
 	}
 
-	// 삭제 (HTML form은 GET·POST만 보낼 수 있어서 DELETE 대신 POST로 받는다)
+	// 삭제 (HTML form은 GET, POST만 보낼 수 있어서 DELETE 대신 POST로 받는다)
 	// @RequestParam: form의 name="password" 값을 받는다.
 	// RedirectAttributes: redirect한 다음 화면에 한 번만 보여 줄 값(flash)을 넘길 때 쓴다.
 	@PostMapping("/posts/{id}/delete")
@@ -124,6 +124,6 @@ public class PostController {
 			// rejectValue(칸 이름, 에러 종류, 메시지): 그 칸 아래에 보여 줄 메시지를 추가한다.
 			bindingResult.rejectValue("image", "required", "사진을 골라 주세요.");
 		}
-		// 사진 형식(진짜 JPEG·PNG인지)은 파일 내용을 봐야 알 수 있어서 ImageProcessor가 검사한다.
+		// 사진 형식(진짜 JPEG, PNG인지)은 파일 내용을 봐야 알 수 있어서 ImageProcessor가 검사한다.
 	}
 }

@@ -7,7 +7,7 @@ import backend.analysis.model.dto.FoodAnalysisResult.FoodItem;
 import backend.analysis.model.entity.AnalysisStatus;
 import backend.analysis.model.entity.FoodAnalysis;
 
-// 상세 화면(JSP)으로 넘기는 분석 결과. 토큰 수·실패 이유 같은 내부 정보는 넣지 않는다.
+// 상세 화면(JSP)으로 넘기는 분석 결과. 토큰 수, 실패 이유 같은 내부 정보는 넣지 않는다.
 public record FoodAnalysisView(
 		AnalysisStatus status,
 		BigDecimal totalKcal,

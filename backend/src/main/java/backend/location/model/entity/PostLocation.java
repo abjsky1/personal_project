@@ -18,7 +18,7 @@ import jakarta.persistence.Table;
 // 게시글의 촬영 위치 (post_locations 테이블)
 // 사용자가 "위치 제공"에 동의하고, 사진에 GPS 정보가 있을 때만 만들어진다. (기획서 6.2절)
 // 게시글과 1:1이고, 게시글이 삭제되면 이 행은 상태 변경이 아니라 완전히 지운다. (동의 철회로 본다, 기획서 5.1절)
-// 좌표는 화면·로그·공개 API 어디에도 내보내지 않는다.
+// 좌표는 화면, 로그, 공개 API 어디에도 내보내지 않는다.
 @Entity
 @Table(name = "post_locations")
 public class PostLocation {

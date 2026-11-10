@@ -17,7 +17,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
 
-// ImageProcessor 하나만 떼어서 검사하는 테스트 (단위 테스트 — Spring·DB 없이 빠르게 돈다)
+// ImageProcessor 하나만 떼어서 검사하는 테스트 (단위 테스트 — Spring, DB 없이 빠르게 돈다)
 class ImageProcessorTest {
 
 	// 실제 설정과 같은 한도(5,000만 화소)
@@ -71,7 +71,7 @@ class ImageProcessorTest {
 
 		PhotoMetadata metadata = processor.process(upload(photo)).metadata();
 
-		// isCloseTo: 도·분·초로 바꿨다가 되돌리는 과정의 아주 작은 오차는 허용한다.
+		// isCloseTo: 도, 분, 초로 바꿨다가 되돌리는 과정의 아주 작은 오차는 허용한다.
 		assertThat(metadata.latitude()).isCloseTo(37.566535, within(0.000001));
 		assertThat(metadata.longitude()).isCloseTo(126.977969, within(0.000001));
 		// 한국 시간 12:30 = 세계 표준시(UTC) 03:30

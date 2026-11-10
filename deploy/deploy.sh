@@ -7,7 +7,7 @@
 
 # -e: 명령이 하나라도 실패하면 바로 멈춘다 / -u: 없는 변수를 쓰면 오류 / -o pipefail: 파이프 중간의 실패도 실패로
 set -euo pipefail
-# 이 파일이 있는 폴더(deploy)로 이동 → 어디서 실행해도 compose.yaml·.env를 찾는다
+# 이 파일이 있는 폴더(deploy)로 이동 → 어디서 실행해도 compose.yaml, .env를 찾는다
 cd "$(dirname "$0")"
 
 TAG="${1:?사용법: bash deploy.sh <이미지 태그(커밋 SHA)>}"

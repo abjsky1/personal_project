@@ -16,7 +16,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
-// 피드백 엔티티: DB의 feedbacks 테이블과 짝을 이룬다 (Post·Comment와 같은 방식, 서버가 켜질 때 JPA가 테이블을 만든다)
+// 피드백 엔티티: DB의 feedbacks 테이블과 짝을 이룬다 (Post, Comment와 같은 방식, 서버가 켜질 때 JPA가 테이블을 만든다)
 // 인덱스 (status, id): 목록 조회("ACTIVE인 피드백을 최신순으로 20개")용
 @Entity
 @Table(name = "feedbacks", indexes = @Index(name = "idx_feedbacks_status_id", columnList = "status, id"))
@@ -38,7 +38,7 @@ public class Feedback {
 	@Column(nullable = false, length = 2000)
 	private String content;
 
-	// 삭제 여부 (게시글·댓글과 같은 상태 값)
+	// 삭제 여부 (게시글, 댓글과 같은 상태 값)
 	@Enumerated(EnumType.STRING)
 	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false, length = 30)

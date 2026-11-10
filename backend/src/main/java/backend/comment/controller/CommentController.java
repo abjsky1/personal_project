@@ -15,7 +15,7 @@ import backend.common.error.ErrorCode;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
-// 댓글 저장·삭제 요청을 받는 Controller
+// 댓글 저장, 삭제 요청을 받는 Controller
 // 댓글은 따로 화면이 없고 글 상세 화면(PostController)에 붙어 있어서, 여기서는 처리한 뒤 항상 그 글의 상세로 돌려보낸다.
 @Controller
 @RequiredArgsConstructor
@@ -29,7 +29,7 @@ public class CommentController {
 			BindingResult bindingResult, RedirectAttributes redirectAttributes) {
 		if (bindingResult.hasErrors()) {
 			// 검사에 걸리면 상세 화면으로 돌아가 댓글 칸 아래에 메시지를 보여 준다.
-			// 상세 화면은 글·분석·댓글 목록을 모두 읽어서 그려야 하므로(PostController.detail) 여기서 직접 그리지 않고 redirect한다.
+			// 상세 화면은 글, 분석, 댓글 목록을 모두 읽어서 그려야 하므로(PostController.detail) 여기서 직접 그리지 않고 redirect한다.
 			// flash에 입력값(form)과 검사 결과를 실어 보내면, 상세 화면이 한 번만 그 값으로 칸을 채우고 메시지를 보여 준다.
 			// MODEL_KEY_PREFIX + "commentForm": Spring의 form 태그가 "commentForm의 검사 결과"를 찾는 정해진 이름
 			redirectAttributes.addFlashAttribute("commentForm", form);

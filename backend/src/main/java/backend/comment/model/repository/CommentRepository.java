@@ -21,7 +21,7 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 	// 목록(최신순, id < cursor)과 반대로, 지금 화면의 마지막 댓글 번호(cursor)보다 큰 번호를 이어서 가져온다.
 	List<Comment> findByPostIdAndStatusAndIdGreaterThanOrderByIdAsc(Long postId, PostStatus status, Long cursor, Limit limit);
 
-	// 삭제할 댓글 찾기: 번호·글 번호·상태가 모두 맞아야 한다 (다른 글의 댓글 번호를 넣어도 찾지 못하게)
+	// 삭제할 댓글 찾기: 번호, 글 번호, 상태가 모두 맞아야 한다 (다른 글의 댓글 번호를 넣어도 찾지 못하게)
 	Optional<Comment> findByIdAndPostIdAndStatus(Long id, Long postId, PostStatus status);
 
 	// 운영자 삭제용: 글 번호 없이 댓글 번호와 상태로 찾는다

@@ -14,18 +14,18 @@
 </head>
 <body>
 <main>
-	<header class="top top-home">
-		<div>
-			<h1>찍먹</h1>
-			<%-- 상단 메뉴: 피드(이 화면)와 피드백 게시판을 오간다 --%>
-			<nav class="site-nav">
-				<a href="/" class="active">피드</a>
-				<a href="/feedback">피드백</a>
-			</nav>
-		</div>
-		<%-- 한 줄 소개: 처음 온 사람이 뭘 하는 곳인지 바로 알게. PC에서는 제목과 버튼 사이 가운데, 휴대폰에서는 둘째 줄 (app.css의 .top-home) --%>
-		<p class="slogan">찍고 먹자 !<small>먹은 사진을 올리면 AI가 칼로리를 알려 줘요</small></p>
+	<%-- 머리 (JM-60): PC는 첫 줄에 제목 | 한 줄 소개(가운데) | 사진 올리기, 둘째 줄 왼쪽에 메뉴 링크 (사진 바로 위)
+	     휴대폰은 첫 줄에 제목과 버튼, 둘째 줄에 한 줄 소개, 셋째 줄에 메뉴 링크 (자리는 app.css의 .top-menu) --%>
+	<header class="top top-menu">
+		<h1>찍먹</h1>
+		<%-- 한 줄 소개: 처음 온 사람이 뭘 하는 곳인지 바로 알게 (11-05). "알려줘요"는 운영자 요청으로 붙여 쓴다 (11-10) --%>
+		<p class="slogan">찍고 먹자 !<small>먹은 사진을 올리면 AI가 칼로리를 알려줘요</small></p>
 		<a class="button" href="/posts/new">사진 올리기</a>
+		<%-- 메뉴 링크: 피드(이 화면)와 피드백 게시판. 피드백은 무엇을 하는 곳인지 바로 알게 "개발자에게 피드백 보내기"로 적는다 --%>
+		<nav class="site-nav">
+			<a href="/" class="active">피드</a>
+			<a href="/feedback">개발자에게 피드백 보내기</a>
+		</nav>
 	</header>
 
 	<%-- empty: 목록이 비어 있으면 true --%>
@@ -52,12 +52,13 @@
 						<p class="meta">칼로리 분석 중</p>
 					</c:when>
 				</c:choose>
-				<%-- 닉네임·메모는 사용자가 쓴 값이라 반드시 c:out으로 출력한다 (XSS 방지) --%>
+				<%-- 닉네임, 메모는 사용자가 쓴 값이라 반드시 c:out으로 출력한다 (XSS 방지) --%>
 				<%-- 댓글 수는 있을 때만 보여 준다 (0개는 표시하지 않는다) --%>
 				<p class="meta">
-					<%-- 날짜는 span으로 감싸서 휴대폰(3칸)에서는 숨긴다 (app.css의 .card-when) --%>
-					<strong><c:out value="${post.nickname}" /></strong><span class="card-when"> · <c:out value="${post.createdAt}" /></span>
-					<c:if test="${post.commentCount > 0}"> · 댓글 ${post.commentCount}</c:if>
+					<%-- 닉네임, 날짜, 댓글 수는 중앙점 없이 띄어서 구분한다 (app.css의 .meta span, JM-61).
+					     줄을 바꾸면 그 자리에 빈칸이 하나 더 생겨 간격이 달라지므로 한 줄로 이어 쓴다.
+					     날짜는 휴대폰(3칸)에서는 숨긴다 (app.css의 .card-when) --%>
+					<strong><c:out value="${post.nickname}" /></strong><span class="card-when"><c:out value="${post.createdAt}" /></span><c:if test="${post.commentCount > 0}"><span>댓글 ${post.commentCount}</span></c:if>
 				</p>
 				<c:if test="${not empty post.memo}">
 					<p class="memo"><c:out value="${post.memo}" /></p>
@@ -66,7 +67,7 @@
 		</c:forEach>
 	</div>
 
-	<%-- 쪽 번호 줄: 이전 · 1 2 3 · 다음 (JM-57). 2쪽 이상일 때만 보인다. 그리는 법은 common/pager.jspf --%>
+	<%-- 쪽 번호 줄: 이전 1 2 3 다음 (JM-57). 2쪽 이상일 때만 보인다. 그리는 법은 common/pager.jspf --%>
 	<c:set var="nav" value="${feed.nav}" />
 	<c:set var="pagerBase" value="/?page=" />
 	<%@ include file="/WEB-INF/views/common/pager.jspf" %>

@@ -11,7 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 
-// 정책 페이지(이용약관·개인정보처리방침)가 열리고, 문의 이메일이 화면에 넘어가는지 확인한다
+// 정책 페이지(이용약관, 개인정보처리방침)가 열리고, 문의 이메일이 화면에 넘어가는지 확인한다
 @SpringBootTest
 @AutoConfigureMockMvc
 class PolicyControllerTest {

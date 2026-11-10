@@ -6,7 +6,7 @@ import org.springframework.http.HttpStatusCode;
 
 // 에러 종류 목록
 // 에러마다 "코드 이름 + HTTP 상태 + 사용자에게 보여 줄 기본 메시지"를 한곳에 모아 둔다.
-// → 같은 에러는 어디서 나든 같은 상태·메시지로 응답하고, 프론트는 코드 이름(NOT_FOUND 등)으로 에러를 구분한다.
+// → 같은 에러는 어디서 나든 같은 상태, 메시지로 응답하고, 프론트는 코드 이름(NOT_FOUND 등)으로 에러를 구분한다.
 //
 // enum: 정해진 값 몇 개만 가질 수 있는 타입. 아래 이름 하나하나가 ErrorCode 객체다.
 // 기능을 만들면서 필요한 에러를 여기에 추가한다. (예: 댓글이 생기면 COMMENT_NOT_FOUND)
@@ -48,7 +48,7 @@ public enum ErrorCode {
 	ADMIN_DISABLED(HttpStatus.FORBIDDEN, "운영자 기능이 꺼져 있습니다."),
 
 	// ---- 사진 ----
-	// 400: 파일 내용이 JPEG·PNG가 아니거나, 읽을 수 없는 사진 (확장자만 바꾼 파일, 아이폰 HEIC 등)
+	// 400: 파일 내용이 JPEG, PNG가 아니거나, 읽을 수 없는 사진 (확장자만 바꾼 파일, 아이폰 HEIC 등)
 	INVALID_IMAGE(HttpStatus.BAD_REQUEST, "JPEG 또는 PNG 사진만 올릴 수 있습니다."),
 	// 400: 화소 수가 너무 많은 사진 (서버 메모리를 지키기 위한 한도)
 	IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "사진 해상도가 너무 큽니다. 5,000만 화소 이하의 사진을 올려 주세요.");

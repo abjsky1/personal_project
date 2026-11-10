@@ -26,7 +26,7 @@ import backend.post.model.entity.Post;
 import tools.jackson.databind.json.JsonMapper;
 
 // 분석 결과에 따라 무엇이 저장되는지 확인하는 테스트
-// mock(): 정해 둔 대로만 답하는 가짜 객체. 실제 AI·DB·저장소 없이 판단 로직만 확인한다.
+// mock(): 정해 둔 대로만 답하는 가짜 객체. 실제 AI, DB, 저장소 없이 판단 로직만 확인한다.
 class FoodAnalysisServiceTest {
 
 	private static final Long POST_ID = 1L;

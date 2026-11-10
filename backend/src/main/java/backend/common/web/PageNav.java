@@ -3,7 +3,7 @@ package backend.common.web;
 import java.util.List;
 import java.util.stream.IntStream;
 
-// 쪽 번호 방식 목록의 "이전 · 1 2 3 · 다음" 재료. 화면은 common/pager.jspf가 이 값으로 그린다. (JM-57)
+// 쪽 번호 방식 목록의 "이전 1 2 3 다음" 재료. 화면은 common/pager.jspf가 이 값으로 그린다. (JM-57)
 // JSP에서 ${nav.hasPrev}처럼 꺼내 쓰는데, JSP의 EL은 record의 구성 요소만 읽을 수 있어서
 // 계산용 메서드 대신 계산 결과를 미리 값으로 담아 둔다.
 public record PageNav(int page, int totalPages, boolean hasPrev, boolean hasNext, List<Integer> pages) {
