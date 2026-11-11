@@ -312,7 +312,8 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - **첫 배포** (2026-11-03): 서버에서 레포를 `git clone`하고 `deploy/.env`(레포 밖, `chmod 600`)를 만든 뒤 `docker compose up -d --build`. 이미지를 서버에서 직접 빌드(84초, 앱 기동 17초) — GitHub Actions 빌드 + 레지스트리는 S4-5에서. 확인한 것: 글 3개가 RDS에, 사진 6개(글마다 큰 사진 + 썸네일)가 S3 `images/`에 저장, AI 분석 성공, 첫 화면 0.06초, 사진 0.2~0.3초, 서버를 재부팅해도 1분 뒤 컨테이너와 스왑이 스스로 돌아옴. 한가할 때 메모리: app 약 570MB, Nginx 약 5MB
 - **도메인** (S4-4, 2026-11-03): 서비스 이름 **찍먹**, 주소 **`jjikmuk.com`**. 가비아에서 구입(첫해 20,900원, 이후 27,500원/년, 만기 2027-11-03, 기관이전 잠금 켬). Route 53은 무료 플랜에서 도메인 구입이 막혀 있어("Free Tier accounts are not supported") 가비아로 했다. DNS도 가비아: A 레코드 `@`와 `www` → Elastic IP. 공개 WHOIS에는 가비아가 소유자 개인정보를 기본으로 가려 준다(조회해서 확인). 이름은 나중에 바꿀 수 있다(새 도메인 + 예전 주소에서 301).
 - **HTTPS** (S4-4, 인증서는 2026-11-11 JM-67부터 유료): 가비아에서 산 **Sectigo Basic** (도메인 소유만 확인하는 DV 등급, 44,000원/년, 계약 2026-11-11 ~ 2027-11-11). 암호화 수준과 자물쇠 표시는 그 전의 Let's Encrypt와 같고, 달라지는 것은 발급 기관과 **교체 방식**(자동 → 수동)이다. `www.jjikmuk.com`으로 발급받아 `jjikmuk.com`까지 한 장에 들어 있다. 파일은 서버의 `deploy/nginx/ssl/`에만 둔다 (`.gitignore`): `privkey.pem`(서버에서 만든 비밀키, 권한 600, 서버 밖으로 내보내지 않는다)과 `fullchain.pem`(우리 인증서 + 중간 인증서 2개). 이 폴더는 nginx 설정 폴더 mount(`./nginx` → `/etc/nginx/conf.d`) 안에 있어서 compose는 그대로이고, nginx는 `/etc/nginx/conf.d/ssl/`에서 읽는다. http → https, `www.jjikmuk.com` → `jjikmuk.com`으로 301. HSTS 6개월. 세션 쿠키 `Secure`. 내 PC 시험은 `nginx-local/default.conf`(http만).
-  - **자동 갱신이 없다**: 인증서 한 장은 최대 199일이고(지금 것은 **2027-05-28까지**, 한국 시간으로 29일 오전 9시 직전), 가비아는 1년 계약 안에서 무료로 재발급해 준다. 만료 전에 재발급받아 직접 바꿔야 한다 (순서는 16절 "인증서 교체"). 2027-03-15부터 새로 발급되는 인증서는 최대 100일로 줄어든다 (인증 기관 공통 규칙). 다음 인증서가 100일짜리로 나오면 계약 기간 안에 한 번 더 바꿔야 한다 (재발급 때 가비아에 확인). HSTS를 켜 두었기 때문에 만료되면 방문자가 경고를 넘어 들어올 수도 없다
+  - **자동 갱신이 없다**: 인증서 한 장은 최대 199일이고(지금 것은 **2027-05-28까지**, 한국 시간으로 29일 오전 9시 직전), 가비아는 1년 계약 안에서 무료로 재발급해 준다. 만료 전에 재발급받아 직접 바꿔야 한다 (순서는 16절 "인증서 교체", 다음 교체 일감은 JM-70). 2027-03-15부터 새로 발급되는 인증서는 최대 100일로 줄어든다 (인증 기관 공통 규칙). 다음 인증서가 100일짜리로 나오면 계약 기간 안에 한 번 더 바꿔야 한다 (재발급 때 가비아에 확인). HSTS를 켜 두었기 때문에 만료되면 방문자가 경고를 넘어 들어올 수도 없다
+  - **적용 확인 (2026-11-11, PR #29)**: 배포의 nginx reload로 끊김 없이 바뀌었다 (nginx 컨테이너는 그대로, 오류 기록 없음). 밖에서 본 발급자는 Sectigo, 체인은 3장, 두 주소 모두 검증 통과, `www`와 http 주소는 전처럼 301. 응답 시간 0.11~0.21초. 아이폰(5G)에서도 유효한 인증서로 열렸다
   - **예비 (Let's Encrypt)**: 2026-11-03부터 쓰던 무료 인증서(90일짜리)는 지우지 않고 계속 갱신한다. `deploy/compose.yaml`의 **certbot 컨테이너**가 12시간마다 "만료 30일 전이면 갱신"을 시도하고(webroot 방식: nginx 80번이 `/.well-known/acme-challenge/`를 certbot과 공유하는 볼륨에서 내준다), nginx는 6시간마다 reload한다. 유료 인증서에 문제가 생기면 `deploy/nginx/default.conf`의 인증서 경로 두 쌍을 `/etc/letsencrypt/live/jjikmuk.com/`으로 되돌리는 PR 하나로 돌아간다
   - **Let's Encrypt 처음 발급 (서버에서 한 번만, 2026-11-03)**: nginx가 80번을 쓰고 있어서 standalone 방식으로 certbot이 잠깐 80번을 직접 받는다. `docker compose stop nginx` → `docker compose run --rm --entrypoint certbot -p 80:80 certbot certonly --standalone -d jjikmuk.com -d www.jjikmuk.com --agree-tos --register-unsafely-without-email` → `docker compose up -d --build` → 갱신 리허설 `docker compose run --rm --entrypoint certbot certbot renew --dry-run --webroot -w /var/www/certbot`. 인증서는 이름 있는 볼륨 `certbot-etc`에 남는다(`down -v`를 하면 지워지므로 다시 받으면 된다).
 - **자동 배포** (S4-5, 2026-11-03): `main`에 push → GitHub Actions `backend`(테스트) → `image`(Docker 이미지를 GitHub 컴퓨터에서 만들어 **GHCR** `ghcr.io/abjsky1/macros-app`에 올림, 태그 = 커밋 SHA + latest) → `deploy`(AWS **SSM**으로 서버에 명령: `git pull` 뒤 `deploy/deploy.sh <SHA>`). 서버에서는 빌드하지 않고 이미지만 받는다.
@@ -627,7 +628,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
   - **배포가 잘못됐을 때 (되돌리기)**: GitHub Actions 화면에서 직전 성공 실행의 커밋 SHA 확인 → 서버에서 `cd ~/personal_project/deploy && bash deploy.sh <그 SHA>` (GHCR에 남은 이미지를 다시 받아 교체, 약 1분). 배포가 끝났는지는 `.env`의 태그가 아니라 `docker compose ps`에 보이는 app 이미지 태그로 본다 (deploy.sh가 `.env`를 먼저 바꾸기 때문에 옛 컨테이너가 도는 동안에도 태그는 새것)
   - **DB가 망가졌을 때 (복구)**: RDS → `macros-db` → 작업 → 특정 시점으로 복원 → 새 인스턴스(`macros-db-restore`, 같은 클래스, 퍼블릭 아니요, 보안 그룹 `macros-db`) → 사용 가능해지면 서버 `.env`의 `DB_HOST`를 새 엔드포인트로 바꾸고 `docker compose up -d` → 확인 뒤 옛 인스턴스 삭제. 복원 가능한 범위는 백업 보관 기간(무료 플랜 1일, 유료 전환 뒤 7일). 연습 없이 두기로 했으므로(18절) 실제 상황에서는 이 순서를 한 줄씩 그대로 따른다
   - **SSH가 갑자기 안 될 때** (`Connection timed out`인데 사이트는 멀쩡): 내 PC의 공인 IP가 바뀐 경우가 대부분이다 (집 인터넷은 공유기를 다시 켜거나 통신사 사정으로 IP가 바뀔 수 있다). EC2 → 보안 그룹 `macros-web` → 인바운드 규칙 편집 → SSH(22) 규칙을 "규칙 추가"로 하나 더 만들어 소스를 "내 IP"로 저장한다 (옛 규칙은 지우지 않는다. 집 IP가 두 값 사이를 오가서, 둘 다 열어 두면 다시 겪지 않는다) → 바로 접속된다. 서버 쪽 문제인지 헷갈리면 먼저 브라우저로 사이트가 열리는지 본다 (2026-11-05 실제로 겪음)
-- **인증서 교체 (JM-67)**: 유료 인증서는 스스로 갱신되지 않으므로 **만료 2주 전까지** 직접 바꾼다 (지금 것은 2027-05-28 만료. 가비아가 15일 전쯤 메일로 알리고, 일정은 Jira에도 둔다). 재발급은 무료이고 새 CSR과 도메인 확인을 다시 한다. 2026-11-11 첫 설치 때 한 순서 그대로이고, ①의 "다른 이름"과 ⑥의 바꿔치기만 교체용으로 더했다 (재발급은 아직 해 보지 않았다). 서버 명령은 프롬프트가 `[ec2-user@…]$`인 창에서 실행한다 (내 PC의 PowerShell에는 `awk`가 없다)
+- **인증서 교체 (JM-67)**: 유료 인증서는 스스로 갱신되지 않으므로 직접 바꾼다. 가비아가 유효기간 15일 전에 추가 인증 알림을 문자와 메일로 보내면 **바로 시작해서 만료 1주 전까지** 끝낸다 (지금 것은 2027-05-28 만료라서 알림은 5월 13일경. 일감은 Jira JM-70, 기한 2027-05-21). 재발급은 무료이고 새 CSR과 도메인 확인을 다시 한다. 2026-11-11 첫 설치 때 한 순서 그대로이고, ①의 "다른 이름"과 ⑥의 바꿔치기만 교체용으로 더했다 (재발급은 아직 해 보지 않았다). 서버 명령은 프롬프트가 `[ec2-user@…]$`인 창에서 실행한다 (내 PC의 PowerShell에는 `awk`가 없다)
   - ① 서버에서 새 비밀키와 CSR을 만든다. 비밀키는 **다른 이름**(`privkey.new.pem`)으로 만든다 — 쓰고 있는 `privkey.pem`을 덮어쓰면 새 인증서가 오기 전에 nginx가 다시 켜질 때 짝이 안 맞아 뜨지 못한다. 키에 암호(`-des3`)는 걸지 않는다 (Docker 안의 nginx는 암호를 입력받지 못한다). 주소에 `www`를 붙여야 `jjikmuk.com`까지 한 장에 들어간다. 시도와 시군구는 도메인 등록 주소와 같게 영문으로 쓴다. 비밀키는 화면에 찍거나 서버 밖으로 복사하지 않는다 (CSR은 공개돼도 된다)
     ```
     cd ~/personal_project/deploy/nginx/ssl
@@ -637,8 +638,8 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
     ```
   - ② My가비아 → 서비스 관리 → SSL 보안서버 인증서에서 재발급을 신청한다. CSR은 "보유"를 골라 위에서 나온 내용을 붙여 넣는다 ("신규 생성"은 비밀키가 서버 밖에서 만들어진다). 인증 방식은 **DNS 레코드 인증** — CSR을 저장하면 "메일"로 돌아가 있으니 다시 고른다 (이 도메인은 메일을 받지 못한다)
   - ③ [SSL 인증]에 나온 CNAME 호스트와 값을 DNS 관리툴에 추가한다 (A 레코드는 그대로 둔다) → 발급 메일을 기다린다 (평일 9~18시에만 처리된다)
-  - ④ 메일이 오면 My가비아 → 서비스 관리 → SSL → 인증서 파일 요청(하루 3번까지)으로 `certificate.crt`, `chain.crt`, `root.crt`를 받아 내 PC에서 서버로 올린다: `scp -i <키 파일 경로> <받은 폴더>/certificate.crt <받은 폴더>/chain.crt <받은 폴더>/root.crt ec2-user@3.39.120.213:personal_project/deploy/nginx/ssl/`
-  - ⑤ 서버에서 합치고 검사한다. 세 파일을 모두 넣는다: `root.crt`는 이름과 달리 루트가 아니라, 오래된 기기도 아는 기관(USERTrust)으로 이어 주는 교차 서명 인증서다. `cat` 대신 `awk 1`을 쓰는 이유는 `certificate.crt` 끝에 줄바꿈이 없어서 그냥 붙이면 두 인증서의 경계가 한 줄이 되기 때문이고, `tr`은 윈도우 줄바꿈을 지운다. 셋째 줄의 결과는 3, 넷째 줄에는 두 주소와 새 만료일, 마지막 두 줄의 값은 서로 같아야 한다 (인증서와 비밀키가 짝이라는 뜻이고, 비밀키 내용은 찍히지 않는다)
+  - ④ 메일이 오면 My가비아 → 서비스 관리 → SSL → 인증서 파일 요청(하루 3번까지)으로 `certificate.crt`, `chain.crt`, `root.crt`를 받는다. 받기 전에 다운로드 폴더에 남아 있는 예전 세 파일을 지운다 (안 지우면 새 파일이 `certificate (1).crt` 같은 이름으로 받아져서 옛 파일을 올리게 된다). 그다음 내 PC에서 서버로 올린다: `scp -i <키 파일 경로> <받은 폴더>/certificate.crt <받은 폴더>/chain.crt <받은 폴더>/root.crt ec2-user@3.39.120.213:personal_project/deploy/nginx/ssl/`
+  - ⑤ 서버에서 합치고 검사한다. 세 파일을 모두 넣는다: `root.crt`는 이름과 달리 루트가 아니라, 오래된 기기도 아는 기관(USERTrust)으로 이어 주는 교차 서명 인증서다. `cat` 대신 `awk 1`을 쓰는 이유는 `certificate.crt` 끝에 줄바꿈이 없어서 그냥 붙이면 두 인증서의 경계가 한 줄이 되기 때문이고, `tr`은 혹시 섞여 있을 윈도우 줄바꿈을 지운다 (2026-11-11에 받은 파일에는 없었다). 셋째 줄의 결과는 3, 넷째 줄에는 두 주소와 새 만료일, 마지막 두 줄의 값은 서로 같아야 한다 (인증서와 비밀키가 짝이라는 뜻이고, 비밀키 내용은 찍히지 않는다)
     ```
     cd ~/personal_project/deploy/nginx/ssl
     awk 1 certificate.crt chain.crt root.crt | tr -d '\r' > fullchain.new.pem
@@ -653,7 +654,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
     cd ~/personal_project/deploy
     docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
     ```
-  - ⑦ 밖에서 확인한다 (내 PC의 Git Bash): `echo | openssl s_client -connect jjikmuk.com:443 -servername jjikmuk.com 2>/dev/null | openssl x509 -noout -issuer -enddate`에 새 만료일이 나오는지, 휴대폰으로도 열리는지 본다. 다음 교체일을 Jira에 적고 `.old` 파일을 지운다
+  - ⑦ 확인한다 (서버 창에서 그대로 실행해도 되고, 내 PC에서는 Git Bash): `echo | openssl s_client -connect jjikmuk.com:443 -servername jjikmuk.com 2>/dev/null | openssl x509 -noout -issuer -enddate`에 새 만료일이 나오는지 보고, 휴대폰으로도 열어 자물쇠의 인증서 정보에서 만료일을 본다. 다음 교체일을 Jira에 적고 `.old` 파일을 지운다
   - 만료가 가까운데 발급이 끝나지 않으면: `default.conf`의 인증서 경로를 예비 인증서로 되돌리는 PR을 머지한다 (10절 "예비")
 
 ## 17. 성공 지표 (공개 후 4주)
@@ -726,6 +727,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 
 ## 변경 이력
 
+- 2026-11-11 — 인증서 교체 시점을 가비아 알림(유효기간 15일 전)에 맞추고, 받기 전에 옛 파일 지우기를 더함. 적용 확인 기록 (JM-67, 10절, 16절)
 - 2026-11-11 — HTTPS 인증서를 가비아 Sectigo Basic(유료, 수동 교체)으로 바꾸고 Let's Encrypt는 예비로 (JM-67, 10절, 16절 "인증서 교체", 18절)
 - 2026-11-11 — 운영자 통계 API `GET /api/admin/stats`, 집계 조회에 MyBatis 도입 (JM-68, 9절, 13절, 16절, 17절, 18절)
 - 2026-11-11 — 댓글에 답글 한 단계 (JM-58, 4절, 5절, 12절, 13절, 14절). 답글이 남은 채 지운 댓글은 삭제 주체별 안내 글로 표시. 변경 기록 규칙 ⑤를 "PR 번호(미리 적음)"로
