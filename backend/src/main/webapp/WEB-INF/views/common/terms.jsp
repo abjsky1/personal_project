@@ -15,7 +15,7 @@
 <body>
 <main>
 	<header class="top">
-		<a href="/">← 목록</a>
+		<a href="/" data-back>← 목록</a>
 	</header>
 
 	<%-- 처리방침과 같은 모양(.policy)으로 보여 준다 --%>

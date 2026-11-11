@@ -12,7 +12,7 @@
 <body>
 <main>
 	<header class="top">
-		<a href="/feedback">← 피드백 목록</a>
+		<a href="/feedback" data-back>← 피드백 목록</a>
 	</header>
 
 	<article class="feedback-detail">

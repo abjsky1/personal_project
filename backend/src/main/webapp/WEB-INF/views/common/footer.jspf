@@ -6,3 +6,78 @@
 	<%-- 두 링크 사이는 중앙점 없이 띄어서 구분한다 (app.css의 .site-footer a + a, JM-61) --%>
 	<a href="/terms">이용약관</a><a href="/privacy">개인정보처리방침</a>
 </footer>
+
+<%-- 목록으로 돌아가기 (JM-71, 피드백 10번 "목록으로 돌아가면 첫 쪽으로만 간다")
+     글을 보다가 "← 목록"을 누르면 보고 있던 쪽, 보고 있던 위치로 돌아가게 한다. 바닥글은 모든 화면에 들어가므로 여기 한 곳에만 둔다.
+     - 목록 화면(피드 "/", 피드백 "/feedback", 공지 "/notice"): 지금 쪽의 주소와, 떠날 때의 스크롤 위치를 브라우저에 적어 둔다.
+     - 그 밖의 화면: data-back이 붙은 돌아가기 링크의 주소를 적어 둔 쪽으로 바꾼다. 적어 둔 것이 없으면 원래 주소(첫 쪽) 그대로다.
+     - 적어 두는 곳은 sessionStorage: 탭마다 따로이고 탭을 닫으면 사라진다. 서버로 보내지 않고 쿠키도 아니다.
+     주소에 쪽 번호를 싣지 않은 이유: 댓글을 쓰거나 지우면 서버가 상세 화면을 새로 열어 주는데, 그때마다 쪽 번호를 들고 다녀야 한다.
+     JavaScript가 꺼져 있거나 저장소를 못 쓰는 브라우저에서는 아무 일도 하지 않고, 전처럼 첫 쪽으로 간다. --%>
+<script>
+(function () {
+	// 저장소를 쓸 수 있는지 먼저 확인한다 (막아 둔 브라우저에서는 여기서 오류가 난다 → 그만둔다)
+	let store;
+	try {
+		store = window.sessionStorage;
+		store.setItem('back:test', '1');
+		store.removeItem('back:test');
+	} catch (error) {
+		return;
+	}
+
+	const LISTS = ['/', '/feedback', '/notice'];
+	const path = location.pathname;
+	// 쪽 번호까지 포함한 지금 주소. 예: /?page=2
+	const here = path + location.search;
+
+	if (LISTS.includes(path)) {
+		// 목록 화면 ① 지금 쪽을 적어 둔다
+		store.setItem('back:url:' + path, here);
+
+		// ② 돌아가기 링크를 눌러서 방금(10초 안) 온 것이면, 떠날 때 보던 위치로 내린다
+		//    카드 사진은 불러오기 전에도 자리를 차지하므로(app.css의 aspect-ratio) 바로 내려도 위치가 맞는다
+		const restore = (store.getItem('back:restore') || '').split(' ');
+		store.removeItem('back:restore');
+		if (restore[1] === here && Date.now() - Number(restore[0]) < 10000) {
+			window.scrollTo(0, Number(store.getItem('back:y:' + path)) || 0);
+		}
+
+		// ③ 이 화면을 떠날 때 스크롤 위치를 적어 둔다 (pagehide: 다른 화면으로 넘어가기 직전에 실행된다)
+		window.addEventListener('pagehide', function () {
+			store.setItem('back:y:' + path, String(Math.round(window.scrollY)));
+		});
+		return;
+	}
+
+	// 바로 앞 화면의 주소(경로만). 글을 막 써서 올린 직후인지 알아보는 데 쓴다
+	let cameFrom = '';
+	try {
+		cameFrom = new URL(document.referrer).pathname;
+	} catch (error) {
+		// 앞 화면이 없으면(주소를 직접 열었으면) 빈 값 그대로
+	}
+
+	// 그 밖의 화면: 돌아가기 링크를 적어 둔 쪽으로 바꾼다
+	document.querySelectorAll('a[data-back]').forEach(function (link) {
+		// 원래 주소 = 그 목록의 첫 쪽 ("/", "/feedback", "/notice")
+		const base = link.getAttribute('href');
+
+		// 작성 화면(/posts/new 등)에서 넘어왔으면 방금 쓴 글이 보이는 첫 쪽으로 가야 하므로, 적어 둔 쪽을 지운다
+		if (cameFrom.endsWith('/new')) {
+			store.removeItem('back:url:' + base);
+		}
+
+		const remembered = store.getItem('back:url:' + base);
+		// 우리가 적은 모양(첫 쪽 주소 그대로이거나 뒤에 ?page=… 가 붙은 것)일 때만 쓴다
+		if (!remembered || (remembered !== base && !remembered.startsWith(base + '?'))) {
+			return;
+		}
+		link.setAttribute('href', remembered);
+		// 눌렀다는 것과 시각을 적어 둔다 → 목록 화면이 ②에서 위치를 되돌린다
+		link.addEventListener('click', function () {
+			store.setItem('back:restore', Date.now() + ' ' + remembered);
+		});
+	});
+})();
+</script>
