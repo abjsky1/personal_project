@@ -245,6 +245,7 @@
 | `459cc84` (PR #21) | JM-61 | 중앙점을 모두 뺌 (운영자 요청, JM-44에서 양옆을 띄워 쓰던 것). 화면 글자는 및, 또는, 이나, 쉼표로 잇고(글이나 댓글 삭제 요청, JPEG 또는 PNG, 광고나 도배), 닉네임과 시간 사이와 바닥글 두 링크 사이는 띄어서, 페이지 제목은 "피드백 - 찍먹". 이용약관과 처리방침은 뜻은 그대로 두고 문장 부호만. 코드 주석, 설정 파일 주석, 기획서와 스프린트 문서, Jira 일감도. JM-60과 같은 PR. 변경 전후 사진(폰과 PC, 첫 화면과 전체): [JM-61 폴더](https://github.com/abjsky1/jjikmuk_update_picture/tree/main/update_picture/JM-61) — 화면 9개 |
 | `58eebc0` (PR #22) | JM-63 | 메뉴 링크의 밑줄을 빼고 지금 있는 화면을 초록 굵은 글자로 (다른 화면 링크는 진한 회색, 마우스를 올리면 초록, 화면 읽기 프로그램용 aria-current). 운영자 요청. 변경 전후 사진(폰과 PC, 첫 화면과 전체): [JM-63 폴더](https://github.com/abjsky1/jjikmuk_update_picture/tree/main/update_picture/JM-63) — 피드와 피드백 목록 |
 | (JM-65 PR) | JM-65 | 공지 게시판 `/notice`: 게임 공지처럼 목록은 한 줄에 "[안내] 제목", 오른쪽에 조회수와 날짜, 누르면 상세(`/notice/{id}`). 글은 `notices.json`(git), 조회수만 DB(`notice_views`, 봇 제외, 쿠키 없이). 메뉴에 "공지" 링크(피드와 개발자에게 피드백 보내기 사이). 첫 공지 다섯 개(피드백 3번, 8번 반영 표시). 운영자 검토 두 번: 첫 안(한 화면에 공지를 다 펼침)을 게시판 모양으로, 제목은 "메뉴 개선 안내"처럼 간단히, 본문은 문어체로. 앞으로 사용자에게 보이는 변경은 같은 PR에서 공지도 더한다. 테스트 105개에서 109개로. 변경 전후 사진(폰과 PC, 첫 화면과 전체): [JM-65 폴더](https://github.com/abjsky1/jjikmuk_update_picture/tree/main/update_picture/JM-65) — 피드, 피드백 목록, 공지 목록과 상세 |
+| (JM-66 PR) | JM-66 | 상세와 작성 화면 머리의 돌아가기 링크("← 목록", "← 피드백 목록", "← 공지 목록") 밑줄을 빼고 검은 글자로, 마우스를 올리거나 누르면 초록. CSS 한 규칙이라 JSP는 그대로. 공지 "목록 이동 링크 개선 안내". 운영자 요청. JM-65 위에 이어서 만듦. 변경 전후 사진(폰과 PC, 첫 화면과 전체): [JM-66 폴더](https://github.com/abjsky1/jjikmuk_update_picture/tree/main/update_picture/JM-66) — 화면 7개 |
 
 ### 만난 문제
 | 문제 | 원인 | 기록 |
