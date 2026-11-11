@@ -99,8 +99,17 @@ public class FoodAnalysisService {
 	// 메모리가 아니라 DB에서 세는 이유: 배포로 서버를 다시 켜도 오늘 횟수가 0으로 돌아가지 않는다.
 	// 일꾼 2명이 동시에 분석하면 상한을 1~2건 넘을 수 있지만, 비용을 막는 장치라 그 정도는 괜찮다.
 	private boolean isDailyLimitReached() {
+		return countToday() >= dailyLimit;
+	}
+
+	// 오늘(한국 시간 자정부터) 끝난 AI 호출 수. 상한 검사와 운영자 통계가 같은 숫자를 본다.
+	public long countToday() {
 		Instant startOfToday = LocalDate.now(KOREA).atStartOfDay(KOREA).toInstant();
-		return foodAnalysisRepository.countByCompletedAtGreaterThanEqual(startOfToday) >= dailyLimit;
+		return foodAnalysisRepository.countByCompletedAtGreaterThanEqual(startOfToday);
+	}
+
+	public int getDailyLimit() {
+		return dailyLimit;
 	}
 
 	private void saveResult(FoodAnalysis analysis, FoodAnalyzerResponse response, long latencyMs) {

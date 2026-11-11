@@ -27,6 +27,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	// MyBatis: SQL을 직접 쓰고 결과를 자바 객체로 받는다. 집계 조회(운영자 통계)에만 쓰고, 저장과 일반 조회는 JPA 그대로 둔다 (JM-68)
+	// Spring Boot가 버전을 관리하지 않는 라이브러리라 버전을 직접 적는다. 4.x가 Spring Boot 4용이다.
+	implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:4.1.0'
 	// 비밀번호를 BCrypt로 바꿔 저장하는 도구만 가져온다 (로그인 기능이 있는 Spring Security 전체는 넣지 않음)
 	implementation 'org.springframework.security:spring-security-crypto'
 	// Thumbnailator: 사진 크기 줄이기, 썸네일 만들기. 사진의 EXIF 방향 정보를 읽어 세로 사진을 똑바로 세워 준다.
