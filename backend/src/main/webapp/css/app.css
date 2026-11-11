@@ -495,6 +495,38 @@ form button {
 	margin-left: 16px;
 }
 
+/* ---- 공지 (JM-65) ---- */
+/* 공지마다 날짜, 제목, 쉬운 말 설명. 정책 페이지처럼 읽기 좋은 폭(760px)으로 좁힌다 */
+.notice-list {
+	max-width: 760px;
+}
+
+.notice {
+	padding: 18px 0;
+	border-bottom: 1px solid #eee;
+}
+
+.notice h2 {
+	margin: 4px 0 6px;
+	font-size: 1.1rem;
+}
+
+/* keep-all: 휴대폰에서 낱말 중간이 아니라 띄어쓰기에서 줄을 바꾼다 */
+.notice p {
+	margin: 0;
+	line-height: 1.6;
+	word-break: keep-all;
+}
+
+.notice p + p {
+	margin-top: 4px;
+}
+
+.notice .notice-date {
+	color: #888;
+	font-size: 0.85rem;
+}
+
 /* ---- 정책 페이지(이용약관, 개인정보처리방침): 긴 글이라 읽기 좋은 폭(760px)으로 좁힌다 ---- */
 .policy {
 	max-width: 760px;
