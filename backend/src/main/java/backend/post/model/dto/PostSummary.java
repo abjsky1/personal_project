@@ -15,7 +15,7 @@ import backend.post.model.entity.Post;
 //
 // record: 값을 담기만 하는 클래스를 짧게 만드는 문법. JSP에서는 ${post.nickname}처럼 꺼내 쓴다.
 // imageUrl: 상세 화면용 큰 사진 / thumbnailUrl: 목록용 정사각형 썸네일
-// createdAt: "11월 11일 18:43" / createdShort: 카드의 좁은 자리에 넣는 짧은 날짜 (아래 shortWhen)
+// createdAt: 상세 화면의 "11월 11일 18:43" / createdDate: 목록 카드의 "2026.11.11" / createdShort: 휴대폰 카드의 짧은 날짜 (아래 shortWhen)
 // analysisStatus, totalKcal: 목록 카드에 보여 줄 분석 상태와 칼로리. 분석 기록이 없으면 null
 // commentCount: 목록 카드의 댓글 수 (상세 화면은 댓글 목록 쪽에서 따로 세므로 0으로 둔다)
 // likeCount, viewCount: 좋아요 수와 조회수 (JM-59, JM-72)
@@ -26,6 +26,7 @@ public record PostSummary(
 		String imageUrl,
 		String thumbnailUrl,
 		String createdAt,
+		String createdDate,
 		String createdShort,
 		AnalysisStatus analysisStatus,
 		BigDecimal totalKcal,
@@ -35,9 +36,11 @@ public record PostSummary(
 
 	private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
 
-	// 작성 시각을 한국 시간으로 바꿔 "10월 29일 14:05" 모양으로 보여 준다.
+	// 작성 시각을 한국 시간으로 바꿔 "10월 29일 14:05" 모양으로 보여 준다. (상세 화면)
 	private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("M월 d일 HH:mm").withZone(KOREA);
-	private static final DateTimeFormatter TODAY_FORMAT = DateTimeFormatter.ofPattern("HH:mm").withZone(KOREA);
+	// 목록 카드의 날짜 (JM-72): 연도까지 넣은 "2026.11.11". 공지 목록의 날짜와 같은 모양이다.
+	// "2026년 11월 11일"은 카드에 넣기에 길어서 점으로 줄였다. 해가 바뀌어도 어느 해 글인지 알 수 있다 (운영자 요청)
+	private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy.MM.dd").withZone(KOREA);
 	private static final DateTimeFormatter THIS_YEAR_FORMAT = DateTimeFormatter.ofPattern("MM.dd").withZone(KOREA);
 	private static final DateTimeFormatter OLDER_FORMAT = DateTimeFormatter.ofPattern("yy.MM.dd").withZone(KOREA);
 
@@ -51,6 +54,7 @@ public record PostSummary(
 				"/images/" + post.getImageKey(),
 				"/images/" + post.getThumbnailKey(),
 				TIME_FORMAT.format(post.getCreatedAt()),
+				DATE_FORMAT.format(post.getCreatedAt()),
 				shortWhen(post.getCreatedAt(), LocalDate.now(KOREA)),
 				analysis == null ? null : analysis.getStatus(),
 				analysis == null ? null : analysis.getTotalKcal(),
@@ -59,14 +63,11 @@ public record PostSummary(
 				post.getViewCount());
 	}
 
-	// 휴대폰 카드처럼 좁은 자리에 넣는 짧은 날짜 (JM-72).
-	// 오늘 올린 글은 시각(18:43), 올해 글은 날짜(11.02), 그 전 글은 연도까지(25.12.31). today: 한국 날짜 기준의 오늘
+	// 휴대폰 카드처럼 좁은 자리에 넣는 짧은 날짜 (JM-72): "2026.11.11"이 들어가지 않는 자리에 쓴다.
+	// 올해 글은 "11.02", 지난해까지의 글은 연도 두 자리를 붙여 "25.12.31". today: 한국 날짜 기준의 오늘
 	// 월과 일은 두 자리로 맞춘다: "11.2"는 소수처럼 읽힌다
 	static String shortWhen(Instant createdAt, LocalDate today) {
 		LocalDate day = createdAt.atZone(KOREA).toLocalDate();
-		if (day.equals(today)) {
-			return TODAY_FORMAT.format(createdAt);
-		}
 		return (day.getYear() == today.getYear() ? THIS_YEAR_FORMAT : OLDER_FORMAT).format(createdAt);
 	}
 }

@@ -127,9 +127,11 @@ button {
 	background: #eee;
 }
 
-/* 카드 첫 줄 (JM-72): 왼쪽에 칼로리, 오른쪽 끝에 숫자(좋아요, 댓글, 조회수) → 숫자가 아래 줄의 날짜 바로 위에 온다 */
+/* ---- 카드의 글자 두 줄 (JM-72): 닉네임, 칼로리, 숫자, 날짜가 카드마다 같은 자리에 온다 ---- */
+/* 첫 줄: 왼쪽에 닉네임, 오른쪽 끝에 칼로리 / 둘째 줄: 왼쪽에 숫자(좋아요, 댓글, 조회수), 오른쪽 끝에 날짜 */
+/* 메모는 줄 수가 글마다 달라서 목록에서 뺐다 (상세 화면에서 보인다) → 모든 카드의 높이가 같다 */
 /* space-between: 둘을 양쪽 끝으로 벌린다 / baseline: 크기가 다른 글자의 밑선을 맞춘다 */
-.card-top {
+.card-row {
 	display: flex;
 	align-items: baseline;
 	justify-content: space-between;
@@ -137,57 +139,52 @@ button {
 	margin: 8px 0 0;
 }
 
-.card-kcal {
-	margin: 0;
-	font-size: 1.1rem;
-	font-weight: 700;
-}
-
-/* 칼로리 자리에 나오는 "칼로리 분석 중" 안내는 보통 글자로 */
-.card-pending {
-	color: #666;
-	font-size: 0.9rem;
-	font-weight: 400;
-}
-
-/* ---- 카드의 닉네임 줄과 숫자 줄 (JM-72): 날짜와 숫자가 카드마다 같은 자리에 오게 한다 ---- */
-/* 카드는 사진 아래 두 줄(칼로리와 숫자, 닉네임과 날짜)로 모두 같은 높이다. 메모는 줄 수가 글마다 달라서 목록에서 뺐다 (상세 화면에서 보인다) */
-/* 닉네임 줄: 닉네임이 남는 폭을 다 쓰고(flex: 1) 넘치면 …으로 줄인다. 날짜는 줄어들지 않고 오른쪽 끝에 붙는다 */
-.card-who {
-	display: flex;
-	align-items: baseline;
-	gap: 8px;
-	margin: 6px 0 0;
-	color: #666;
-	font-size: 0.9rem;
-}
-
-.card-who strong {
+/* 닉네임: 남는 폭을 다 쓰고(flex: 1) 넘치면 …으로 줄인다. 칼로리는 줄어들지 않고 오른쪽 끝에 붙는다 */
+.card-name {
 	flex: 1;
-	/* min-width: 0 — 이게 없으면 긴 닉네임이 줄어들지 않고 날짜를 밀어낸다 */
+	/* min-width: 0 — 이게 없으면 긴 닉네임이 줄어들지 않고 칼로리를 밀어낸다 */
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	color: #222;
+	font-size: 1rem;
+}
+
+.card-kcal {
+	flex: none;
+	font-size: 1.05rem;
+	font-weight: 700;
+}
+
+/* 칼로리 자리에 나오는 "분석 중" 안내는 보통 글자로 */
+.card-pending {
+	flex: none;
+	color: #666;
+	font-size: 0.85rem;
+}
+
+/* 둘째 줄(숫자와 날짜)은 작고 흐린 글자 */
+.card-sub {
+	margin-top: 4px;
+	color: #777;
+	font-size: 0.85rem;
 }
 
 .card-when {
 	flex: none;
 }
 
-/* 날짜는 두 모양을 넣어 두고 하나만 보여 준다: 여기(PC)는 긴 것, 아래 "좁은 화면"에서는 짧은 것 */
+/* 날짜는 두 모양을 넣어 두고 하나만 보여 준다: 여기(PC)는 연도까지 "2026.11.11", 아래 "좁은 화면"에서는 짧게 "11.11" */
 .when-short {
 	display: none;
 }
 
-/* 숫자: 좋아요, 댓글, 조회수를 폭이 정해진 세 칸에 넣는다 → 숫자 자릿수가 달라도 아이콘이 카드마다 같은 자리에 온다 */
+/* 숫자: 폭이 정해진 세 칸에 넣는다 → 숫자 자릿수가 달라도 아이콘이 카드마다 같은 자리에 온다 */
 /* 칸 폭은 아이콘 15px + 간격 + 숫자가 들어갈 만큼. 조회수는 자릿수가 커지므로 조금 넓게 (세 자리까지) */
 .card-stats {
 	display: grid;
 	grid-template-columns: 40px 40px 44px;
-	margin: 0;
-	color: #777;
-	font-size: 0.85rem;
 }
 
 .stat {
@@ -850,23 +847,37 @@ form button {
 		gap: 14px 8px;
 	}
 
-	/* 카드 폭이 110px쯤이라 글자를 줄이고, 날짜는 짧은 모양으로 바꾼다 */
-	.card-kcal {
-		font-size: 0.95rem;
-	}
-
-	.card-who,
-	.card-pending {
-		margin-top: 2px;
-		font-size: 0.75rem;
-	}
-
-	.card-who {
+	/* 카드 폭이 110px쯤이라 글자를 줄인다 */
+	.card-row {
 		gap: 4px;
+		margin-top: 6px;
 	}
 
-	/* 날짜: 긴 모양("11월 11일 18:43")은 숨기고 짧은 모양("18:43" 또는 "11.10")을 보여 준다.
-	   JM-50에서는 자리가 없어 날짜를 아예 숨겼는데, 짧은 모양이면 닉네임 줄 오른쪽 끝에 들어간다 (JM-72) */
+	.card-name {
+		font-size: 0.8rem;
+	}
+
+	/* 칼로리: 닉네임 자리를 남기려고 숫자를 조금 작게, 단위(kcal)는 더 작고 가는 글자로 */
+	.card-kcal {
+		font-size: 0.85rem;
+	}
+
+	.kcal-unit {
+		font-size: 0.65rem;
+		font-weight: 400;
+	}
+
+	.card-pending {
+		font-size: 0.7rem;
+	}
+
+	.card-sub {
+		margin-top: 2px;
+		font-size: 0.7rem;
+	}
+
+	/* 날짜: 연도까지 쓰면("2026.11.11") 숫자 옆에 들어가지 않아서 짧은 모양("11.11", 지난해 글은 "25.12.31")을 보여 준다.
+	   JM-50에서는 자리가 없어 날짜를 아예 숨겼었다 */
 	.when-full {
 		display: none;
 	}
@@ -875,17 +886,13 @@ form button {
 		display: inline;
 	}
 
-	/* 카드가 좁아서 숫자를 칼로리 옆에 둘 수 없다 → 칼로리 아래 줄로 내리고(block), 세 칸이 카드 폭을 똑같이 나눠 쓴다.
-	   한 칸이 36px쯤이라 아이콘 11px + 숫자 세 자리까지 들어간다. 그 아래 줄이 닉네임과 날짜라서 숫자는 여전히 날짜 바로 위다 */
-	.card-top {
-		display: block;
-		margin-top: 6px;
-	}
-
+	/* 숫자: 칸을 내용에 맞춰 좁게 붙인다 (PC처럼 정해진 폭이면 날짜와 한 줄에 들어가지 않는다).
+	   그래도 넘치면 숫자 쪽이 잘리고 날짜는 남는다 (min-width: 0 + overflow) */
 	.card-stats {
-		grid-template-columns: repeat(3, 1fr);
-		margin-top: 2px;
-		font-size: 0.7rem;
+		grid-template-columns: repeat(3, auto);
+		column-gap: 5px;
+		min-width: 0;
+		overflow: hidden;
 	}
 
 	.stat::before {
