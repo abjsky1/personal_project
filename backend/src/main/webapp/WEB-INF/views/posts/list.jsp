@@ -57,13 +57,11 @@
 				<%-- 닉네임 줄 (JM-72): 왼쪽에 닉네임(길면 …으로 줄인다), 오른쪽 끝에 날짜. 날짜가 닉네임 길이와 상관없이 늘 같은 자리에 온다.
 				     (그 전에는 닉네임 바로 뒤에 날짜를 붙여서, 닉네임 길이에 따라 날짜 자리가 카드마다 달랐다)
 				     날짜는 둘 다 넣어 두고 app.css가 하나만 보여 준다: PC는 "11월 11일 18:43", 휴대폰은 짧게 "18:43"(오늘) 또는 "11.10"
-				     닉네임, 메모는 사용자가 쓴 값이라 반드시 c:out으로 출력한다 (XSS 방지) --%>
+				     닉네임은 사용자가 쓴 값이라 반드시 c:out으로 출력한다 (XSS 방지) --%>
 				<p class="card-who"><strong><c:out value="${post.nickname}" /></strong><span class="card-when"><span class="when-full"><c:out value="${post.createdAt}" /></span><span class="when-short"><c:out value="${post.createdShort}" /></span></span></p>
-				<c:if test="${not empty post.memo}">
-					<p class="memo"><c:out value="${post.memo}" /></p>
-				</c:if>
+				<%-- 메모는 목록에 보여 주지 않는다 (JM-72, 운영자 검토): 메모가 있는 카드와 없는 카드의 높이가 달라 격자가 들쑥날쑥해 보였다.
+				     메모는 글을 열면 상세 화면에서 보인다. 덕분에 모든 카드가 사진, 칼로리, 닉네임과 날짜, 숫자의 네 줄로 똑같다 --%>
 				<%-- 숫자 줄 (JM-72): 좋아요, 댓글, 조회수. 세 칸의 폭이 같아서 숫자가 카드마다 같은 자리에 오고, 0이어도 자리를 지킨다.
-				     카드 맨 아래에 붙어서, 메모가 있든 없든 같은 줄의 카드끼리 높이가 맞는다 (app.css의 .card-stats)
 				     아이콘은 app.css가 그린다. sr-only: 화면에는 안 보이고 화면 읽기 프로그램만 읽는 글자 ("좋아요 3") --%>
 				<p class="card-stats">
 					<span class="stat stat-like"><span class="sr-only">좋아요 </span>${post.likeCount}</span>
