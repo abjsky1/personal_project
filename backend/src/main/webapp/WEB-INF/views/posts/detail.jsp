@@ -102,22 +102,28 @@
 		<c:forEach var="comment" items="${comments.comments}">
 			<%-- id="comment-번호": 비밀번호가 틀렸을 때 그 댓글 자리로 돌아오기 위한 표시 --%>
 			<article class="comment" id="comment-${comment.id}">
-				<p class="meta"><strong><c:out value="${comment.nickname}" /></strong><span><c:out value="${comment.createdAt}" /></span></p>
-				<%-- 댓글 내용은 사용자 입력이라 c:out (XSS 방지). 줄바꿈은 CSS(white-space)로 살린다. --%>
-				<p class="comment-content"><c:out value="${comment.content}" /></p>
+				<c:choose>
+					<%-- 지운 댓글에 답글이 남아 있으면 그 자리에 안내 글만 보여 준다 (닉네임, 내용, "답글" 칸 없음) --%>
+					<c:when test="${not empty comment.deletedMessage}">
+						<p class="comment-deleted"><c:out value="${comment.deletedMessage}" /></p>
+					</c:when>
+					<c:otherwise>
+						<c:set var="shown" value="${comment}" />
+						<%@ include file="/WEB-INF/views/posts/comment-body.jspf" %>
+					</c:otherwise>
+				</c:choose>
 
-				<%-- details/summary: "삭제"를 누르면 비밀번호 칸이 그 자리에서 펼쳐진다 (JavaScript 없이 되는 HTML 기본 기능) --%>
-				<%-- 비밀번호가 틀려 돌아온 경우에는 그 댓글의 칸을 펼친 채로 보여 준다 (open) --%>
-				<details class="comment-delete"<c:if test="${commentDeleteErrorId == comment.id}"> open</c:if>>
-					<summary>삭제</summary>
-					<form action="/posts/${post.id}/comments/${comment.id}/delete" method="post">
-						<input type="password" name="password" maxlength="20" placeholder="비밀번호" aria-label="비밀번호" required>
-						<button type="submit" class="danger">삭제</button>
-						<c:if test="${commentDeleteErrorId == comment.id}">
-							<p class="error"><c:out value="${commentDeleteError}" /></p>
-						</c:if>
-					</form>
-				</details>
+				<%-- 답글: 댓글 아래에 들여 써서 오래된 순으로 --%>
+				<c:if test="${not empty comment.replies}">
+					<div class="comment-replies">
+						<c:forEach var="reply" items="${comment.replies}">
+							<article class="comment" id="comment-${reply.id}">
+								<c:set var="shown" value="${reply}" />
+								<%@ include file="/WEB-INF/views/posts/comment-body.jspf" %>
+							</article>
+						</c:forEach>
+					</div>
+				</c:if>
 			</article>
 		</c:forEach>
 
@@ -174,12 +180,28 @@
 		commentButton.textContent = '남기는 중…';
 	});
 
+	// 답글도 같은 이유로 첫 번째 누름에서 버튼을 막는다. 답글 칸은 댓글마다 있어서 전부 찾아서 건다.
+	const replyForms = document.querySelectorAll('.reply-form');
+
+	replyForms.forEach(function (form) {
+		form.addEventListener('submit', function () {
+			const button = form.querySelector('button[type="submit"]');
+			button.disabled = true;
+			button.textContent = '남기는 중…';
+		});
+	});
+
 	// "뒤로 가기"로 이 화면이 되살아났을 때 버튼이 막힌 채로 남지 않게 원래대로 돌려놓는다.
 	window.addEventListener('pageshow', function () {
 		deleteButton.disabled = false;
 		deleteButton.textContent = '삭제';
 		commentButton.disabled = false;
 		commentButton.textContent = '댓글 남기기';
+		replyForms.forEach(function (form) {
+			const button = form.querySelector('button[type="submit"]');
+			button.disabled = false;
+			button.textContent = '답글 남기기';
+		});
 	});
 </script>
 

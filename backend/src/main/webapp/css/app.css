@@ -286,15 +286,73 @@ button.danger {
 	word-break: break-word;
 }
 
-/* "삭제"를 누르면 펼쳐지는 비밀번호 칸. 글자는 작고 흐리게 */
-.comment-delete {
+/* 지운 댓글에 답글이 남아 있을 때 그 자리에 보여 주는 안내 글 */
+.comment-deleted {
+	margin: 0;
+	color: #999;
+}
+
+/* 답글: 댓글 아래에 들여 쓰고 왼쪽에 선을 둔다 */
+.comment-replies {
+	margin-top: 12px;
+	padding-left: 12px;
+	border-left: 2px solid #eee;
+}
+
+.comment-replies .comment {
+	padding: 8px 0;
+}
+
+.comment-replies .comment:first-child {
+	padding-top: 0;
+}
+
+.comment-replies .comment:last-child {
+	padding-bottom: 0;
+	border-bottom: none;
+}
+
+/* "답글", "삭제"를 한 줄에 놓고, 펼치면 그 칸이 한 줄을 다 쓴다. 글자는 작고 흐리게 */
+.comment-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 12px;
 	margin-top: 4px;
 }
 
-.comment-delete summary {
+.comment-actions details[open] {
+	flex-basis: 100%;
+}
+
+.comment-actions summary {
 	color: #999;
 	font-size: 0.85rem;
 	cursor: pointer;
+}
+
+/* "답글"을 누르면 펼쳐지는 쓰기 칸: 닉네임과 비밀번호를 한 줄에, 내용과 버튼은 그 아래에 */
+.reply-form {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.reply-form textarea,
+.reply-form .hint,
+.reply-form .error {
+	grid-column: 1 / -1;
+	margin: 0;
+}
+
+/* 답글 버튼은 form button의 "가득 채우기" 규칙 대신 작게 */
+.reply-form button {
+	grid-column: 1 / -1;
+	justify-self: start;
+	width: auto;
+	margin-top: 0;
+	padding: 6px 12px;
+	font-size: 0.85rem;
 }
 
 /* 펼쳐진 뒤: 비밀번호 칸과 작은 삭제 버튼을 한 줄에 */

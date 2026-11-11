@@ -19,8 +19,12 @@ import jakarta.persistence.Table;
 
 // 댓글 엔티티: DB의 comments 테이블과 짝을 이룬다. (서버가 켜질 때 JPA가 테이블을 만든다, Post와 같은 방식)
 // 인덱스 (post_id, status, id): 상세 화면의 댓글 목록 조회("이 글의 ACTIVE 댓글을 오래된 순으로 20개")를 빠르게 한다.
+// 인덱스 (parent_id, status, id): 화면에 나온 댓글들의 답글을 한 번에 읽을 때 쓴다.
 @Entity
-@Table(name = "comments", indexes = @Index(name = "idx_comments_post_status_id", columnList = "post_id, status, id"))
+@Table(name = "comments", indexes = {
+		@Index(name = "idx_comments_post_status_id", columnList = "post_id, status, id"),
+		@Index(name = "idx_comments_parent_status_id", columnList = "parent_id, status, id")
+})
 public class Comment {
 
 	@Id
@@ -31,6 +35,10 @@ public class Comment {
 	// 댓글을 보여 줄 때 글의 다른 정보는 필요 없고, 객체로 이으면 지연 로딩, N+1 같은 신경 쓸 거리만 늘기 때문이다.
 	@Column(nullable = false)
 	private Long postId;
+
+	// 답글이면 달린 댓글의 번호, 일반 댓글이면 null. 답글은 한 단계만 달 수 있다 (CommentService.createReply).
+	// postId와 같은 이유로 객체 대신 번호만 둔다.
+	private Long parentId;
 
 	@Column(nullable = false, length = 20)
 	private String nickname;
@@ -58,7 +66,13 @@ public class Comment {
 	}
 
 	public Comment(Long postId, String nickname, String passwordHash, String content) {
+		this(postId, null, nickname, passwordHash, content);
+	}
+
+	// 답글을 만들 때 쓴다 (parentId = 달린 댓글의 번호)
+	public Comment(Long postId, Long parentId, String nickname, String passwordHash, String content) {
 		this.postId = postId;
+		this.parentId = parentId;
 		this.nickname = nickname;
 		this.passwordHash = passwordHash;
 		this.content = content;
@@ -84,6 +98,10 @@ public class Comment {
 
 	public Long getPostId() {
 		return postId;
+	}
+
+	public Long getParentId() {
+		return parentId;
 	}
 
 	public String getNickname() {
