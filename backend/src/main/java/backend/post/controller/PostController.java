@@ -1,5 +1,8 @@
 package backend.post.controller;
 
+import java.net.URI;
+
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -7,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
@@ -16,6 +20,7 @@ import backend.comment.model.dto.CommentCreateForm;
 import backend.comment.service.CommentService;
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
+import backend.common.web.Visitors;
 import backend.post.model.dto.PostCreateForm;
 import backend.post.service.PostService;
 import jakarta.validation.Valid;
@@ -87,9 +92,13 @@ public class PostController {
 	// @PathVariable: 주소 안의 {id} 자리 값을 받는다. (/posts/3 → id = 3)
 	// 없거나 삭제된 글이면 Service가 POST_NOT_FOUND 예외를 던지고, PageExceptionHandler가 에러 화면(404)을 보여 준다.
 	// commentCursor: 댓글 "더 보기"를 눌렀을 때 이어서 볼 위치 (없으면 첫 댓글부터)
+	// @RequestHeader: 요청 머리말의 값을 받는다. User-Agent = 브라우저 종류, Referer = 바로 앞 화면의 주소 (둘 다 없을 수 있다)
+	// → 이번에 연 것을 조회수로 셀지 정하는 데 쓴다 (아래 countsAsView, JM-72)
 	@GetMapping("/posts/{id}")
-	public String detail(@PathVariable Long id, @RequestParam(required = false) Long commentCursor, Model model) {
-		model.addAttribute("post", postService.getDetail(id));
+	public String detail(@PathVariable Long id, @RequestParam(required = false) Long commentCursor,
+			@RequestHeader(value = HttpHeaders.USER_AGENT, required = false) String userAgent,
+			@RequestHeader(value = HttpHeaders.REFERER, required = false) String referer, Model model) {
+		model.addAttribute("post", postService.getDetail(id, countsAsView(id, userAgent, referer)));
 		model.addAttribute("analysis", foodAnalysisService.getView(id));
 		model.addAttribute("comments", commentService.getComments(id, commentCursor));
 		// 댓글 입력칸과 연결할 빈 form. 검사에 걸려 돌아온 경우에는 CommentController가 flash로 보낸 입력값이 이미 들어 있어서 덮어쓰지 않는다.
@@ -116,6 +125,34 @@ public class PostController {
 			return "redirect:/posts/" + id;
 		}
 		return "redirect:/";
+	}
+
+	// 이번에 연 것을 조회수로 셀지 정한다 (JM-72).
+	// - 사람이 연 것만 센다. 검색 엔진, 링크 미리보기, 캡처 도구는 뺀다 (Visitors)
+	// - 같은 글 화면에서 넘어온 것은 세지 않는다: 댓글을 쓰거나 지우면 서버가 이 화면을 새로 열어 주는데,
+	//   그때마다 올리면 조회수가 댓글 수만큼 부풀려진다
+	// - 작성 화면에서 넘어온 것도 세지 않는다: 글을 올린 사람의 첫 화면과, 분석이 끝나 저절로 새로 열리는 화면이다
+	//   (/posts는 입력 검사에 한 번 걸렸다가 다시 올린 경우의 작성 화면 주소)
+	// 같은 사람이 나갔다가 다시 들어오면 또 센다 (가려 내려면 쿠키나 IP 저장이 필요하다)
+	private boolean countsAsView(Long id, String userAgent, String referer) {
+		if (!Visitors.isPerson(userAgent)) {
+			return false;
+		}
+		String from = pathOf(referer);
+		return !from.equals("/posts/" + id) && !from.equals("/posts/new") && !from.equals("/posts");
+	}
+
+	// 주소에서 경로만 꺼낸다 (https://jjikmuk.com/posts/3?commentCursor=5 → /posts/3). 없거나 주소 모양이 아니면 빈 글자
+	private String pathOf(String url) {
+		if (url == null || url.isBlank()) {
+			return "";
+		}
+		try {
+			String path = URI.create(url).getPath();
+			return path == null ? "" : path;
+		} catch (IllegalArgumentException e) {
+			return "";
+		}
 	}
 
 	// 사진을 골랐는지는 @NotBlank 같은 규칙으로 검사하기 어려워서 직접 검사하고, 어긋나면 BindingResult에 메시지를 추가한다.

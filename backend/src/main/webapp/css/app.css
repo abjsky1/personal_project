@@ -108,7 +108,9 @@ button {
 }
 
 .card {
-	display: block;
+	/* 안의 줄들을 세로로 쌓는다(flex). 맨 아래 숫자 줄(.card-stats)을 카드 바닥에 붙이려고 block 대신 쓴다 (JM-72) */
+	display: flex;
+	flex-direction: column;
 	color: inherit;
 	text-decoration: none;
 	/* min-width: 0 — 격자 칸은 기본적으로 "안의 내용보다 좁아질 수 없다". 한 줄로 자르는(nowrap) 긴 닉네임, 메모가 있으면
@@ -131,6 +133,91 @@ button {
 	margin: 8px 0 0;
 	font-size: 1.1rem;
 	font-weight: 700;
+}
+
+/* 칼로리 자리에 나오는 "칼로리 분석 중" 안내는 보통 글자로 */
+.card-pending {
+	color: #666;
+	font-size: 0.9rem;
+	font-weight: 400;
+}
+
+/* ---- 카드의 닉네임 줄과 숫자 줄 (JM-72): 날짜와 숫자가 카드마다 같은 자리에 오게 한다 ---- */
+/* 닉네임 줄: 닉네임이 남는 폭을 다 쓰고(flex: 1) 넘치면 …으로 줄인다. 날짜는 줄어들지 않고 오른쪽 끝에 붙는다 */
+.card-who {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin: 6px 0 0;
+	color: #666;
+	font-size: 0.9rem;
+}
+
+.card-who strong {
+	flex: 1;
+	/* min-width: 0 — 이게 없으면 긴 닉네임이 줄어들지 않고 날짜를 밀어낸다 */
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.card-when {
+	flex: none;
+}
+
+/* 날짜는 두 모양을 넣어 두고 하나만 보여 준다: 여기(PC)는 긴 것, 아래 "좁은 화면"에서는 짧은 것 */
+.when-short {
+	display: none;
+}
+
+/* 숫자 줄: 좋아요, 댓글, 조회수를 폭이 같은 세 칸에 넣는다 → 숫자 자릿수가 달라도 다음 칸이 밀리지 않는다 */
+.card-stats {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	/* margin-top: auto — 카드에 남는 세로 공간을 이 줄 위에 몰아서, 이 줄을 카드 맨 아래에 붙인다.
+	   같은 줄의 카드는 높이가 같으므로(격자), 메모가 있는 카드와 없는 카드의 숫자 줄이 나란히 놓인다 */
+	margin: auto 0 0;
+	padding-top: 10px;
+	color: #777;
+	font-size: 0.85rem;
+}
+
+.stat {
+	white-space: nowrap;
+}
+
+/* 숫자 앞의 작은 아이콘. 그림 파일 없이 SVG를 주소(data:)에 직접 적었다. 모양은 Feather Icons(MIT 라이선스)의 heart, message-circle, eye */
+.stat::before {
+	content: "";
+	display: inline-block;
+	width: 15px;
+	height: 15px;
+	margin-right: 4px;
+	vertical-align: -2px;
+	background: no-repeat center / contain;
+}
+
+.stat-like::before {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z'/%3E%3C/svg%3E");
+}
+
+.stat-comment::before {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'/%3E%3C/svg%3E");
+}
+
+.stat-view::before {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+}
+
+/* 화면에는 안 보이고 화면 읽기 프로그램만 읽는 글자 (아이콘 옆의 "좋아요", "댓글", "조회") */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
 }
 
 .meta {
@@ -243,6 +330,45 @@ button {
 	padding: 6px 4px;
 	border-bottom: 1px solid #eee;
 	text-align: left;
+}
+
+/* ---- 좋아요 버튼 (상세 화면, JM-59) ---- */
+/* 흰 바탕에 테두리만 있는 버튼. 위의 button 공통 규칙(초록 바탕)을 덮어쓴다 */
+.like-row {
+	margin: 20px 0 0;
+}
+
+.like-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 16px;
+	border: 1px solid #ccc;
+	background: #fff;
+	color: #444;
+	font-size: 0.95rem;
+}
+
+.like-button:hover {
+	border-color: #d6455d;
+	color: #d6455d;
+}
+
+.like-icon {
+	width: 18px;
+	height: 18px;
+	background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z'/%3E%3C/svg%3E") no-repeat center / contain;
+}
+
+/* 누른 뒤: 하트를 빨갛게 채우고, 더 누를 수 없다는 뜻으로 손가락 커서를 푼다 */
+.like-button.liked {
+	border-color: #d6455d;
+	color: #d6455d;
+	cursor: default;
+}
+
+.like-button.liked .like-icon {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23d6455d' stroke='%23d6455d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z'/%3E%3C/svg%3E");
 }
 
 .delete-form {
@@ -725,27 +851,51 @@ form button {
 		gap: 14px 8px;
 	}
 
-	/* 카드 폭이 110px쯤이라 글자를 줄이고, 닉네임 줄과 메모는 한 줄에서 자른다(…). 날짜는 숨긴다(상세 화면에서 보인다) */
+	/* 카드 폭이 110px쯤이라 글자를 줄이고, 메모는 한 줄에서 자른다(…). 날짜는 짧은 모양으로 바꾼다 */
 	.card-kcal {
 		margin-top: 6px;
 		font-size: 0.95rem;
 	}
 
-	.card .meta,
-	.card .memo {
+	.card-who,
+	.card .memo,
+	.card-pending {
 		margin-top: 2px;
 		font-size: 0.75rem;
+	}
+
+	.card-who {
+		gap: 4px;
+	}
+
+	.card .memo {
+		display: block;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 
-	.card .memo {
-		display: block;
+	/* 날짜: 긴 모양("11월 11일 18:43")은 숨기고 짧은 모양("18:43" 또는 "11.10")을 보여 준다.
+	   JM-50에서는 자리가 없어 날짜를 아예 숨겼는데, 짧은 모양이면 닉네임 줄 오른쪽 끝에 들어간다 (JM-72) */
+	.when-full {
+		display: none;
 	}
 
-	.card .card-when {
-		display: none;
+	.when-short {
+		display: inline;
+	}
+
+	/* 숫자 줄도 작게: 한 칸이 36px쯤이라 아이콘 11px + 숫자 세 자리까지 들어간다 */
+	.card-stats {
+		padding-top: 4px;
+		font-size: 0.7rem;
+	}
+
+	.stat::before {
+		width: 11px;
+		height: 11px;
+		margin-right: 2px;
+		vertical-align: -1px;
 	}
 
 	/* 상세를 두 칸에서 한 칸(위: 사진, 아래: 내용)으로 바꾼다 */

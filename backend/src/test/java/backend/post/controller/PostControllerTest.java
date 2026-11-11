@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
@@ -78,6 +79,10 @@ class PostControllerTest {
 	// 테스트용 사진 파일: (form의 칸 이름, 파일 이름, 형식, 내용)
 	// 서버가 파일 내용을 진짜 사진인지 검사하므로, 코드로 만든 실제 JPEG(300 × 200)를 넣는다.
 	private final MockMultipartFile photo = new MockMultipartFile("image", "food.jpg", "image/jpeg", TestImages.jpeg(300, 200));
+
+	// 브라우저(사람)가 보내는 User-Agent의 예. 조회수는 사람이 연 것만 센다 (JM-72)
+	private static final String BROWSER =
+			"Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1";
 
 	// GPS(서울시청 근처)와 촬영 시각(한국 시간 2026-10-29 12:30)이 들어 있는 사진
 	private final MockMultipartFile photoWithGps = new MockMultipartFile("image", "food.jpg", "image/jpeg",
@@ -327,6 +332,76 @@ class PostControllerTest {
 	}
 
 	// 테스트용 글을 DB에 바로 저장한다. (사진 파일은 만들지 않고 이름만 넣는다)
+	@Test
+	void 사람이_상세_화면을_열면_조회수가_1_오르고_그_숫자가_화면에_나간다() throws Exception {
+		Post post = savePost("1234");
+
+		MvcResult result = mockMvc.perform(get("/posts/" + post.getId()).header(HttpHeaders.USER_AGENT, BROWSER))
+				.andExpect(status().isOk())
+				.andReturn();
+
+		// 먼저 올리고 읽으므로, 화면에 나가는 숫자에 이번 방문이 들어 있다
+		PostSummary shown = (PostSummary) result.getModelAndView().getModel().get("post");
+		assertThat(shown.viewCount()).isEqualTo(1);
+		assertThat(viewCountOf(post)).isEqualTo(1);
+	}
+
+	@Test
+	void 봇이_열거나_User_Agent가_없으면_조회수를_세지_않는다() throws Exception {
+		Post post = savePost("1234");
+
+		mockMvc.perform(get("/posts/" + post.getId())
+				.header(HttpHeaders.USER_AGENT, "Mozilla/5.0 (compatible; Googlebot/2.1)"))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/posts/" + post.getId())).andExpect(status().isOk());
+
+		assertThat(viewCountOf(post)).isZero();
+	}
+
+	@Test
+	void 같은_글_화면이나_작성_화면에서_넘어온_것은_조회수를_세지_않는다() throws Exception {
+		Post post = savePost("1234");
+		String url = "/posts/" + post.getId();
+
+		// 댓글을 쓰거나 지운 뒤 서버가 이 화면을 새로 열어 줄 때: 앞 화면(Referer)이 같은 글이다
+		mockMvc.perform(get(url).header(HttpHeaders.USER_AGENT, BROWSER)
+				.header(HttpHeaders.REFERER, "https://jjikmuk.com" + url + "?commentCursor=5"))
+				.andExpect(status().isOk());
+		// 글을 올린 사람의 첫 화면: 앞 화면이 작성 화면이다
+		mockMvc.perform(get(url).header(HttpHeaders.USER_AGENT, BROWSER)
+				.header(HttpHeaders.REFERER, "https://jjikmuk.com/posts/new"))
+				.andExpect(status().isOk());
+		assertThat(viewCountOf(post)).isZero();
+
+		// 목록에서 들어온 것은 센다
+		mockMvc.perform(get(url).header(HttpHeaders.USER_AGENT, BROWSER)
+				.header(HttpHeaders.REFERER, "https://jjikmuk.com/?page=2"))
+				.andExpect(status().isOk());
+		assertThat(viewCountOf(post)).isEqualTo(1);
+	}
+
+	@Test
+	void 목록은_글마다_좋아요_수와_조회수와_짧은_날짜를_함께_넘긴다() throws Exception {
+		Post post = savePost("1234");
+		postRepository.incrementLikeCount(post.getId(), PostStatus.ACTIVE);
+		postRepository.incrementLikeCount(post.getId(), PostStatus.ACTIVE);
+		postRepository.incrementViewCount(post.getId(), PostStatus.ACTIVE);
+
+		MvcResult result = mockMvc.perform(get("/")).andExpect(status().isOk()).andReturn();
+		FeedPage feed = (FeedPage) result.getModelAndView().getModel().get("feed");
+
+		PostSummary summary = summaryOf(feed, post);
+		assertThat(summary.likeCount()).isEqualTo(2);
+		assertThat(summary.viewCount()).isEqualTo(1);
+		// 오늘 올린 글의 짧은 날짜는 시각이다 (예: 18:43)
+		assertThat(summary.createdShort()).matches("\\d{2}:\\d{2}");
+	}
+
+	// DB에 저장된 조회수를 다시 읽는다 (UPDATE로 올린 값이라 메모리의 post 객체에는 반영되지 않는다)
+	private int viewCountOf(Post post) {
+		return postRepository.findById(post.getId()).orElseThrow().getViewCount();
+	}
+
 	private Post savePost(String password) {
 		return postRepository.save(new Post("테스터", passwordEncoder.encode(password), null, "test.jpg", "test-thumb.jpg", null));
 	}
