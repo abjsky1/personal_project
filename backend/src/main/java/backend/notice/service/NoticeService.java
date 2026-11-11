@@ -3,7 +3,6 @@ package backend.notice.service;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -12,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
 import backend.common.web.PageNav;
+import backend.common.web.Visitors;
 import backend.notice.model.dto.Notice;
 import backend.notice.model.dto.NoticeDetail;
 import backend.notice.model.dto.NoticePage;
@@ -27,10 +27,6 @@ public class NoticeService {
 
 	private static final int PAGE_SIZE = 20;
 	private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy.MM.dd");
-	// 사람이 아닌 요청은 조회수에 넣지 않는다 (검색 엔진, 링크 미리보기, 화면 캡처 도구 등).
-	// 같은 사람이 다시 열어도 센다: 가려 내려면 쿠키가 필요한데, 처리방침(9절)에서 추적용 쿠키를 쓰지 않는다고 했다
-	private static final Pattern NOT_PERSON = Pattern.compile(
-			"bot|crawl|spider|slurp|preview|facebookexternalhit|headless|curl|wget|python", Pattern.CASE_INSENSITIVE);
 
 	private final NoticeCatalog catalog;
 	private final NoticeViewRepository noticeViewRepository;
@@ -53,19 +49,16 @@ public class NoticeService {
 	}
 
 	// 상세: 사람이 열었으면 조회수를 1 올리고 보여 준다. 없는 번호면 NOTICE_NOT_FOUND (404 화면)
+	// 사람인지는 User-Agent로 가린다 (검색 엔진, 미리보기, 캡처 도구 제외: Visitors). 같은 사람이 다시 열어도 센다
 	@Transactional
 	public NoticeDetail getDetail(long id, String userAgent) {
 		Notice notice = catalog.find(id).orElseThrow(() -> new BusinessException(ErrorCode.NOTICE_NOT_FOUND));
-		if (isPerson(userAgent) && noticeViewRepository.increment(id) == 0) {
+		if (Visitors.isPerson(userAgent) && noticeViewRepository.increment(id) == 0) {
 			// 처음 열린 공지: 행이 없어서 UPDATE가 0건 → 1로 새로 만든다
 			noticeViewRepository.save(new NoticeView(id, 1));
 		}
 		long views = noticeViewRepository.findById(id).map(NoticeView::getViewCount).orElse(0L);
 		return new NoticeDetail(notice.id(), notice.category(), notice.title(), notice.date().format(DATE), views,
 				notice.blocks());
-	}
-
-	private static boolean isPerson(String userAgent) {
-		return userAgent != null && !userAgent.isBlank() && !NOT_PERSON.matcher(userAgent).find();
 	}
 }

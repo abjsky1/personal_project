@@ -27,7 +27,8 @@
 		<img src="${post.imageUrl}" alt="음식 사진">
 
 		<div>
-			<p class="meta"><strong><c:out value="${post.nickname}" /></strong><span><c:out value="${post.createdAt}" /></span></p>
+			<%-- 조회수 (JM-72): 사람이 이 화면을 열 때마다 1 오른다. 댓글을 쓰고 돌아온 화면, 봇은 세지 않는다 (PostController) --%>
+			<p class="meta"><strong><c:out value="${post.nickname}" /></strong><span><c:out value="${post.createdAt}" /></span><span>조회 ${post.viewCount}</span></p>
 			<c:if test="${not empty post.memo}">
 				<p class="memo"><c:out value="${post.memo}" /></p>
 			</c:if>
@@ -79,6 +80,15 @@
 					</c:choose>
 				</section>
 			</c:if>
+
+			<%-- 좋아요 (JM-59, 피드백 9번): 누르면 숫자가 1 오른다. 화면을 새로 열지 않고, 아래 script가 서버에 알린 뒤 숫자만 바꾼다.
+			     취소는 없다 (누가 눌렀는지 서버가 모른다). 누른 글은 이 브라우저가 기억해서, 다시 열어도 눌린 모양으로 보이고 또 누를 수 없다.
+			     data-post-id: script가 읽어 갈 글 번호 / aria-pressed: 화면 읽기 프로그램에 "눌린 상태인지"를 알린다 --%>
+			<p class="like-row">
+				<button type="button" class="like-button" id="like-button" data-post-id="${post.id}" aria-pressed="false">
+					<span class="like-icon" aria-hidden="true"></span>좋아요 <span id="like-count">${post.likeCount}</span>
+				</button>
+			</p>
 
 			<%-- 삭제: 작성할 때 입력한 비밀번호가 맞아야 지워진다. 확인 창과 연속 누름 막기는 아래 script에서 처리한다. --%>
 			<form class="delete-form" action="/posts/${post.id}/delete" method="post">
@@ -191,6 +201,59 @@
 			button.disabled = true;
 			button.textContent = '남기는 중…';
 		});
+	});
+
+	// 좋아요 (JM-59)
+	const likeButton = document.getElementById('like-button');
+	const likeCount = document.getElementById('like-count');
+	const postId = likeButton.dataset.postId;
+	const likedKey = 'liked:' + postId;
+
+	// localStorage: 브라우저에 남는 저장소 (탭을 닫아도 남는다). 서버로 보내지 않는다.
+	// 저장소를 막아 둔 브라우저에서는 여기서 오류가 난다 → 기억하지 못할 뿐 좋아요는 누를 수 있다
+	let likedStore = null;
+	try {
+		likedStore = window.localStorage;
+		likedStore.getItem(likedKey);
+	} catch (error) {
+		likedStore = null;
+	}
+
+	// 눌린 모양으로 바꾸고 더 누를 수 없게 한다
+	function showLiked() {
+		likeButton.classList.add('liked');
+		likeButton.disabled = true;
+		likeButton.setAttribute('aria-pressed', 'true');
+	}
+
+	// 전에 이 브라우저에서 누른 글이면 처음부터 눌린 모양으로
+	if (likedStore && likedStore.getItem(likedKey)) {
+		showLiked();
+	}
+
+	likeButton.addEventListener('click', async function () {
+		// 응답을 기다리는 동안 또 누르지 못하게 먼저 막는다
+		likeButton.disabled = true;
+		try {
+			const response = await fetch('/api/posts/' + postId + '/like', { method: 'POST' });
+			if (response.ok) {
+				// 화면의 숫자를 서버가 센 값으로 바꾼다 (그사이 다른 사람이 누른 것도 반영된다)
+				const body = await response.json();
+				likeCount.textContent = body.likeCount;
+				if (likedStore) {
+					likedStore.setItem(likedKey, '1');
+				}
+				showLiked();
+				return;
+			}
+			if (response.status === 429) {
+				// 이 글에 좋아요가 짧은 시간에 너무 많이 눌렸을 때 (숫자 부풀리기를 막는 서버의 제한)
+				alert('지금은 이 글에 좋아요가 몰려 있어요. 잠시 후 다시 눌러 주세요.');
+			}
+		} catch (error) {
+			// 휴대폰 연결이 잠깐 끊긴 경우 등: 아래에서 버튼을 풀어 다시 누를 수 있게 한다
+		}
+		likeButton.disabled = false;
 	});
 
 	// "뒤로 가기"로 이 화면이 되살아났을 때 버튼이 막힌 채로 남지 않게 원래대로 돌려놓는다.

@@ -5,6 +5,9 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
@@ -26,4 +29,18 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	// Optional: 결과가 없을 수도 있다는 표시. 없으면 비어 있는 Optional이 돌아온다 (null 대신)
 	// 삭제된 글을 실수로 보여 주지 않도록, 상세, 삭제는 항상 이 메서드로 ACTIVE인 글만 찾는다.
 	Optional<Post> findByIdAndStatus(Long id, PostStatus status);
+
+	// 조회수 1 올리기 (JM-72) → UPDATE posts SET view_count = view_count + 1 WHERE id = ? AND status = ?
+	// 글을 읽어서 +1 한 뒤 저장하면, 두 사람이 동시에 열었을 때 둘 다 같은 숫자를 읽고 같은 값으로 저장해서 하나를 잃는다.
+	// UPDATE 한 번으로 DB가 직접 더하게 하면 잃지 않는다. (공지 조회수 NoticeViewRepository와 같은 방식)
+	// @Modifying: 조회가 아니라 값을 바꾸는 쿼리라는 표시. 돌려주는 값은 바뀐 행 수 (글이 없거나 삭제됐으면 0)
+	// clearAutomatically: 실행 뒤 JPA가 기억하고 있던 글을 잊게 한다 → 바로 다시 읽으면 올라간 숫자가 나온다
+	@Modifying(clearAutomatically = true)
+	@Query("update Post p set p.viewCount = p.viewCount + 1 where p.id = :id and p.status = :status")
+	int incrementViewCount(@Param("id") Long id, @Param("status") PostStatus status);
+
+	// 좋아요 1 올리기 (JM-59). 조회수와 같은 방식
+	@Modifying(clearAutomatically = true)
+	@Query("update Post p set p.likeCount = p.likeCount + 1 where p.id = :id and p.status = :status")
+	int incrementLikeCount(@Param("id") Long id, @Param("status") PostStatus status);
 }

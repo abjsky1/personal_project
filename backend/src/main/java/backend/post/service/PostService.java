@@ -181,9 +181,24 @@ public class PostService {
 
 	// 상세 조회. 없거나 삭제된 글이면 POST_NOT_FOUND 예외를 던진다 → 에러 화면(404)이 나온다.
 	// 글 내용은 목록과 같은 값이라 PostSummary를 함께 쓴다. (분석 결과와 댓글은 Controller가 각 Service에서 따로 받는다)
-	@Transactional(readOnly = true)
-	public PostSummary getDetail(Long id) {
+	// countView: 조회수로 셀 방문이면 true (사람이 연 것인지는 Controller가 정한다, JM-72).
+	// 먼저 1 올린 뒤에 읽어서, 화면에 보이는 숫자에 이번 방문이 들어가게 한다. 읽기만 하던 메서드가 쓰기도 하게 돼서 readOnly를 뺐다.
+	@Transactional
+	public PostSummary getDetail(Long id, boolean countView) {
+		if (countView) {
+			postRepository.incrementViewCount(id, PostStatus.ACTIVE);
+		}
 		return PostSummary.from(findActivePost(id), null, 0);
+	}
+
+	// 좋아요 1 올리고, 올린 뒤의 수를 돌려준다 (JM-59).
+	// UPDATE가 바꾼 행 수가 0이면 그 번호의 ACTIVE 글이 없다는 뜻이다 → POST_NOT_FOUND (없는 글, 삭제된 글)
+	@Transactional
+	public int like(Long id) {
+		if (postRepository.incrementLikeCount(id, PostStatus.ACTIVE) == 0) {
+			throw new BusinessException(ErrorCode.POST_NOT_FOUND);
+		}
+		return findActivePost(id).getLikeCount();
 	}
 
 	// 작성자 삭제: 비밀번호가 맞으면 상태를 DELETED_BY_AUTHOR로 바꾼다. (DB에서 지우지 않는다)

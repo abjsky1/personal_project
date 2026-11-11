@@ -2,6 +2,7 @@ package backend.post.model.entity;
 
 import java.time.Instant;
 
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -70,6 +71,18 @@ public class Post {
 
 	// 삭제(상태 변경)된 시각. 삭제 전에는 비어 있다(null).
 	private Instant deletedAt;
+
+	// 좋아요 수와 조회수 (JM-59, JM-72). 숫자만 둔다: 가입이 없는 서비스라 누가 눌렀는지, 누가 봤는지는 저장하지 않는다.
+	// 값을 올리는 것은 이 클래스가 아니라 PostRepository의 UPDATE 한 줄이 한다 (여러 명이 동시에 눌러도 숫자를 잃지 않게).
+	// @ColumnDefault("0"): 컬럼을 만들 때 DEFAULT 0을 붙인다. 이미 글이 있는 테이블에 NOT NULL 컬럼을 더하려면
+	// 예전 글에 채울 값이 있어야 하는데, 이 기본값 덕분에 ddl-auto=update가 컬럼을 더할 때 예전 글들이 0으로 채워진다.
+	@ColumnDefault("0")
+	@Column(nullable = false)
+	private int likeCount;
+
+	@ColumnDefault("0")
+	@Column(nullable = false)
+	private int viewCount;
 
 	// JPA는 DB에서 읽은 값을 채울 때 빈 객체부터 만들기 때문에, 매개변수 없는 생성자가 꼭 있어야 한다.
 	// protected: 우리 코드에서는 실수로 빈 게시글을 만들지 못하게 막는다.
@@ -142,5 +155,13 @@ public class Post {
 
 	public Instant getDeletedAt() {
 		return deletedAt;
+	}
+
+	public int getLikeCount() {
+		return likeCount;
+	}
+
+	public int getViewCount() {
+		return viewCount;
 	}
 }
