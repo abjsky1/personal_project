@@ -41,6 +41,10 @@ public enum ErrorCode {
 	// 404: 없는 피드백이거나 삭제된 피드백
 	FEEDBACK_NOT_FOUND(HttpStatus.NOT_FOUND, "피드백을 찾을 수 없습니다."),
 
+	// ---- 공지 (JM-65) ----
+	// 404: notices.json에 없는 공지 번호
+	NOTICE_NOT_FOUND(HttpStatus.NOT_FOUND, "공지를 찾을 수 없습니다."),
+
 	// ---- 운영자 API ----
 	// 401: X-Admin-Token 헤더가 없거나 서버의 토큰과 다름
 	ADMIN_UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "운영자 인증에 실패했습니다."),
