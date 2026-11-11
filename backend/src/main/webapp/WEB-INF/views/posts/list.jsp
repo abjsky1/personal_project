@@ -45,29 +45,34 @@
 				<%-- 목록에는 큰 사진 대신 600 × 600 썸네일을 쓴다 (보통 수십 KB라 목록이 빨리 뜬다) --%>
 				<%-- loading="lazy": 화면에 가까워졌을 때 사진을 불러온다 (휴대폰 데이터 절약) --%>
 				<img src="${post.thumbnailUrl}" alt="음식 사진" loading="lazy">
-				<%-- 칼로리 줄: 분석이 끝난 글은 칼로리, 분석 중인 글은 안내. 음식이 아니거나 실패한 글, 분석 기록이 없는 글은 빈 줄이다.
-				     빈 줄(&nbsp;)이라도 자리를 차지하게 해서, 카드마다 그 아래 줄들의 높이가 같게 한다 (JM-72) --%>
-				<p class="card-kcal">
-					<c:choose>
-						<c:when test="${post.analysisStatus == 'DONE'}"><fmt:formatNumber value="${post.totalKcal}" maxFractionDigits="0" /> kcal</c:when>
-						<c:when test="${post.analysisStatus == 'PENDING'}"><span class="card-pending">칼로리 분석 중</span></c:when>
-						<c:otherwise>&nbsp;</c:otherwise>
-					</c:choose>
-				</p>
+				<%-- 첫 줄 (JM-72): 왼쪽에 칼로리, 오른쪽 끝에 숫자(좋아요, 댓글, 조회수). 숫자가 그 아래 줄의 날짜 바로 위에 온다.
+				     휴대폰은 카드가 좁아서 숫자가 칼로리 아래 줄로 내려간다 (app.css의 .card-top)
+				     처음에는 숫자를 카드 맨 아래 줄에 따로 두었는데, 배포된 화면을 본 운영자 요청으로 오른쪽 위로 올렸다 --%>
+				<div class="card-top">
+					<%-- 칼로리: 분석이 끝난 글은 칼로리, 분석 중인 글은 안내. 음식이 아니거나 실패한 글, 분석 기록이 없는 글은 빈 칸이다.
+					     빈 칸(&nbsp;)이라도 자리를 차지하게 해서, 카드마다 줄의 높이가 같게 한다 --%>
+					<p class="card-kcal">
+						<c:choose>
+							<c:when test="${post.analysisStatus == 'DONE'}"><fmt:formatNumber value="${post.totalKcal}" maxFractionDigits="0" /> kcal</c:when>
+							<c:when test="${post.analysisStatus == 'PENDING'}"><span class="card-pending">칼로리 분석 중</span></c:when>
+							<c:otherwise>&nbsp;</c:otherwise>
+						</c:choose>
+					</p>
+					<%-- 숫자: 좋아요, 댓글, 조회수. 칸의 폭이 정해져 있어서 아이콘이 카드마다 같은 자리에 오고, 0이어도 자리를 지킨다.
+					     아이콘은 app.css가 그린다. sr-only: 화면에는 안 보이고 화면 읽기 프로그램만 읽는 글자 ("좋아요 3") --%>
+					<p class="card-stats">
+						<span class="stat stat-like"><span class="sr-only">좋아요 </span>${post.likeCount}</span>
+						<span class="stat stat-comment"><span class="sr-only">댓글 </span>${post.commentCount}</span>
+						<span class="stat stat-view"><span class="sr-only">조회 </span>${post.viewCount}</span>
+					</p>
+				</div>
 				<%-- 닉네임 줄 (JM-72): 왼쪽에 닉네임(길면 …으로 줄인다), 오른쪽 끝에 날짜. 날짜가 닉네임 길이와 상관없이 늘 같은 자리에 온다.
 				     (그 전에는 닉네임 바로 뒤에 날짜를 붙여서, 닉네임 길이에 따라 날짜 자리가 카드마다 달랐다)
 				     날짜는 둘 다 넣어 두고 app.css가 하나만 보여 준다: PC는 "11월 11일 18:43", 휴대폰은 짧게 "18:43"(오늘) 또는 "11.10"
 				     닉네임은 사용자가 쓴 값이라 반드시 c:out으로 출력한다 (XSS 방지) --%>
 				<p class="card-who"><strong><c:out value="${post.nickname}" /></strong><span class="card-when"><span class="when-full"><c:out value="${post.createdAt}" /></span><span class="when-short"><c:out value="${post.createdShort}" /></span></span></p>
 				<%-- 메모는 목록에 보여 주지 않는다 (JM-72, 운영자 검토): 메모가 있는 카드와 없는 카드의 높이가 달라 격자가 들쑥날쑥해 보였다.
-				     메모는 글을 열면 상세 화면에서 보인다. 덕분에 모든 카드가 사진, 칼로리, 닉네임과 날짜, 숫자의 네 줄로 똑같다 --%>
-				<%-- 숫자 줄 (JM-72): 좋아요, 댓글, 조회수. 세 칸의 폭이 같아서 숫자가 카드마다 같은 자리에 오고, 0이어도 자리를 지킨다.
-				     아이콘은 app.css가 그린다. sr-only: 화면에는 안 보이고 화면 읽기 프로그램만 읽는 글자 ("좋아요 3") --%>
-				<p class="card-stats">
-					<span class="stat stat-like"><span class="sr-only">좋아요 </span>${post.likeCount}</span>
-					<span class="stat stat-comment"><span class="sr-only">댓글 </span>${post.commentCount}</span>
-					<span class="stat stat-view"><span class="sr-only">조회 </span>${post.viewCount}</span>
-				</p>
+				     메모는 글을 열면 상세 화면에서 보인다. 덕분에 모든 카드가 사진 아래 두 줄(칼로리와 숫자, 닉네임과 날짜)로 똑같다 --%>
 			</a>
 		</c:forEach>
 	</div>
