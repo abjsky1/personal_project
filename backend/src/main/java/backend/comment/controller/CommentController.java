@@ -2,6 +2,7 @@ package backend.comment.controller;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,6 +41,28 @@ public class CommentController {
 		commentService.create(postId, form);
 		// #comments: 상세 화면이 열리면 댓글 부분으로 바로 내려가게 한다
 		return "redirect:/posts/" + postId + "#comments";
+	}
+
+	// 답글 저장 (/posts/12/comments/5/replies → 12번 글의 5번 댓글에 다는 답글)
+	// commentCursor: 댓글 "더 보기"로 넘어간 화면에서 달았을 때 그 화면으로 돌아오기 위한 위치
+	@PostMapping("/posts/{postId}/comments/{commentId}/replies")
+	public String reply(@PathVariable Long postId, @PathVariable Long commentId,
+			@RequestParam(required = false) Long commentCursor,
+			@Valid @ModelAttribute("replyForm") CommentCreateForm form, BindingResult bindingResult,
+			RedirectAttributes redirectAttributes) {
+		String detail = "redirect:/posts/" + postId + (commentCursor == null ? "" : "?commentCursor=" + commentCursor);
+
+		if (bindingResult.hasErrors()) {
+			// 답글 칸은 댓글마다 있어서 Spring의 form 태그로 잇지 않고, 어느 댓글의 칸인지와 메시지를 따로 넘긴다.
+			redirectAttributes.addFlashAttribute("replyForm", form);
+			redirectAttributes.addFlashAttribute("replyErrorId", commentId);
+			redirectAttributes.addFlashAttribute("replyErrors",
+					bindingResult.getFieldErrors().stream().map(FieldError::getDefaultMessage).toList());
+			return detail + "#comment-" + commentId;
+		}
+
+		Long replyId = commentService.createReply(postId, commentId, form);
+		return detail + "#comment-" + replyId;
 	}
 
 	// 댓글 삭제 (게시글 삭제와 같이 POST로 받는다)

@@ -18,6 +18,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.BindingResult;
 
@@ -214,8 +215,225 @@ class CommentControllerTest {
 		assertThat(feed.posts().stream().filter(p -> p.id().equals(without.getId())).findFirst().orElseThrow().commentCount()).isZero();
 	}
 
+	@Test
+	void 답글을_달면_달린_댓글_번호와_함께_저장하고_그_답글_자리로_이동한다() throws Exception {
+		Post post = savePost();
+		Comment parent = saveComment(post, "부모 댓글");
+
+		MvcResult result = mockMvc.perform(replyRequest(post.getId(), parent.getId(), "  답글입니다  "))
+				.andExpect(status().is3xxRedirection())
+				.andReturn();
+
+		Comment reply = latestComment();
+		assertThat(result.getResponse().getRedirectedUrl()).isEqualTo("/posts/" + post.getId() + "#comment-" + reply.getId());
+		assertThat(reply.getPostId()).isEqualTo(post.getId());
+		assertThat(reply.getParentId()).isEqualTo(parent.getId());
+		// 앞뒤 공백은 지우고 비밀번호는 해시로 저장한다 (댓글과 같음)
+		assertThat(reply.getContent()).isEqualTo("답글입니다");
+		assertThat(passwordEncoder.matches("1234", reply.getPasswordHash())).isTrue();
+	}
+
+	@Test
+	void 답글은_달린_댓글_아래에_오래된_순으로_넘기고_댓글_수에_센다() throws Exception {
+		Post post = savePost();
+		Comment parent = saveComment(post, "부모 댓글");
+		Comment other = saveComment(post, "다른 댓글");
+		Comment firstReply = saveReply(post, parent, "첫 답글");
+		Comment secondReply = saveReply(post, parent, "둘째 답글");
+
+		CommentPage page = commentsOf(get("/posts/" + post.getId()));
+
+		// 답글은 목록에 따로 나오지 않고 달린 댓글 아래에 들어간다
+		assertThat(page.comments()).extracting(CommentView::id).containsExactly(parent.getId(), other.getId());
+		assertThat(page.comments().get(0).replies()).extracting(CommentView::id).containsExactly(firstReply.getId(), secondReply.getId());
+		assertThat(page.comments().get(0).replies().get(0).parentId()).isEqualTo(parent.getId());
+		assertThat(page.comments().get(1).replies()).isEmpty();
+		// "댓글 N개"에는 답글도 들어간다
+		assertThat(page.totalCount()).isEqualTo(4);
+	}
+
+	@Test
+	void 답글에는_답글을_달_수_없다() throws Exception {
+		Post post = savePost();
+		Comment parent = saveComment(post, "부모 댓글");
+		Comment reply = saveReply(post, parent, "답글");
+
+		mockMvc.perform(replyRequest(post.getId(), reply.getId(), "답글의 답글"))
+				.andExpect(status().isNotFound());
+
+		assertThat(latestComment().getId()).isEqualTo(reply.getId());
+	}
+
+	@Test
+	void 지운_댓글에는_답글을_달_수_없다() throws Exception {
+		Post post = savePost();
+		Comment parent = saveComment(post, "지운 댓글");
+		parent.deleteByAuthor();
+		commentRepository.save(parent);
+
+		mockMvc.perform(replyRequest(post.getId(), parent.getId(), "늦은 답글"))
+				.andExpect(status().isNotFound());
+
+		assertThat(latestComment().getId()).isEqualTo(parent.getId());
+	}
+
+	@Test
+	void 다른_글의_댓글에는_주소를_바꿔도_답글을_달_수_없다() throws Exception {
+		Post post = savePost();
+		Post otherPost = savePost();
+		Comment parent = saveComment(post, "다른 글의 댓글");
+
+		mockMvc.perform(replyRequest(otherPost.getId(), parent.getId(), "답글"))
+				.andExpect(status().isNotFound());
+
+		assertThat(latestComment().getId()).isEqualTo(parent.getId());
+	}
+
+	@Test
+	void 삭제된_글의_댓글에는_답글을_달_수_없다() throws Exception {
+		Post post = savePost();
+		Comment parent = saveComment(post, "부모 댓글");
+		post.deleteByAuthor();
+		postRepository.save(post);
+
+		mockMvc.perform(replyRequest(post.getId(), parent.getId(), "답글"))
+				.andExpect(status().isNotFound());
+
+		assertThat(latestComment().getId()).isEqualTo(parent.getId());
+	}
+
+	@Test
+	void 답글_내용이_비면_저장하지_않고_그_댓글_자리로_돌아가_메시지를_넘긴다() throws Exception {
+		Post post = savePost();
+		Comment parent = saveComment(post, "부모 댓글");
+
+		mockMvc.perform(replyRequest(post.getId(), parent.getId(), "   "))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/posts/" + post.getId() + "#comment-" + parent.getId()))
+				.andExpect(flash().attribute("replyErrorId", parent.getId()))
+				.andExpect(flash().attribute("replyErrors", List.of("댓글 내용을 입력해 주세요.")));
+
+		assertThat(latestComment().getId()).isEqualTo(parent.getId());
+	}
+
+	@Test
+	void 더_보기_화면에서_답글을_달면_그_화면으로_돌아온다() throws Exception {
+		Post post = savePost();
+		Comment parent = saveComment(post, "부모 댓글");
+
+		MvcResult result = mockMvc.perform(replyRequest(post.getId(), parent.getId(), "답글").param("commentCursor", "7"))
+				.andExpect(status().is3xxRedirection())
+				.andReturn();
+
+		assertThat(result.getResponse().getRedirectedUrl())
+				.isEqualTo("/posts/" + post.getId() + "?commentCursor=7#comment-" + latestComment().getId());
+	}
+
+	@Test
+	void 답글이_있는_댓글을_작성자가_지우면_작성자_안내_글과_답글이_남는다() throws Exception {
+		Post post = savePost();
+		Comment parent = saveComment(post, "지울 댓글");
+		Comment reply = saveReply(post, parent, "남을 답글");
+
+		mockMvc.perform(post("/posts/" + post.getId() + "/comments/" + parent.getId() + "/delete").param("password", "1234"))
+				.andExpect(status().is3xxRedirection());
+
+		CommentPage page = commentsOf(get("/posts/" + post.getId()));
+		CommentView shown = page.comments().get(0);
+		assertThat(shown.id()).isEqualTo(parent.getId());
+		assertThat(shown.deletedMessage()).isEqualTo("작성자에 의해 삭제된 댓글입니다.");
+		// 지운 댓글의 닉네임과 내용은 화면으로 넘기지 않는다
+		assertThat(shown.nickname()).isNull();
+		assertThat(shown.content()).isNull();
+		assertThat(shown.replies()).extracting(CommentView::id).containsExactly(reply.getId());
+		// 지운 댓글은 세지 않고 답글만 센다
+		assertThat(page.totalCount()).isEqualTo(1);
+	}
+
+	@Test
+	void 답글이_있는_댓글을_운영자가_지우면_관리자_안내_글과_답글이_남는다() throws Exception {
+		Post post = savePost();
+		Comment parent = saveComment(post, "지울 댓글");
+		Comment reply = saveReply(post, parent, "남을 답글");
+		parent.deleteByAdmin();
+		commentRepository.save(parent);
+
+		CommentView shown = commentsOf(get("/posts/" + post.getId())).comments().get(0);
+
+		assertThat(shown.deletedMessage()).isEqualTo("관리자에 의해 삭제된 댓글입니다.");
+		assertThat(shown.content()).isNull();
+		assertThat(shown.replies()).extracting(CommentView::id).containsExactly(reply.getId());
+	}
+
+	@Test
+	void 답글까지_모두_지우면_지운_댓글의_자리도_사라진다() throws Exception {
+		Post post = savePost();
+		Comment parent = saveComment(post, "지울 댓글");
+		Comment reply = saveReply(post, parent, "지울 답글");
+		parent.deleteByAuthor();
+		reply.deleteByAuthor();
+		commentRepository.saveAll(List.of(parent, reply));
+
+		CommentPage page = commentsOf(get("/posts/" + post.getId()));
+
+		assertThat(page.comments()).isEmpty();
+		assertThat(page.totalCount()).isZero();
+	}
+
+	@Test
+	void 답글을_지우면_그_답글만_사라지고_댓글과_다른_답글은_남는다() throws Exception {
+		Post post = savePost();
+		Comment parent = saveComment(post, "부모 댓글");
+		Comment removed = saveReply(post, parent, "지울 답글");
+		Comment kept = saveReply(post, parent, "남을 답글");
+
+		mockMvc.perform(post("/posts/" + post.getId() + "/comments/" + removed.getId() + "/delete").param("password", "1234"))
+				.andExpect(status().is3xxRedirection());
+
+		CommentView shown = commentsOf(get("/posts/" + post.getId())).comments().get(0);
+		assertThat(shown.deletedMessage()).isNull();
+		assertThat(shown.content()).isEqualTo("부모 댓글");
+		assertThat(shown.replies()).extracting(CommentView::id).containsExactly(kept.getId());
+	}
+
+	@Test
+	void 답글은_한_화면_20개에_세지_않는다() throws Exception {
+		Post post = savePost();
+		Comment parent = saveComment(post, "부모 댓글");
+		for (int i = 1; i <= 21; i++) {
+			saveReply(post, parent, "답글 " + i);
+		}
+
+		CommentPage page = commentsOf(get("/posts/" + post.getId()));
+
+		assertThat(page.comments()).hasSize(1);
+		assertThat(page.comments().get(0).replies()).hasSize(21);
+		assertThat(page.nextCursor()).isNull();
+		assertThat(page.totalCount()).isEqualTo(22);
+	}
+
+	@Test
+	void 목록_카드의_댓글_수에_답글도_센다() throws Exception {
+		Post post = savePost();
+		Comment parent = saveComment(post, "부모 댓글");
+		saveReply(post, parent, "답글");
+
+		MvcResult result = mockMvc.perform(get("/")).andExpect(status().isOk()).andReturn();
+		FeedPage feed = (FeedPage) result.getModelAndView().getModel().get("feed");
+
+		assertThat(feed.posts().stream().filter(p -> p.id().equals(post.getId())).findFirst().orElseThrow().commentCount()).isEqualTo(2);
+	}
+
+	// 답글 쓰기 요청 (비밀번호 1234)
+	private MockHttpServletRequestBuilder replyRequest(Long postId, Long commentId, String content) {
+		return post("/posts/" + postId + "/comments/" + commentId + "/replies")
+				.param("nickname", "답글러")
+				.param("password", "1234")
+				.param("content", content);
+	}
+
 	// 상세 화면 요청을 보내고, Model에 담긴 댓글 부분(CommentPage)을 꺼낸다
-	private CommentPage commentsOf(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request) throws Exception {
+	private CommentPage commentsOf(MockHttpServletRequestBuilder request) throws Exception {
 		MvcResult result = mockMvc.perform(request).andExpect(status().isOk()).andReturn();
 		return (CommentPage) result.getModelAndView().getModel().get("comments");
 	}
@@ -228,6 +446,11 @@ class CommentControllerTest {
 	// 비밀번호 1234인 테스트용 댓글
 	private Comment saveComment(Post post, String content) {
 		return commentRepository.save(new Comment(post.getId(), "댓글러", passwordEncoder.encode("1234"), content));
+	}
+
+	// 비밀번호 1234인 테스트용 답글
+	private Comment saveReply(Post post, Comment parent, String content) {
+		return commentRepository.save(new Comment(post.getId(), parent.getId(), "답글러", passwordEncoder.encode("1234"), content));
 	}
 
 	private Comment latestComment() {

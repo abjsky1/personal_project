@@ -1,0 +1,45 @@
+<%-- 댓글 하나의 닉네임, 시간, 내용, "답글", "삭제". 댓글과 답글이 같은 모양이라 detail.jsp에서 두 번 끼워 넣는다. --%>
+<%-- 끼워 넣기 전에 detail.jsp가 보여 줄 댓글을 ${shown}에 담아 둔다. --%>
+<%@ page pageEncoding="UTF-8" %>
+<p class="meta"><strong><c:out value="${shown.nickname}" /></strong><span><c:out value="${shown.createdAt}" /></span></p>
+<%-- 댓글 내용은 사용자 입력이라 c:out (XSS 방지). 줄바꿈은 CSS(white-space)로 살린다. --%>
+<p class="comment-content"><c:out value="${shown.content}" /></p>
+
+<div class="comment-actions">
+	<%-- 답글은 한 단계만: 답글에는 "답글" 칸을 두지 않는다 --%>
+	<c:if test="${shown.parentId == null}">
+		<%-- 검사에 걸려 돌아온 경우에는 그 댓글의 칸을 펼치고, 입력했던 닉네임과 내용을 채운다 --%>
+		<details class="comment-reply"<c:if test="${replyErrorId == shown.id}"> open</c:if>>
+			<summary>답글</summary>
+			<form class="reply-form" action="/posts/${post.id}/comments/${shown.id}/replies" method="post">
+				<%-- 댓글 "더 보기"로 넘어간 화면이면 답글을 단 뒤 그 화면으로 돌아온다 --%>
+				<c:if test="${not empty param.commentCursor}">
+					<input type="hidden" name="commentCursor" value="<c:out value='${param.commentCursor}' />">
+				</c:if>
+				<input type="text" name="nickname" maxlength="20" placeholder="닉네임" aria-label="닉네임" required value="<c:if test='${replyErrorId == shown.id}'><c:out value='${replyForm.nickname}' /></c:if>">
+				<input type="password" name="password" minlength="4" maxlength="20" placeholder="비밀번호" aria-label="비밀번호" required>
+				<textarea name="content" maxlength="500" rows="2" placeholder="답글" aria-label="답글" required><c:if test="${replyErrorId == shown.id}"><c:out value="${replyForm.content}" /></c:if></textarea>
+				<p class="hint">답글을 지울 때 비밀번호가 필요해요. 잊으면 직접 지울 수 없어요.</p>
+				<c:if test="${replyErrorId == shown.id}">
+					<c:forEach var="message" items="${replyErrors}">
+						<p class="error"><c:out value="${message}" /></p>
+					</c:forEach>
+				</c:if>
+				<button type="submit">답글 남기기</button>
+			</form>
+		</details>
+	</c:if>
+
+	<%-- details/summary: "삭제"를 누르면 비밀번호 칸이 그 자리에서 펼쳐진다 (JavaScript 없이 되는 HTML 기본 기능) --%>
+	<%-- 비밀번호가 틀려 돌아온 경우에는 그 댓글의 칸을 펼친 채로 보여 준다 (open) --%>
+	<details class="comment-delete"<c:if test="${commentDeleteErrorId == shown.id}"> open</c:if>>
+		<summary>삭제</summary>
+		<form action="/posts/${post.id}/comments/${shown.id}/delete" method="post">
+			<input type="password" name="password" maxlength="20" placeholder="비밀번호" aria-label="비밀번호" required>
+			<button type="submit" class="danger">삭제</button>
+			<c:if test="${commentDeleteErrorId == shown.id}">
+				<p class="error"><c:out value="${commentDeleteError}" /></p>
+			</c:if>
+		</form>
+	</details>
+</div>

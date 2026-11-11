@@ -41,12 +41,21 @@ public class CommentService {
 	public Long create(Long postId, CommentCreateForm form) {
 		requireActivePost(postId);
 
-		Comment saved = commentRepository.save(new Comment(
-				postId,
-				form.getNickname().strip(),
-				passwordEncoder.encode(form.getPassword()),
-				form.getContent().strip()));
+		Comment saved = save(postId, null, form);
 		log.info("Comment created: postId={}, commentId={}", postId, saved.getId());
+		return saved.getId();
+	}
+
+	// 답글 저장. 답글은 한 단계만 달 수 있어서, 이 글의 살아 있는 일반 댓글에만 달린다.
+	// 답글에 답글을 달거나 지운 댓글에 달려고 하면 댓글을 찾지 못한 것으로 본다 (COMMENT_NOT_FOUND → 404 화면).
+	@Transactional
+	public Long createReply(Long postId, Long parentId, CommentCreateForm form) {
+		requireActivePost(postId);
+		commentRepository.findByIdAndPostIdAndStatusAndParentIdIsNull(parentId, postId, PostStatus.ACTIVE)
+				.orElseThrow(() -> new BusinessException(ErrorCode.COMMENT_NOT_FOUND));
+
+		Comment saved = save(postId, parentId, form);
+		log.info("Comment reply created: postId={}, parentId={}, commentId={}", postId, parentId, saved.getId());
 		return saved.getId();
 	}
 
@@ -57,15 +66,20 @@ public class CommentService {
 		long after = (cursor == null) ? 0 : cursor;
 
 		// 21개를 가져와 21번째가 있으면 "더 보기"를 보여 준다 (PostService.getFeed와 같은 방식)
-		List<Comment> comments = commentRepository.findByPostIdAndStatusAndIdGreaterThanOrderByIdAsc(
+		List<Comment> comments = commentRepository.findTopLevelForPage(
 				postId, PostStatus.ACTIVE, after, Limit.of(PAGE_SIZE + 1));
 
 		boolean hasNext = comments.size() > PAGE_SIZE;
 		List<Comment> pageComments = hasNext ? comments.subList(0, PAGE_SIZE) : comments;
 		Long nextCursor = hasNext ? pageComments.get(pageComments.size() - 1).getId() : null;
 
+		Map<Long, List<CommentView>> replies = repliesOf(pageComments);
+		List<CommentView> views = pageComments.stream()
+				.map(comment -> CommentView.from(comment, replies.getOrDefault(comment.getId(), List.of())))
+				.toList();
+
 		long totalCount = commentRepository.countByPostIdAndStatus(postId, PostStatus.ACTIVE);
-		return new CommentPage(pageComments.stream().map(CommentView::from).toList(), nextCursor, totalCount);
+		return new CommentPage(views, nextCursor, totalCount);
 	}
 
 	// 글 여러 개의 댓글 수를 "글 번호 → 개수" 지도로 돌려준다 (목록 카드용). 댓글이 없는 글은 지도에 없다.
@@ -102,6 +116,26 @@ public class CommentService {
 				.orElseThrow(() -> new BusinessException(ErrorCode.COMMENT_NOT_FOUND));
 		comment.deleteByAdmin();
 		log.info("Admin deleted comment: commentId={}, postId={}", commentId, comment.getPostId());
+	}
+
+	private Comment save(Long postId, Long parentId, CommentCreateForm form) {
+		return commentRepository.save(new Comment(
+				postId,
+				parentId,
+				form.getNickname().strip(),
+				passwordEncoder.encode(form.getPassword()),
+				form.getContent().strip()));
+	}
+
+	// 이번 화면 댓글들의 살아 있는 답글을 "댓글 번호 → 답글들"로 묶는다. 답글이 없는 댓글은 지도에 없다.
+	private Map<Long, List<CommentView>> repliesOf(List<Comment> comments) {
+		if (comments.isEmpty()) {
+			return Map.of();
+		}
+		List<Long> parentIds = comments.stream().map(Comment::getId).toList();
+		return commentRepository.findByParentIdInAndStatusOrderByIdAsc(parentIds, PostStatus.ACTIVE).stream()
+				.collect(Collectors.groupingBy(Comment::getParentId,
+						Collectors.mapping(reply -> CommentView.from(reply, List.of()), Collectors.toList())));
 	}
 
 	// ACTIVE인 글이 아니면 POST_NOT_FOUND
