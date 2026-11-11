@@ -1,10 +1,11 @@
 # 배포 서버(EC2)에서 실행하는 구성: [사용자] → nginx(80, 443번) → app(Spring, 8080) → RDS(MySQL, 서버 밖)
-#                                                └ certbot: https 인증서 발급, 갱신 (nginx와 볼륨을 공유)
+#                                                └ certbot: 예비 인증서(Let's Encrypt) 갱신 (nginx와 볼륨을 공유)
 # DB는 이 파일에 없다: AWS가 관리하는 RDS를 쓰고, app이 .env의 DB_HOST(RDS 주소)로 접속한다.
 # 평소 배포: main에 push하면 GitHub Actions가 이미지를 만들고 서버에서 deploy.sh를 실행한다 (사람이 할 일 없음)
 # 처음 올리거나 비상시(서버에서 직접 빌드): deploy 폴더에서  docker compose up -d --build
 # 비밀값은 같은 폴더의 .env에서 읽는다 (.env.example을 복사해서 채운다. Git에는 올라가지 않는다)
-# 인증서를 처음 받는 순서(서버에 한 번만): 기획서 10절 "HTTPS"
+# 인증서: 서비스에는 가비아에서 산 인증서를 쓴다 (JM-67. 파일은 서버의 nginx/ssl 폴더에만 있고 Git에는 없다).
+#         certbot의 Let's Encrypt 인증서는 예비. 설명은 기획서 10절 "HTTPS", 교체 순서는 16절 "인증서 교체"
 
 # 이 구성의 이름. 컨테이너 이름 앞에 붙는다 (macros-app-1 등)
 name: macros
@@ -42,11 +43,12 @@ services:
       # 우리가 쓴 설정(nginx/default.conf)을 Nginx 설정 폴더 자리에 끼워 넣는다. :ro = 읽기 전용
       # 파일 하나가 아니라 폴더를 붙이는 이유: 파일 하나를 붙이면 git pull이 파일을 새로 만들 때 컨테이너는 옛 파일을 계속 본다
       # (troubleshooting/2026-11-04-nginx-bind-mount-stale.md)
+      # 이 폴더 안의 ssl 폴더(인증서와 비밀키, 서버에만 있다)도 함께 들어가서 /etc/nginx/conf.d/ssl 로 보인다 (JM-67)
       - ./nginx:/etc/nginx/conf.d:ro
-      # certbot이 발급한 인증서(읽기만) / Let's Encrypt 확인용 파일(읽기만)
+      # certbot이 갱신해 두는 예비 인증서(읽기만) / Let's Encrypt 확인용 파일(읽기만)
       - certbot-etc:/etc/letsencrypt:ro
       - certbot-www:/var/www/certbot:ro
-    # 6시간마다 설정을 다시 읽어(reload, 끊김 없음) certbot이 갱신해 둔 인증서를 적용한다.
+    # 6시간마다 설정을 다시 읽는다(reload, 끊김 없음). 인증서 파일이 바뀌어 있으면 이때 적용된다 (ssl 폴더의 파일도, certbot의 예비 인증서도).
     # $${!}: 방금 띄운 sleep의 번호. 컨테이너를 끌 때 sleep이 바로 끝나도록 wait로 기다린다. ($$는 Compose가 $로 바꾼다)
     command: ["sh", "-c", "while :; do sleep 6h & wait $${!}; nginx -s reload; done & exec nginx -g 'daemon off;'"]
     # app보다 나중에 켠다
@@ -56,7 +58,8 @@ services:
       TZ: Asia/Seoul
     logging: *logging-local
 
-  # 인증서 관리: Let's Encrypt 인증서는 90일짜리라서, 12시간마다 "만료 30일 전이면 갱신"을 시도한다.
+  # 예비 인증서 관리 (JM-67부터 예비): 서비스에는 가비아에서 산 인증서를 쓰고, Let's Encrypt 인증서는 문제가 생기면 되돌아갈 수 있게 계속 갱신해 둔다.
+  # Let's Encrypt 인증서는 90일짜리라서, 12시간마다 "만료 30일 전이면 갱신"을 시도한다.
   # webroot 방식: certbot이 /var/www/certbot에 확인용 파일을 놓고, nginx(80번)가 그 파일을 Let's Encrypt에 보여 준다.
   # 처음 발급은 standalone 방식으로 한 번만 직접 실행한다 (기획서 10절). 평소에는 이 컨테이너가 조용히 돌기만 한다.
   certbot:
@@ -108,7 +111,7 @@ services:
       retries: 3
     logging: *logging-cloud
 
-# 이름 있는 볼륨: 컨테이너를 지우고 다시 만들어도 남는 저장 공간 (docker compose down -v 를 하면 지워진다 → 인증서를 다시 받아야 한다)
+# 이름 있는 볼륨: 컨테이너를 지우고 다시 만들어도 남는 저장 공간 (docker compose down -v 를 하면 지워진다 → 예비 인증서를 다시 받아야 한다)
 volumes:
   certbot-etc:
   certbot-www:

@@ -12,3 +12,6 @@ samples/
 
 # 변경 기록 사진: 비공개 저장소(jjikmuk_update_picture)를 이 폴더에 받아 둔다. 공개 저장소에는 올리지 않는다
 records/
+
+# https 인증서와 비밀키 (JM-67): 서버에만 둔다. 비밀키가 들어 있어서 Git에 올리지 않는다
+deploy/nginx/ssl/
