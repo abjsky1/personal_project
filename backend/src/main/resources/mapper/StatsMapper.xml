@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 운영자 통계 SQL (JM-68). namespace = 짝이 되는 Java 인터페이스, 각 select의 id = 그 안의 메서드 이름 -->
+<!-- #{from}: 값을 안전하게 끼워 넣는 자리 (문자열을 이어 붙이지 않아서 SQL 주입이 안 된다) -->
+<!-- resultType이 record이면 SELECT의 열 순서대로 생성자에 넣는다. 열 순서는 record의 순서와 같아야 한다. -->
+<!-- 시각 컬럼은 UTC로 저장되어 있다. 한국 날짜로 묶으려면 9시간을 더한다 (한국은 서머타임이 없어서 항상 +9). -->
+<mapper namespace="backend.stats.model.mapper.StatsMapper">
+
+	<!-- 세 표의 날짜별 건수를 합친다. 삭제된 글, 댓글, 피드백도 "그날 올라온 수"에 들어간다. -->
+	<select id="findDailyActivity" resultType="backend.stats.model.dto.DailyActivity">
+		SELECT activity_day, SUM(posts) AS posts, SUM(comments) AS comments, SUM(feedbacks) AS feedbacks
+		FROM (
+			SELECT DATE(created_at + INTERVAL 9 HOUR) AS activity_day, COUNT(*) AS posts, 0 AS comments, 0 AS feedbacks
+			FROM posts
+			WHERE created_at >= #{from}
+			GROUP BY activity_day
+			UNION ALL
+			SELECT DATE(created_at + INTERVAL 9 HOUR), 0, COUNT(*), 0
+			FROM comments
+			WHERE created_at >= #{from}
+			GROUP BY 1
+			UNION ALL
+			SELECT DATE(created_at + INTERVAL 9 HOUR), 0, 0, COUNT(*)
+			FROM feedbacks
+			WHERE created_at >= #{from}
+			GROUP BY 1
+		) activity
+		GROUP BY activity_day
+		ORDER BY activity_day
+	</select>
+
+	<!-- status = 'DONE'은 맞으면 1, 아니면 0이라서 SUM으로 상태별 건수를 한 번에 센다. 기록이 없으면 SUM이 NULL이라 0으로 바꾼다. -->
+	<select id="findAnalysisCounts" resultType="backend.stats.model.dto.AnalysisCounts">
+		SELECT
+			COALESCE(SUM(status = 'DONE'), 0) AS done,
+			COALESCE(SUM(status = 'NOT_FOOD'), 0) AS not_food,
+			COALESCE(SUM(status = 'FAILED'), 0) AS failed,
+			COALESCE(SUM(status = 'LIMIT_EXCEEDED'), 0) AS limit_exceeded,
+			COALESCE(SUM(status = 'PENDING'), 0) AS pending,
+			AVG(latency_ms) AS avg_latency_ms,
+			COALESCE(SUM(input_tokens), 0) AS input_tokens,
+			COALESCE(SUM(output_tokens), 0) AS output_tokens
+		FROM food_analyses
+		WHERE created_at >= #{from}
+	</select>
+
+	<!-- CUME_DIST: 응답 시간을 작은 순으로 줄 세웠을 때 "나보다 같거나 빠른 건의 비율" -->
+	<!-- 이 비율이 처음으로 95%를 넘는 값이 95번째 백분위다. 실패한 호출도 사용자가 기다린 시간이라 함께 센다. -->
+	<select id="findLatencyP95" resultType="long">
+		SELECT MIN(latency_ms)
+		FROM (
+			SELECT latency_ms, CUME_DIST() OVER (ORDER BY latency_ms) AS cumulative
+			FROM food_analyses
+			WHERE created_at >= #{from} AND latency_ms IS NOT NULL
+		) ranked
+		WHERE cumulative >= 0.95
+	</select>
+
+	<!-- 글을 지우면 위치는 완전히 지워지므로, 남아 있는 글만 놓고 비율을 본다. 좌표는 읽지 않고 개수만 센다. -->
+	<select id="findLocationCounts" resultType="backend.stats.model.dto.LocationCounts">
+		SELECT COUNT(*) AS active_posts, COUNT(location.post_id) AS with_location
+		FROM posts post
+		LEFT JOIN post_locations location ON location.post_id = post.id
+		WHERE post.status = 'ACTIVE' AND post.created_at >= #{from}
+	</select>
+
+	<select id="findFeedbackCounts" resultType="backend.stats.model.dto.FeedbackCounts">
+		SELECT
+			COALESCE(SUM(progress = 'RECEIVED'), 0) AS received,
+			COALESCE(SUM(progress = 'IN_PROGRESS'), 0) AS in_progress,
+			COALESCE(SUM(progress = 'DONE'), 0) AS done,
+			COALESCE(SUM(progress = 'ON_HOLD'), 0) AS on_hold
+		FROM feedbacks
+		WHERE status = 'ACTIVE'
+	</select>
+</mapper>

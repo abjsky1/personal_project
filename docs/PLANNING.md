@@ -218,7 +218,7 @@ sequenceDiagram
 | 영역 | 선택 | 비고 |
 |---|---|---|
 | 화면 | JSP + JSTL (war 패키징) | Spring이 HTML을 만들어 보낸다. 분석 상태 폴링 등 필요한 곳만 JavaScript(fetch) |
-| 백엔드 | Spring Boot 4 (Java 17, Amazon Corretto), Spring Web MVC, Data JPA, Validation, Actuator | 자료 대부분이 Boot 3 기준이라 의존성, 설정 이름이 다를 수 있음. 빌드, 운영 모두 Corretto 17 (`build.gradle` toolchain에 vendor 고정, 배포 이미지 `amazoncorretto:17`) |
+| 백엔드 | Spring Boot 4 (Java 17, Amazon Corretto), Spring Web MVC, Data JPA, MyBatis(집계 조회만, JM-68), Validation, Actuator | 자료 대부분이 Boot 3 기준이라 의존성, 설정 이름이 다를 수 있음. 빌드, 운영 모두 Corretto 17 (`build.gradle` toolchain에 vendor 고정, 배포 이미지 `amazoncorretto:17`) |
 | DB | **MySQL 8** (확정) | 분석 결과 items는 JSON 타입 |
 | DB 테이블 생성 | JPA `ddl-auto=update` | 엔티티를 보고 테이블을 자동 생성 (로컬, CI). 운영 DB의 스키마 변경 방식은 S4에서 결정 |
 | 로컬 개발 환경 | Docker Compose (MySQL) | 배포 환경과 같은 버전으로 맞춤 |
@@ -234,7 +234,7 @@ Spring이 Controller, Service, Repository(Model) 계층과 화면(JSP, View)까�
 HTTP 요청
   → Controller  (@Controller / @RestController) 요청 검증, DTO → 화면(JSP) 또는 JSON
   → Service     (@Service)        비즈니스 로직, 트랜잭션, 비밀번호 확인, 상태 변경
-  → Repository  (Spring Data JPA) 엔티티 조회, 저장
+  → Repository  (Spring Data JPA) 엔티티 조회, 저장. 운영자 통계의 집계 조회만 MyBatis 매퍼 (JM-68)
   → MySQL
 ```
 
@@ -254,6 +254,7 @@ backend
 ├─ comment/           댓글 (S3) — 같은 모양
 ├─ feedback/          피드백 게시판 (S3) — 같은 모양
 ├─ admin/             운영자 API (S3)
+├─ stats/             운영자 통계 (JM-68): StatsService, StatsMapper(MyBatis, SQL은 resources/mapper/StatsMapper.xml)
 ├─ image/             도메인이 아닌 도구: 사진 저장(LocalImageStorage → S4에서 S3), 사진 처리(S1-3)
 └─ common/            예외 처리, 에러 응답, traceId 로그, 비밀번호 해시 설정, (S2) rate limit
 ```
@@ -497,6 +498,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 | POST | `/api/admin/comments/{id}/delete` | 댓글 운영자 삭제 |
 | POST | `/api/admin/feedback/{id}/delete` | 피드백 운영자 삭제 |
 | PATCH | `/api/admin/feedback/{id}` | 본문 `{"progress":"DONE","reply":"반영했어요"}` (둘 중 하나만도 됨). progress = RECEIVED / IN_PROGRESS / DONE / ON_HOLD. 바뀐 피드백 내용을 돌려준다 |
+| GET | `/api/admin/stats?days=7` | 운영 통계 (JM-68). days는 오늘을 포함한 기간(안 주면 7, 1~90). 날짜별 글, 댓글, 피드백 수(한국 날짜, 삭제 포함), AI 분석 상태별 건수와 성공률, 평균과 p95 응답 시간, 토큰 합계, 오늘 AI 호출 수와 상한, 위치 수집률, 피드백 처리 상태별 수. 개인을 알아볼 수 있는 값은 없다 |
 
 운영자 행동은 모두 로그에 남는다 (`Admin deleted post: postId=…`, `Admin updated feedback: …`). 토큰이 틀린 시도도 경고 로그로 남는다.
 
@@ -611,6 +613,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
     curl -s -X POST https://jjikmuk.com/api/admin/posts/<글 번호>/delete -H "X-Admin-Token: $TOKEN"
     curl -s -X POST https://jjikmuk.com/api/admin/comments/<댓글 번호>/delete -H "X-Admin-Token: $TOKEN"
     curl -s -X PATCH https://jjikmuk.com/api/admin/feedback/1 -H "X-Admin-Token: $TOKEN" -H "Content-Type: application/json" -d '{"progress":"DONE","reply":"반영했어요. 고마워요!"}'
+    curl -s "https://jjikmuk.com/api/admin/stats?days=7" -H "X-Admin-Token: $TOKEN" | jq .
     ```
   - 피드백 읽기: 브라우저로 `https://jjikmuk.com/feedback` (번호는 주소 끝의 숫자). 터미널에서 보려면 `curl -s https://jjikmuk.com/feedback/<번호> | sed 's/<[^>]*>//g' | grep -v '^[[:space:]]*$'` (HTML 태그를 지우고 글자만 남긴다). 진행 상태만 바꾸려면 PATCH 본문에 `{"progress":"IN_PROGRESS"}`처럼 progress만, 답변만 달려면 reply만 보내도 된다
   - 피드백으로 들어온 삭제 요청: 글, 댓글 번호를 확인하고 위 명령으로 지운 뒤, 그 피드백에 `{"progress":"DONE","reply":"삭제했어요"}`
@@ -630,7 +633,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 - 무료 LLM 일일 한도 사용률 (유료 전환 판단 근거)
 - 위치 정보 수집률 = 동의율 × GPS 포함 사진 비율
 
-MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 만든다.
+운영자 통계 API(`GET /api/admin/stats`, 13절, 2026-11-11 JM-68)로 본다. 그 전에는 서버 DB에 직접 들어가 쿼리로 뽑았다. 위치 수집률은 저장된 위치 수로만 알 수 있어서 동의율과 GPS 비율을 따로 나누지는 못한다. 화면은 필요해지면 만든다.
 
 ## 18. 결정 사항
 
@@ -677,7 +680,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 | 백업 복구 연습 | **하지 않는다**. 자동 백업 + 16절의 복구 절차로 갈음하고, 실제로 필요해질 때 절차대로 한다 | 2026-11-04 |
 | 댓글, 피드백의 IP | 저장하지 않는다 (12절 초안의 `ip_hash` 컬럼을 만들지 않음). 처리방침과 게시글 구현에 맞춤 | 2026-11-04 |
 | 운영자 기능 | 화면 없이 API + 관리자 토큰 (MVP). 운영 화면은 필요해지면 | 2026-11-04 |
-| MyBatis | **MVP 이후 학습 과제** (Jenkins와 같은 취급). 지금은 JPA 그대로. 배울 때는 한 도메인만 MyBatis로 옮겨 보는 식으로 JPA와 함께 둘 수 있다 (바꾸는 과정: 의존성 교체, 테이블 SQL 직접 관리, 쿼리 전부 SQL로, 엔티티를 일반 클래스로, 명시적 UPDATE) | 2026-11-04 |
+| MyBatis | **MVP 이후 학습 과제** (Jenkins와 같은 취급). 지금은 JPA 그대로. 배울 때는 한 도메인만 MyBatis로 옮겨 보는 식으로 JPA와 함께 둘 수 있다 (바꾸는 과정: 의존성 교체, 테이블 SQL 직접 관리, 쿼리 전부 SQL로, 엔티티를 일반 클래스로, 명시적 UPDATE). **2026-11-11 (JM-68)**: 전면 교체 대신 운영자 통계의 집계 조회에만 도입. 저장과 일반 조회는 JPA 그대로 | 2026-11-04 |
 | 목록 넘기기 | "더 보기"(커서, S1-1) → **쪽 번호**(이전 1 2 3 다음). 피드 24개씩(PC 4칸, 휴대폰 3칸 줄 맞춤), 피드백 20개씩, 댓글 더 보기는 커서 그대로. 이유: 화면에 "이전"이 없어 앞 쪽으로 돌아가기 어렵다는 지인 베타 의견. 새 글이 올라오면 2쪽 내용이 한 칸 밀리는 단점은 이 규모에서 감수. 앱용 JSON API를 만들 때 "이어 붙이기"로 바꿀지 다시 정한다 | 2026-11-07 |
 
 **미정**
@@ -693,6 +696,7 @@ MVP에서는 DB 쿼리로 직접 확인한다. 대시보드는 필요해지면 �
 
 ## 변경 이력
 
+- 2026-11-11 — 운영자 통계 API `GET /api/admin/stats`, 집계 조회에 MyBatis 도입 (JM-68, 9절, 13절, 16절, 17절, 18절)
 - 2026-11-11 — 댓글에 답글 한 단계 (JM-58, 4절, 5절, 12절, 13절, 14절). 답글이 남은 채 지운 댓글은 삭제 주체별 안내 글로 표시. 변경 기록 규칙 ⑤를 "PR 번호(미리 적음)"로
 - 2026-11-11 — 돌아가기 링크 밑줄 빼고 검은 글자, 올리거나 누르면 초록 (JM-66, 14절)
 - 2026-11-11 — 공지 게시판 `/notice` (목록, 상세, 조회수)와 메뉴 링크 "공지" (JM-65, 12절, 13절, 14절). 변경 기록 규칙에 공지 더하기 (16절 ⑦)
