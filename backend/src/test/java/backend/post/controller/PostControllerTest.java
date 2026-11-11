@@ -393,8 +393,9 @@ class PostControllerTest {
 		PostSummary summary = summaryOf(feed, post);
 		assertThat(summary.likeCount()).isEqualTo(2);
 		assertThat(summary.viewCount()).isEqualTo(1);
-		// 오늘 올린 글의 짧은 날짜는 시각이다 (예: 18:43)
-		assertThat(summary.createdShort()).matches("\\d{2}:\\d{2}");
+		// 카드의 날짜: PC용은 연도까지(2026.11.11), 휴대폰용은 짧게(11.11)
+		assertThat(summary.createdDate()).matches("\\d{4}\\.\\d{2}\\.\\d{2}");
+		assertThat(summary.createdShort()).matches("\\d{2}\\.\\d{2}");
 	}
 
 	// DB에 저장된 조회수를 다시 읽는다 (UPDATE로 올린 값이라 메모리의 post 객체에는 반영되지 않는다)
