@@ -15,7 +15,7 @@
 <body>
 <main>
 	<header class="top">
-		<a href="/">← 목록</a>
+		<a href="/" data-back>← 목록</a>
 	</header>
 
 	<article class="policy">

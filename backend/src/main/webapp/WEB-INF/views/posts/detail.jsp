@@ -16,7 +16,9 @@
 <body>
 <main>
 	<header class="top">
-		<a href="/">← 목록</a>
+		<%-- data-back: "보고 있던 목록 쪽으로 돌아가는 링크"라는 표시. 주소는 첫 쪽으로 적어 두고,
+		     common/footer.jspf의 스크립트가 방문자가 보던 쪽의 주소로 바꿔 준다 (JM-71, 피드백 10번) --%>
+		<a href="/" data-back>← 목록</a>
 	</header>
 
 	<%-- PC에서는 왼쪽 사진 | 오른쪽 내용, 휴대폰에서는 사진 아래에 내용 (app.css의 .detail) --%>

@@ -13,7 +13,7 @@
 <body>
 <main>
 	<header class="top">
-		<a href="/notice">← 공지 목록</a>
+		<a href="/notice" data-back>← 공지 목록</a>
 	</header>
 
 	<article class="notice-detail">
@@ -38,7 +38,7 @@
 			</c:forEach>
 		</div>
 
-		<a class="notice-back" href="/notice">목록으로</a>
+		<a class="notice-back" href="/notice" data-back>목록으로</a>
 	</article>
 
 	<%@ include file="/WEB-INF/views/common/footer.jspf" %>

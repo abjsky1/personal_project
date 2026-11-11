@@ -13,7 +13,7 @@
 <body>
 <main>
 	<header class="top">
-		<a href="/feedback">← 피드백 목록</a>
+		<a href="/feedback" data-back>← 피드백 목록</a>
 		<h1>피드백 남기기</h1>
 	</header>
 
