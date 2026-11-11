@@ -34,6 +34,21 @@ main {
 	border-bottom: 1px solid #eee;
 }
 
+/* 머리의 돌아가기 링크 ("← 목록", "← 피드백 목록", "← 공지 목록"), JM-66
+   밑줄 없이 검은 글자, 마우스를 올리거나 누르면 초록. 머리 바로 아래 링크만 고르고 버튼(사진 올리기 등)은 뺀다.
+   :active = 누르고 있는 동안, :focus-visible = 키보드로 옮겨 왔을 때 */
+.top > a:not(.button) {
+	color: #222;
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.top > a:not(.button):hover,
+.top > a:not(.button):active,
+.top > a:not(.button):focus-visible {
+	color: #2f7d32;
+}
+
 h1 {
 	margin: 0;
 	font-size: 1.4rem;
