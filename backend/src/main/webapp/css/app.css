@@ -374,12 +374,12 @@ button {
 	color: #1f5f24;
 }
 
-/* 작은 글자("후보에서 골라 확정하기")를 누르면 그 자리에 펼쳐진다. 글자 모양은 메모 수정, 댓글의 "답글"과 같다 (.comment-actions summary) */
+/* 작은 글자("후보에서 고르거나 직접 적어서 확정하기")를 누르면 그 자리에 펼쳐진다. 글자 모양은 메모 수정, 댓글의 "답글"과 같다 (.comment-actions summary) */
 .analysis-confirm {
 	margin-top: 12px;
 }
 
-/* 펼쳐진 뒤: 음식마다 한 묶음(후보 고르는 칸, 그 아래 양과 칼로리), 맨 아래에 합계와 비밀번호 칸과 작은 확정 버튼 */
+/* 펼쳐진 뒤: 음식마다 한 묶음(고르는 칸, 직접 적을 때만 이름 칸, 그 아래 양과 칼로리), 맨 아래에 합계와 비밀번호 칸과 작은 확정 버튼 */
 .analysis-confirm-form {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
@@ -409,6 +409,24 @@ button {
 	width: 100%;
 	padding: 8px;
 	font-size: 1rem;
+}
+
+/* 직접 적는 이름 칸: "후보에 없어요 (직접 적기)"를 고른 줄에만 보인다 (script가 그 줄에 typed를 붙인다). 한 줄을 다 쓴다.
+   크기와 글자는 입력칸 공통 규칙(input[type="text"])을 그대로 따른다 */
+.confirm-row .confirm-name {
+	display: none;
+	grid-column: 1 / -1;
+}
+
+.confirm-row.typed .confirm-name {
+	display: block;
+}
+
+/* 직접 적은 줄의 칼로리 자리에는 숫자 대신 "확정할 때 AI가 계산"이 들어간다: 작고 흐리게 */
+.confirm-row.typed .confirm-kcal {
+	color: #888;
+	font-size: 0.85rem;
+	font-weight: 400;
 }
 
 /* 그 줄의 칼로리는 오른쪽 끝에 */

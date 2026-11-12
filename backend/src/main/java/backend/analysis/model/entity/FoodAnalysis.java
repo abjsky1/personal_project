@@ -105,6 +105,8 @@ public class FoodAnalysis {
 
 	// 사용자가 확정한 결과. 확정하기 전에는 모두 비어 있다.
 	// 위의 totalKcal, items 등(AI의 첫 답)은 확정해도 덮어쓰지 않는다 → 둘을 언제든 비교할 수 있다.
+	// 확정은 글마다 한 번뿐이다. 이 칸들은 FoodAnalysisRepository.confirmOnce가 UPDATE 한 번으로 채운다
+	// (confirmedAt이 비어 있을 때만 쓰는 조건이 그 UPDATE 안에 있다). 그래서 이 클래스에는 확정 값을 바꾸는 메서드가 없다.
 	@Column(columnDefinition = "TEXT")
 	private String confirmedItems;
 
@@ -120,12 +122,27 @@ public class FoodAnalysis {
 	@Column(name = "confirmed_fat_g", precision = 7, scale = 1)
 	private BigDecimal confirmedFatG;
 
-	// 마지막으로 확정한 시각과, 확정한 횟수 (고쳐서 다시 확정할 수 있다)
+	// 확정한 시각. 값이 있으면 확정한 글이다.
 	private Instant confirmedAt;
 
-	@ColumnDefault("0")
-	@Column(nullable = false)
-	private int confirmCount;
+	// ---- 직접 적기 (JM-74) ----
+	// 후보에 맞는 음식이 없으면 이름을 직접 적을 수 있고, 그때 AI를 한 번 더 부른다. 그 호출의 기록이다.
+	// 글마다 한 번뿐이라 칸도 하나씩이다 → 글 하나에 AI의 답은 많아야 두 번이다 (처음 분석 한 번, 직접 적은 음식 계산 한 번).
+	// 이 칸들도 Repository의 UPDATE(claimTyped, recordTypedCall, releaseTyped)가 채운다.
+
+	// 직접 적은 음식으로 AI를 부른 시각. 값이 있으면 이 글은 직접 적기를 이미 쓴 것이다. 하루 분석 횟수를 셀 때도 쓴다.
+	private Instant typedCalledAt;
+
+	// 그 호출에 쓴 토큰 수와 걸린 시간 (비용, 성능 확인용)
+	private Integer typedInputTokens;
+
+	private Integer typedOutputTokens;
+
+	private Long typedLatencyMs;
+
+	// 확정한 음식 가운데, 직접 적은 것을 AI가 "사진과 맞지 않는다"고 본 것이 있는지. 확정하기 전에는 비어 있다.
+	// 맞지 않아도 확정은 받는다 (글쓴이가 사진보다 잘 안다). 나중에 통계나 학습 데이터에서 걸러 낼 수 있게 남기는 표시다.
+	private Boolean typedMismatch;
 
 	protected FoodAnalysis() {
 	}
@@ -182,20 +199,13 @@ public class FoodAnalysis {
 		this.candidates = candidatesJson;
 	}
 
-	// 사용자가 고쳐서 확정했을 때 (JM-74). AI의 첫 답은 그대로 두고 확정한 값만 따로 쓴다.
-	// 다시 확정하면 확정한 값을 새로 쓰고 횟수를 올린다.
-	public void confirm(String confirmedItemsJson, BigDecimal totalKcal, BigDecimal carbsG, BigDecimal proteinG, BigDecimal fatG) {
-		this.confirmedItems = confirmedItemsJson;
-		this.confirmedTotalKcal = totalKcal;
-		this.confirmedCarbsG = carbsG;
-		this.confirmedProteinG = proteinG;
-		this.confirmedFatG = fatG;
-		this.confirmedAt = Instant.now();
-		this.confirmCount++;
-	}
-
 	public boolean isConfirmed() {
 		return confirmedAt != null;
+	}
+
+	// 직접 적기를 이미 썼는지 (글마다 한 번)
+	public boolean isTypedUsed() {
+		return typedCalledAt != null;
 	}
 
 	// 화면에 보여 줄 칼로리 합계: 확정했으면 확정한 값, 아니면 AI의 첫 답 (목록 카드가 쓴다)
@@ -317,7 +327,23 @@ public class FoodAnalysis {
 		return confirmedAt;
 	}
 
-	public int getConfirmCount() {
-		return confirmCount;
+	public Instant getTypedCalledAt() {
+		return typedCalledAt;
+	}
+
+	public Integer getTypedInputTokens() {
+		return typedInputTokens;
+	}
+
+	public Integer getTypedOutputTokens() {
+		return typedOutputTokens;
+	}
+
+	public Long getTypedLatencyMs() {
+		return typedLatencyMs;
+	}
+
+	public Boolean getTypedMismatch() {
+		return typedMismatch;
 	}
 }

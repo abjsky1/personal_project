@@ -2,6 +2,7 @@ package backend.analysis.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -22,6 +23,7 @@ import org.springframework.web.client.RestClient;
 
 import backend.analysis.model.dto.FoodAnalyzerResponse;
 import backend.analysis.model.dto.FoodCandidatesResponse;
+import backend.analysis.model.dto.TypedEstimatesResponse;
 import tools.jackson.databind.json.JsonMapper;
 
 // Gemini로 보내는 요청과 응답 처리를 확인하는 테스트. 실제 Gemini는 부르지 않는다.
@@ -160,5 +162,47 @@ class GeminiFoodAnalyzerTest {
 		// 첫 번째 후보로 만든 "AI의 첫 답": 100g당 55kcal × 400g = 220kcal
 		assertThat(response.result().firstAnswer().items().get(0).kcal()).isEqualTo(220);
 		assertThat(response.model()).isEqualTo("test-model");
+	}
+
+	// 직접 적은 음식 (JM-74): 지시문 뒤에 적은 이름을 번호를 붙여 보내고, 이름마다 참, 거짓과 100g당 값을 읽는다
+	@Test
+	void 직접_적은_음식은_이름을_지시문_뒤에_붙여_보내고_이름마다_답을_읽는다() {
+		String result = """
+				{"items":[
+				  {"isFood":true,"matchesPhoto":true,"kcalPer100g":150,"carbsPer100g":8,"proteinPer100g":9,"fatPer100g":9},
+				  {"isFood":false,"matchesPhoto":false,"kcalPer100g":0,"carbsPer100g":0,"proteinPer100g":0,"fatPer100g":0}]}
+				""";
+		server.expect(requestTo(URL))
+				.andExpect(header("x-goog-api-key", "test-key"))
+				// 적은 이름이 번호와 함께, 적은 순서대로 한 줄에 하나씩 들어간다
+				.andExpect(jsonPath("$.contents[0].parts[0].text").value(containsString("사용자가 적은 음식:\n1. 마라샹궈\n2. 자동차\n")))
+				// 사진도 함께 보낸다
+				.andExpect(jsonPath("$.contents[0].parts[1].inline_data.data").value("AQID"))
+				// 답은 참, 거짓과 숫자로만 받는다 (글자 칸이 없다)
+				.andExpect(jsonPath("$.generationConfig.responseSchema.properties.items.items.properties.matchesPhoto.type").value("BOOLEAN"))
+				.andExpect(jsonPath("$.generationConfig.responseSchema.properties.items.items.required[0]").value("isFood"))
+				.andRespond(withSuccess(geminiResponse(result), MediaType.APPLICATION_JSON));
+
+		TypedEstimatesResponse response = analyzer.estimateTyped(jpeg, List.of("마라샹궈", "자동차"));
+
+		server.verify();
+		assertThat(response.result().items()).hasSize(2);
+		assertThat(response.result().items().get(0).isFood()).isTrue();
+		assertThat(response.result().items().get(0).matchesPhoto()).isTrue();
+		assertThat(response.result().items().get(0).kcalPer100g()).isEqualTo(150);
+		assertThat(response.result().items().get(1).isFood()).isFalse();
+		assertThat(response.model()).isEqualTo("test-model");
+		assertThat(response.inputTokens()).isEqualTo(1300);
+		assertThat(response.outputTokens()).isEqualTo(100);
+	}
+
+	@Test
+	void 직접_적은_음식을_물을_때_Gemini가_에러로_답하면_상태_코드를_이유로_실패한다() {
+		server.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+		// FoodAnalysisService는 이 이유(HTTP_로 시작)를 보고 "답을 받지 못했다"고 판단해 직접 적기 한 번을 돌려준다
+		assertThatThrownBy(() -> analyzer.estimateTyped(jpeg, List.of("마라샹궈")))
+				.isInstanceOf(FoodAnalysisException.class)
+				.hasMessage("HTTP_503");
 	}
 }

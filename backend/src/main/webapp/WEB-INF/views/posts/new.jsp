@@ -54,7 +54,7 @@
 			<label class="checkbox"><form:radiobutton path="confirmMode" value="AUTO" /> AI가 바로 확정해요</label>
 			<label class="checkbox"><form:radiobutton path="confirmMode" value="USER" /> AI가 낸 후보를 보고 내가 확정할게요</label>
 		</fieldset>
-		<p class="hint">내가 확정하기를 고르면 AI가 음식마다 후보 세 개와 양을 내요. 글을 올리면 바로 맞는 것을 고르고 양을 고쳐서 확정할 수 있고, 확정하지 않으면 AI의 첫 답이 그대로 보여요.</p>
+		<p class="hint">내가 확정하기를 고르면 AI가 음식마다 후보 세 개와 양을 내요. 글을 올리면 바로 맞는 것을 고르거나, 후보에 없으면 이름을 직접 적고, 양을 고쳐서 확정할 수 있어요. 확정은 한 번만 할 수 있고, 확정하지 않으면 AI의 첫 답이 그대로 보여요.</p>
 		<form:errors path="confirmMode" cssClass="error" element="p" />
 
 		<%-- 위치, 촬영 시각 제공 동의 (선택, 처음에는 체크되지 않은 상태) --%>
