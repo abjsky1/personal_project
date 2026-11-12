@@ -27,7 +27,7 @@ public enum ErrorCode {
 	// ---- 게시글 ----
 	// 404: 없는 글이거나 삭제된 글
 	POST_NOT_FOUND(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."),
-	// 403: 삭제할 때 입력한 비밀번호가 다름
+	// 403: 삭제하거나 메모를 고칠 때 입력한 비밀번호가 다름
 	INVALID_PASSWORD(HttpStatus.FORBIDDEN, "비밀번호가 맞지 않습니다."),
 	// 429: 같은 곳(IP)에서 너무 자주 올림 (application.properties의 app.rate-limit.*)
 	// (제한 숫자는 설정으로 바뀔 수 있어서 메시지에 숫자를 넣지 않는다)

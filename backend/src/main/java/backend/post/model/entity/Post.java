@@ -115,8 +115,14 @@ public class Post {
 		this.deletedAt = Instant.now();
 	}
 
+	// 메모 수정 (JM-53, 지인 피드백 7번): 작성자가 비밀번호를 확인받고 메모를 고친다. null이면 메모 없음.
+	// 고칠 수 있는 값은 메모뿐이다 (운영자 결정). 사진, 닉네임, 작성 시각은 바꾸는 메서드를 두지 않는다.
+	public void changeMemo(String memo) {
+		this.memo = memo;
+	}
+
 	// 값을 꺼내는 메서드(getter)만 두고 값을 바꾸는 메서드(setter)는 두지 않는다.
-	// → 상태 변경은 위의 deleteByAuthor()처럼 이름이 분명한 메서드로만 하게 한다.
+	// → 값을 바꾸는 일은 위의 deleteByAuthor(), changeMemo()처럼 이름이 분명한 메서드로만 하게 한다.
 	public Long getId() {
 		return id;
 	}

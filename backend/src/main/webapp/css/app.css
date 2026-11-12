@@ -330,8 +330,26 @@ button {
 
 /* ---- 좋아요 버튼 (상세 화면, JM-59) ---- */
 /* 흰 바탕에 테두리만 있는 버튼. 위의 button 공통 규칙(초록 바탕)을 덮어쓴다 */
+/* 한 줄의 왼쪽에 좋아요 버튼, 오른쪽 끝에 "메모 수정" 링크 (JM-53) */
 .like-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
 	margin: 20px 0 0;
+}
+
+/* 메모 수정 링크 (JM-53, 피드백 7번): 작성자만 쓰는 기능이라 작고 흐리게 둔다 (댓글의 "답글", "삭제"와 같은 크기).
+   마우스를 올리거나 키보드로 옮겨 오면 초록 */
+.edit-link {
+	color: #777;
+	font-size: 0.85rem;
+	text-decoration: none;
+}
+
+.edit-link:hover,
+.edit-link:focus-visible {
+	color: #2f7d32;
 }
 
 .like-button {
@@ -371,6 +389,25 @@ button {
 	margin-top: 24px;
 	padding-top: 16px;
 	border-top: 1px solid #eee;
+}
+
+/* ---- 메모 수정 화면 (JM-53): 어느 글을 고치는지 보여 주는 작은 사진과 닉네임, 올린 시각 ---- */
+.edit-post {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.edit-post img {
+	width: 72px;
+	height: 72px;
+	object-fit: cover;
+	border-radius: 8px;
+	background: #eee;
+}
+
+.edit-post .meta {
+	margin: 0;
 }
 
 /* 지우기처럼 되돌리기 어려운 버튼은 빨간색 */

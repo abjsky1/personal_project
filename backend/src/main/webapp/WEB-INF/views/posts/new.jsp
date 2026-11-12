@@ -40,7 +40,7 @@
 		<%-- form:password: 보안을 위해 화면이 다시 나올 때 값을 채우지 않는다. --%>
 		<label for="password">비밀번호</label>
 		<form:password path="password" maxlength="20" />
-		<p class="hint">글을 지울 때 필요해요. 잊으면 직접 지울 수 없어요.</p>
+		<p class="hint">메모를 고치거나 글을 지울 때 필요해요. 잊으면 직접 고치거나 지울 수 없어요.</p>
 		<form:errors path="password" cssClass="error" element="p" />
 
 		<label for="memo">메모 (선택)</label>

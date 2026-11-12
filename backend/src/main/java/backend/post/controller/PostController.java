@@ -22,6 +22,8 @@ import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
 import backend.common.web.Visitors;
 import backend.post.model.dto.PostCreateForm;
+import backend.post.model.dto.PostMemoForm;
+import backend.post.model.dto.PostSummary;
 import backend.post.service.PostService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -108,6 +110,43 @@ public class PostController {
 		return "posts/detail";
 	}
 
+	// 메모 수정 화면 (JM-53, 지인 피드백 7번). 고칠 수 있는 것은 메모뿐이다.
+	// 지금 메모를 칸에 채워서 보여 준다. 비밀번호는 여기서 묻지 않고 저장할 때 확인한다:
+	// 메모는 상세 화면에서 누구나 보는 값이라 이 화면을 여는 것만으로 새로 드러나는 것이 없다.
+	// 이 화면을 여는 것은 조회수로 세지 않는다 (getDetail의 둘째 값 false).
+	@GetMapping("/posts/{id}/edit")
+	public String editForm(@PathVariable Long id, Model model) {
+		PostSummary post = postService.getDetail(id, false);
+		PostMemoForm form = new PostMemoForm();
+		form.setMemo(post.memo());
+		model.addAttribute("post", post);
+		model.addAttribute("form", form);
+		return "posts/edit";
+	}
+
+	// 메모 수정 form 제출
+	// 메모가 너무 길거나 비밀번호가 틀리면 저장하지 않고 수정 화면을 다시 보여 준다. (고쳐 쓰던 메모는 칸에 그대로 남는다)
+	@PostMapping("/posts/{id}/edit")
+	public String edit(@PathVariable Long id, @Valid @ModelAttribute("form") PostMemoForm form, BindingResult bindingResult,
+			Model model) {
+		if (!bindingResult.hasErrors()) {
+			try {
+				postService.updateMemo(id, form.getMemo(), form.getPassword());
+				// 저장 후에는 그 글의 상세로 이동한다. (화면을 바로 보여 주면 새로고침할 때 같은 요청이 한 번 더 간다)
+				return "redirect:/posts/" + id;
+			} catch (BusinessException e) {
+				// 비밀번호가 틀린 경우만 비밀번호 칸 아래에 메시지를 보여 주고, 다른 에러(글 없음 등)는 그대로 던져서 에러 화면으로 보낸다.
+				if (e.getErrorCode() != ErrorCode.INVALID_PASSWORD) {
+					throw e;
+				}
+				bindingResult.rejectValue("password", e.getErrorCode().name(), e.getErrorCode().getMessage());
+			}
+		}
+		// 수정 화면 위쪽에 보여 줄 글(사진, 닉네임). 없거나 지운 글이면 여기서 에러 화면(404)으로 간다.
+		model.addAttribute("post", postService.getDetail(id, false));
+		return "posts/edit";
+	}
+
 	// 삭제 (HTML form은 GET, POST만 보낼 수 있어서 DELETE 대신 POST로 받는다)
 	// @RequestParam: form의 name="password" 값을 받는다.
 	// RedirectAttributes: redirect한 다음 화면에 한 번만 보여 줄 값(flash)을 넘길 때 쓴다.
@@ -133,13 +172,15 @@ public class PostController {
 	//   그때마다 올리면 조회수가 댓글 수만큼 부풀려진다
 	// - 작성 화면에서 넘어온 것도 세지 않는다: 글을 올린 사람의 첫 화면과, 분석이 끝나 저절로 새로 열리는 화면이다
 	//   (/posts는 입력 검사에 한 번 걸렸다가 다시 올린 경우의 작성 화면 주소)
+	// - 이 글의 메모 수정 화면에서 넘어온 것도 세지 않는다: 작성자가 메모를 저장했거나 그냥 돌아온 화면이다 (JM-53)
 	// 같은 사람이 나갔다가 다시 들어오면 또 센다 (가려 내려면 쿠키나 IP 저장이 필요하다)
 	private boolean countsAsView(Long id, String userAgent, String referer) {
 		if (!Visitors.isPerson(userAgent)) {
 			return false;
 		}
 		String from = pathOf(referer);
-		return !from.equals("/posts/" + id) && !from.equals("/posts/new") && !from.equals("/posts");
+		String thisPost = "/posts/" + id;
+		return !from.equals(thisPost) && !from.equals(thisPost + "/edit") && !from.equals("/posts/new") && !from.equals("/posts");
 	}
 
 	// 주소에서 경로만 꺼낸다 (https://jjikmuk.com/posts/3?commentCursor=5 → /posts/3). 없거나 주소 모양이 아니면 빈 글자

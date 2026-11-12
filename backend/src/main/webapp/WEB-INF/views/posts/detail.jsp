@@ -88,6 +88,9 @@
 				<button type="button" class="like-button" id="like-button" data-post-id="${post.id}" aria-pressed="false">
 					<span class="like-icon" aria-hidden="true"></span>좋아요 <span id="like-count">${post.likeCount}</span>
 				</button>
+				<%-- 메모 수정 (JM-53, 피드백 7번): 수정 화면으로 간다. 글을 올릴 때 넣은 비밀번호는 거기서 저장할 때 확인한다.
+				     가입이 없어 누가 작성자인지 미리 알 수 없으므로 누구에게나 보인다. 그래서 좋아요 줄의 오른쪽 끝에 작게 둔다. --%>
+				<a class="edit-link" href="/posts/${post.id}/edit">메모 수정</a>
 			</p>
 
 			<%-- 삭제: 작성할 때 입력한 비밀번호가 맞아야 지워진다. 확인 창과 연속 누름 막기는 아래 script에서 처리한다. --%>
