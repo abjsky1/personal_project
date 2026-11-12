@@ -201,17 +201,24 @@ public class PostService {
 		return findActivePost(id).getLikeCount();
 	}
 
+	// 메모 수정 (JM-53, 지인 피드백 7번): 비밀번호가 맞으면 메모만 바꾼다. 사진, 닉네임, 분석 결과, 작성 시각은 그대로다.
+	// 메모는 AI 분석에 쓰이지 않으므로 다시 분석하지 않는다.
+	// 고친 시각이나 예전 메모는 따로 저장하지 않는다 (저장하는 항목을 늘리지 않는다). 고쳤다는 사실만 로그에 남는다.
+	@Transactional
+	public void updateMemo(Long id, String memo, String password) {
+		Post post = findActivePost(id);
+		checkPassword(post, password);
+
+		// 값만 바꾸면 메서드가 끝날 때(트랜잭션 종료) JPA가 UPDATE를 실행한다 (변경 감지). 비어 있는 메모는 null로 저장한다.
+		post.changeMemo(normalizeMemo(memo));
+		log.info("Post memo edited: postId={}", id);
+	}
+
 	// 작성자 삭제: 비밀번호가 맞으면 상태를 DELETED_BY_AUTHOR로 바꾼다. (DB에서 지우지 않는다)
 	@Transactional
 	public void deleteByAuthor(Long id, String password) {
 		Post post = findActivePost(id);
-
-		// matches(입력한 비밀번호, 저장된 해시): 입력값을 같은 방식으로 해시해서 저장된 해시와 같은지 비교한다.
-		if (!passwordEncoder.matches(password, post.getPasswordHash())) {
-			// 비밀번호 실패는 로그로 남긴다 (기획서 5절). 입력한 비밀번호 자체는 절대 로그에 남기지 않는다.
-			log.warn("Password mismatch: postId={}", id);
-			throw new BusinessException(ErrorCode.INVALID_PASSWORD);
-		}
+		checkPassword(post, password);
 
 		// 상태만 바꾸면 메서드가 끝날 때(트랜잭션 종료) JPA가 UPDATE를 실행한다.
 		post.deleteByAuthor();
@@ -236,6 +243,16 @@ public class PostService {
 	private Post findActivePost(Long id) {
 		return postRepository.findByIdAndStatus(id, PostStatus.ACTIVE)
 				.orElseThrow(() -> new BusinessException(ErrorCode.POST_NOT_FOUND));
+	}
+
+	// 글을 올릴 때 넣은 비밀번호와 맞는지 확인한다 (삭제와 메모 수정이 함께 쓴다). 틀리면 INVALID_PASSWORD 예외
+	// matches(입력한 비밀번호, 저장된 해시): 입력값을 같은 방식으로 해시해서 저장된 해시와 같은지 비교한다.
+	private void checkPassword(Post post, String password) {
+		if (!passwordEncoder.matches(password, post.getPasswordHash())) {
+			// 비밀번호 실패는 로그로 남긴다 (기획서 5절). 입력한 비밀번호 자체는 절대 로그에 남기지 않는다.
+			log.warn("Password mismatch: postId={}", post.getId());
+			throw new BusinessException(ErrorCode.INVALID_PASSWORD);
+		}
 	}
 
 	// 메모가 비어 있거나 공백뿐이면 null로 저장한다 (화면에서 "메모 없음"을 쉽게 구분하려고)
