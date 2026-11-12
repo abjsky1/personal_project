@@ -1,7 +1,9 @@
 package backend.post.controller;
 
 import java.net.URI;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Controller;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import backend.analysis.model.entity.ConfirmMode;
 import backend.analysis.service.FoodAnalysisService;
 import backend.comment.model.dto.CommentCreateForm;
 import backend.comment.service.CommentService;
@@ -25,6 +28,8 @@ import backend.common.web.Visitors;
 import backend.post.model.dto.PostCreateForm;
 import backend.post.model.dto.PostMemoForm;
 import backend.post.service.PostService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -39,6 +44,11 @@ public class PostController {
 	private final PostService postService;
 	private final FoodAnalysisService foodAnalysisService;
 	private final CommentService commentService;
+
+	// 세션에 넣어 두는 값의 이름: 이 브라우저가 "내가 보고 확정"으로 올린 글의 번호들 (JM-74).
+	// 세션 = 서버가 브라우저마다 따로 들고 있는 작은 보관함. 브라우저에는 보관함 번호(세션 쿠키)만 있고 내용은 서버에 있다.
+	// 30분 동안 요청이 없거나 브라우저를 닫으면 사라지고, 서버를 다시 켜도(배포) 사라진다. 그 뒤에는 비밀번호로 확인한다.
+	private static final String UPLOADED_POSTS = "uploadedPosts";
 
 	// 첫 화면 = 게시글 목록 (쪽 번호 방식, JM-57)
 	// @RequestParam(defaultValue = "1"): 주소의 ?page=값 을 받는다. 없으면 1쪽. 숫자가 아니면 400 에러 화면
@@ -62,7 +72,7 @@ public class PostController {
 	// @Valid: PostCreateForm에 적어 둔 규칙(@NotBlank, @Size)으로 검사한다.
 	// BindingResult: 검사 결과(어긋난 칸과 메시지)를 담는다. 반드시 @Valid 붙은 값 바로 뒤에 둬야 한다.
 	@PostMapping("/posts")
-	public String create(@Valid @ModelAttribute("form") PostCreateForm form, BindingResult bindingResult) {
+	public String create(@Valid @ModelAttribute("form") PostCreateForm form, BindingResult bindingResult, HttpServletRequest request) {
 		validateImage(form.getImage(), bindingResult);
 
 		// 어긋난 칸이 있으면 저장하지 않고 글쓰기 화면을 다시 보여 준다. (입력한 닉네임, 메모는 그대로 남고, 각 칸 아래에 메시지가 나온다)
@@ -85,6 +95,12 @@ public class PostController {
 			return "posts/new";
 		}
 
+		// "내가 보고 확정"으로 올린 글은 이 브라우저가 올렸다는 것을 세션에 적어 둔다 (JM-74).
+		// → 올린 직후에는 확정 칸이 펼쳐져서 나오고, 비밀번호를 다시 넣지 않고 확정할 수 있다.
+		if (form.getConfirmMode() == ConfirmMode.USER) {
+			rememberUploader(request.getSession(), postId);
+		}
+
 		// redirect: 저장 후 방금 올린 글의 상세 주소로 이동하라고 브라우저에 알린다. 거기서 분석 결과가 뜨는 것을 바로 볼 수 있다.
 		// 화면을 바로 보여 주지 않고 이동시키는 이유: 새로고침을 눌렀을 때 같은 글이 한 번 더 저장되는 것을 막는다.
 		return "redirect:/posts/" + postId;
@@ -99,9 +115,11 @@ public class PostController {
 	@GetMapping("/posts/{id}")
 	public String detail(@PathVariable Long id, @RequestParam(required = false) Long commentCursor,
 			@RequestHeader(value = HttpHeaders.USER_AGENT, required = false) String userAgent,
-			@RequestHeader(value = HttpHeaders.REFERER, required = false) String referer, Model model) {
+			@RequestHeader(value = HttpHeaders.REFERER, required = false) String referer, HttpServletRequest request, Model model) {
 		model.addAttribute("post", postService.getDetail(id, countsAsView(id, userAgent, referer)));
 		model.addAttribute("analysis", foodAnalysisService.getView(id));
+		// 이 글을 방금 올린 브라우저인지 (JM-74). 그러면 화면이 확정 칸을 펼쳐서 보여 주고 비밀번호 칸을 빼 준다.
+		model.addAttribute("confirmTrusted", isUploader(request, id));
 		model.addAttribute("comments", commentService.getComments(id, commentCursor));
 		// 댓글 입력칸과 연결할 빈 form. 검사에 걸려 돌아온 경우에는 CommentController가 flash로 보낸 입력값이 이미 들어 있어서 덮어쓰지 않는다.
 		if (!model.containsAttribute("commentForm")) {
@@ -145,13 +163,15 @@ public class PostController {
 	// AI 분석을 고쳐서 확정 (JM-74, 고쳐 쓰는 AI). 상세 화면의 분석 자리에 펼쳐지는 확정 칸에서 보낸 값을 받는다.
 	// pick: 음식마다 고른 후보의 순서, amount: 음식마다 양(g). 이름이 같은 칸이 음식 수만큼 오므로 목록으로 받는다.
 	// 숫자가 아니라 글자로 받는 이유: 양을 비우거나 잘못 적어 보내도 에러 화면이 아니라 확정 칸 아래 메시지로 알려 주려고.
+	// 이 글을 방금 올린 브라우저면 비밀번호 없이 확정되고, 아니면 글의 비밀번호가 맞아야 한다.
 	// 저장했든 못 했든 그 글의 상세로 돌아간다 (메모 수정과 같은 방식).
 	@PostMapping("/posts/{id}/confirm")
 	public String confirm(@PathVariable Long id, @RequestParam(required = false) String password,
 			@RequestParam(name = "pick", required = false) List<String> picks,
-			@RequestParam(name = "amount", required = false) List<String> amounts, RedirectAttributes redirectAttributes) {
+			@RequestParam(name = "amount", required = false) List<String> amounts, HttpServletRequest request,
+			RedirectAttributes redirectAttributes) {
 		try {
-			postService.confirmAnalysis(id, password == null ? "" : password, picks, amounts);
+			postService.confirmAnalysis(id, password == null ? "" : password, picks, amounts, isUploader(request, id));
 		} catch (BusinessException e) {
 			// 비밀번호가 틀렸거나 보낸 값이 맞지 않는 경우만 여기서 처리하고, 다른 에러(글 없음 등)는 그대로 던져서 에러 화면으로 보낸다.
 			ErrorCode code = e.getErrorCode();
@@ -165,6 +185,28 @@ public class PostController {
 			return "redirect:/posts/" + id + "#analysis-confirm";
 		}
 		return "redirect:/posts/" + id;
+	}
+
+	// 이 브라우저가 올린 글로 적어 둔다. 세션에는 글 번호만 들어간다.
+	@SuppressWarnings("unchecked")
+	private void rememberUploader(HttpSession session, Long postId) {
+		Set<Long> uploaded = (Set<Long>) session.getAttribute(UPLOADED_POSTS);
+		if (uploaded == null) {
+			uploaded = new HashSet<>();
+		}
+		uploaded.add(postId);
+		session.setAttribute(UPLOADED_POSTS, uploaded);
+	}
+
+	// 이 요청을 보낸 브라우저가 그 글을 올린 브라우저인지. getSession(false): 세션이 없으면 새로 만들지 않고 null을 받는다.
+	@SuppressWarnings("unchecked")
+	private boolean isUploader(HttpServletRequest request, Long postId) {
+		HttpSession session = request.getSession(false);
+		if (session == null) {
+			return false;
+		}
+		Set<Long> uploaded = (Set<Long>) session.getAttribute(UPLOADED_POSTS);
+		return uploaded != null && uploaded.contains(postId);
 	}
 
 	// 화면에 다시 채울 값은 숫자 모양일 때만 넘긴다. 숫자가 아닌 글자가 섞여 있으면 넘기지 않아서, 화면은 저장돼 있는 값으로 그려진다.

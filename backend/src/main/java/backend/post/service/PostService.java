@@ -218,13 +218,19 @@ public class PostService {
 		log.info("Post memo edited: postId={}", id);
 	}
 
-	// AI 분석을 고쳐서 확정한다 (JM-74, 고쳐 쓰는 AI). 글을 올릴 때 넣은 비밀번호가 맞아야 한다 (메모 수정, 삭제와 같은 확인).
+	// AI 분석을 고쳐서 확정한다 (JM-74, 고쳐 쓰는 AI).
+	// 글쓴이인지 확인하는 방법이 둘이다.
+	// - uploader가 true: 이 글을 방금 올린 브라우저가 보낸 요청이다 (Controller가 세션으로 안다). 비밀번호를 다시 묻지 않는다.
+	//   올리자마자 확정하는데 방금 넣은 비밀번호를 또 넣게 하면 번거롭다는 운영자 검토로 넣었다.
+	// - 그 밖의 경우(다른 기기, 시간이 지난 뒤): 글을 올릴 때 넣은 비밀번호가 맞아야 한다 (메모 수정, 삭제와 같은 확인)
 	// 무엇을 골랐는지 검사하고 합계를 계산하는 일은 FoodAnalysisService가 한다.
 	// picks: 음식마다 고른 후보의 순서, amounts: 음식마다 양(g)
 	@Transactional
-	public void confirmAnalysis(Long id, String password, List<String> picks, List<String> amounts) {
+	public void confirmAnalysis(Long id, String password, List<String> picks, List<String> amounts, boolean uploader) {
 		Post post = findActivePost(id);
-		checkPassword(post, password);
+		if (!uploader) {
+			checkPassword(post, password);
+		}
 		foodAnalysisService.confirm(id, picks, amounts);
 	}
 

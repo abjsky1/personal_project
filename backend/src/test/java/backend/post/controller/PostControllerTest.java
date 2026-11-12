@@ -21,6 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
@@ -656,8 +657,67 @@ class PostControllerTest {
 				.andExpect(status().isNotFound());
 	}
 
-	// "내가 보고 확정"으로 올려서 분석이 끝난 글의 분석 기록: 음식 둘(찌개 400g, 밥 210g)에 후보 셋씩
+	@Test
+	void 방금_올린_브라우저는_비밀번호_없이_확정하고_다른_브라우저는_비밀번호가_있어야_한다() throws Exception {
+		// MockHttpSession: 브라우저 하나의 세션 흉내. 같은 세션으로 보낸 요청은 같은 브라우저가 보낸 것으로 본다.
+		MockHttpSession uploader = new MockHttpSession();
+		mockMvc.perform(multipart("/posts").file(photo).session(uploader)
+				.param("nickname", "테스터")
+				.param("password", "1234")
+				.param("confirmMode", "USER"))
+				.andExpect(status().is3xxRedirection());
+		Post post = latestPost();
+		// 분석이 끝나 후보가 생긴 상태로 만든다 (테스트에서는 뒤에서 도는 분석이 이 글을 보지 못해 PENDING으로 남는다)
+		finishWithCandidates(foodAnalysisRepository.findById(post.getId()).orElseThrow());
+		String url = "/posts/" + post.getId();
+
+		// 상세 화면: 올린 브라우저에만 "비밀번호 없이 확정할 수 있다"는 표시가 넘어간다
+		mockMvc.perform(get(url).session(uploader)).andExpect(model().attribute("confirmTrusted", true));
+		mockMvc.perform(get(url)).andExpect(model().attribute("confirmTrusted", false));
+
+		// 다른 브라우저: 비밀번호 없이 보내면 확정되지 않는다
+		mockMvc.perform(post(url + "/confirm").param("pick", "1", "0").param("amount", "300", "105"))
+				.andExpect(redirectedUrl(url + "#analysis-confirm"))
+				.andExpect(flash().attribute("confirmError", ErrorCode.INVALID_PASSWORD.getMessage()));
+		assertThat(foodAnalysisRepository.findById(post.getId()).orElseThrow().isConfirmed()).isFalse();
+
+		// 올린 브라우저: 비밀번호 없이 확정된다
+		mockMvc.perform(post(url + "/confirm").session(uploader).param("pick", "1", "0").param("amount", "300", "105"))
+				.andExpect(redirectedUrl(url))
+				.andExpect(flash().attributeCount(0));
+		assertThat(foodAnalysisRepository.findById(post.getId()).orElseThrow().getConfirmedTotalKcal()).isEqualByComparingTo("410.4");
+	}
+
+	@Test
+	void AI가_바로_확정으로_올린_브라우저와_남의_글에는_비밀번호_없는_확정을_열어_주지_않는다() throws Exception {
+		MockHttpSession browser = new MockHttpSession();
+		mockMvc.perform(multipart("/posts").file(photo).session(browser)
+				.param("nickname", "테스터")
+				.param("password", "1234"))
+				.andExpect(status().is3xxRedirection());
+		mockMvc.perform(get("/posts/" + latestPost().getId()).session(browser))
+				.andExpect(model().attribute("confirmTrusted", false));
+
+		// "내가 보고 확정"으로 하나 올린 브라우저라도, 다른 사람이 올린 글은 비밀번호 없이 확정할 수 없다
+		mockMvc.perform(multipart("/posts").file(photo).session(browser)
+				.param("nickname", "테스터")
+				.param("password", "1234")
+				.param("confirmMode", "USER"))
+				.andExpect(status().is3xxRedirection());
+		Post others = savePost("5678");
+		saveUserAnalysis(others);
+		mockMvc.perform(post("/posts/" + others.getId() + "/confirm").session(browser).param("pick", "1", "0").param("amount", "300", "105"))
+				.andExpect(flash().attribute("confirmError", ErrorCode.INVALID_PASSWORD.getMessage()));
+		assertThat(foodAnalysisRepository.findById(others.getId()).orElseThrow().isConfirmed()).isFalse();
+	}
+
+	// "내가 보고 확정"으로 올려서 분석이 끝난 글의 분석 기록을 새로 만든다
 	private FoodAnalysis saveUserAnalysis(Post post) {
+		return finishWithCandidates(new FoodAnalysis(post, ConfirmMode.USER));
+	}
+
+	// 분석 기록을 "분석이 끝나 후보가 있는 상태"로 만든다: 음식 둘(찌개 400g, 밥 210g)에 후보 셋씩
+	private FoodAnalysis finishWithCandidates(FoodAnalysis analysis) {
 		FoodCandidates candidates = new FoodCandidates(true, List.of(
 				new CandidateItem(400, List.of(
 						new Candidate("김치찌개", 55, 3, 4.5, 2.5),
@@ -669,7 +729,6 @@ class PostControllerTest {
 						new Candidate("볶음밥", 185, 27, 4.2, 6.4)))),
 				"MEDIUM", "1인분 기준");
 		FoodAnalysisResult first = candidates.firstAnswer();
-		FoodAnalysis analysis = new FoodAnalysis(post, ConfirmMode.USER);
 		analysis.markDone(new FoodAnalyzerResponse(first, "test-model", 1400, 300), jsonMapper.writeValueAsString(first.items()), 3000);
 		analysis.keepCandidates(jsonMapper.writeValueAsString(candidates.items()));
 		return foodAnalysisRepository.save(analysis);

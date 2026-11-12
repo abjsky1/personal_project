@@ -430,6 +430,12 @@ button {
 	text-align: right;
 }
 
+/* 방금 올린 브라우저에는 비밀번호 칸이 없다: 합계 글자를 왼쪽 칸에, 확정 버튼을 그 오른쪽에 둔다 */
+.analysis-confirm-form.trusted .confirm-total {
+	grid-column: 1;
+	align-self: center;
+}
+
 .analysis-confirm-form .hint,
 .analysis-confirm-form .error {
 	grid-column: 1 / -1;

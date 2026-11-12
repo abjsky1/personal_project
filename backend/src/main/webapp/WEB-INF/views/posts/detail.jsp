@@ -108,15 +108,17 @@
 							<p class="hint">AI 추정치이며 실제와 다를 수 있습니다. 의료나 영양 상담을 대신하지 않습니다.</p>
 
 							<%-- 고쳐서 확정하기 (JM-74, 고쳐 쓰는 AI): 후보가 있는 글("내가 보고 확정"으로 올린 글)에만 나온다.
-							     메모 수정처럼 작은 글자를 누르면 그 자리에 펼쳐진다. 음식마다 후보를 고르고 양을 고친 뒤, 글 비밀번호를 넣어 확정한다.
-							     가입이 없어 누가 글쓴이인지 미리 알 수 없으므로 누구에게나 보이고, 그래서 평소에는 접어 둔다.
-							     펼친 채로 보여 주는 때: 방금 올린 사람이 처음 볼 때(아래 script), 저장하지 못해 돌아왔을 때(confirmError).
+							     메모 수정처럼 작은 글자를 누르면 그 자리에 펼쳐진다. 음식마다 후보를 고르고 양을 고친 뒤 확정한다.
+							     confirmTrusted: 이 글을 방금 올린 브라우저인지 (서버가 세션으로 안다, PostController).
+							       - 맞으면: 아직 확정하지 않은 글은 칸을 펼쳐서 보여 주고, 비밀번호를 묻지 않는다.
+							       - 아니면(다른 사람, 다른 기기, 시간이 지난 뒤): 칸을 접어 두고, 확정하려면 글 비밀번호를 넣어야 한다.
+							     저장하지 못해 돌아왔을 때(confirmError)도 펼친 채로 보여 준다.
 							     confirmPicks, confirmAmounts: 저장하지 못했을 때 고르던 값 (한 번만 넘어온다). 있으면 그 값으로 다시 채운다.
 							     data-kcal: 그 후보의 100g당 칼로리. script가 "지금 고른 대로면 몇 kcal"을 미리 보여 주는 데 쓴다. --%>
 							<c:if test="${not empty analysis.confirmRows}">
-								<details class="analysis-confirm" id="analysis-confirm" data-confirmed="${analysis.confirmed}"<c:if test="${not empty confirmError}"> open</c:if>>
+								<details class="analysis-confirm" id="analysis-confirm"<c:if test="${not empty confirmError or (confirmTrusted and not analysis.confirmed)}"> open</c:if>>
 									<summary>${analysis.confirmed ? '다시 고치기' : '후보에서 골라 확정하기'}</summary>
-									<form class="analysis-confirm-form" action="/posts/${post.id}/confirm" method="post">
+									<form class="analysis-confirm-form${confirmTrusted ? ' trusted' : ''}" action="/posts/${post.id}/confirm" method="post">
 										<c:forEach var="row" items="${analysis.confirmRows}">
 											<c:set var="pickNow" value="${not empty confirmPicks ? confirmPicks[row.index] : row.pick}" />
 											<c:set var="amountNow" value="${not empty confirmAmounts ? confirmAmounts[row.index] : row.amountG}" />
@@ -133,9 +135,17 @@
 											</div>
 										</c:forEach>
 										<p class="confirm-total">합계 <strong id="confirm-total"></strong></p>
-										<input type="password" name="password" maxlength="20" placeholder="비밀번호" aria-label="비밀번호" required>
-										<button type="submit">확정</button>
-										<p class="hint">글을 올릴 때 넣은 비밀번호를 입력해 주세요. 합계는 확정할 때 서버가 다시 계산해요.</p>
+										<c:choose>
+											<c:when test="${confirmTrusted}">
+												<button type="submit">확정</button>
+												<p class="hint">이 브라우저에서 방금 올린 글이라 비밀번호 없이 확정할 수 있어요. 합계는 확정할 때 서버가 다시 계산해요.</p>
+											</c:when>
+											<c:otherwise>
+												<input type="password" name="password" maxlength="20" placeholder="비밀번호" aria-label="비밀번호" required>
+												<button type="submit">확정</button>
+												<p class="hint">글을 올릴 때 넣은 비밀번호를 입력해 주세요. 합계는 확정할 때 서버가 다시 계산해요.</p>
+											</c:otherwise>
+										</c:choose>
 										<c:if test="${not empty confirmError}">
 											<p class="error"><c:out value="${confirmError}" /></p>
 										</c:if>
@@ -349,22 +359,6 @@
 	});
 
 	// 고쳐서 확정하기 (JM-74, 고쳐 쓰는 AI)
-	// sessionStorage: 탭마다 따로이고 탭을 닫으면 사라지는 브라우저 저장소. 서버로 보내지 않는다. 막아 둔 브라우저에서는 쓰지 않고 넘어간다.
-	let confirmStore = null;
-	try {
-		confirmStore = window.sessionStorage;
-		confirmStore.getItem('confirm:justUploaded');
-	} catch (error) {
-		confirmStore = null;
-	}
-	// 작성 화면이 "내가 보고 확정으로 방금 올렸다"는 표시를 남겨 두었으면(new.jsp), 올린 직후 처음 열린 이 글의 번호로 바꿔 기억한다.
-	// 분석이 끝나 이 화면이 새로 열려도 번호는 남아 있어서, 그때 확정 칸을 펼쳐 보여 줄 수 있다. 다른 사람의 브라우저에는 이 기억이 없다.
-	const confirmOpenKey = 'confirm:open:' + postId;
-	if (confirmStore && confirmStore.getItem('confirm:justUploaded')) {
-		confirmStore.removeItem('confirm:justUploaded');
-		confirmStore.setItem(confirmOpenKey, '1');
-	}
-
 	const confirmBox = document.getElementById('analysis-confirm');
 	let confirmButton = null;
 	// 후보가 없는 글에는 확정 칸이 없다
@@ -398,15 +392,6 @@
 		confirmForm.addEventListener('input', showConfirmTotal);
 		confirmForm.addEventListener('change', showConfirmTotal);
 		showConfirmTotal();
-
-		// 방금 올린 사람이 아직 확정하지 않았으면 펼쳐서 보여 준다. 확정을 마쳤으면 기억을 지운다.
-		if (confirmStore && confirmStore.getItem(confirmOpenKey)) {
-			if (confirmBox.dataset.confirmed === 'true') {
-				confirmStore.removeItem(confirmOpenKey);
-			} else {
-				confirmBox.open = true;
-			}
-		}
 
 		// 연속으로 눌러 같은 요청이 여러 번 가지 않게, 첫 번째 누름에서 버튼을 막는다.
 		confirmForm.addEventListener('submit', function () {
