@@ -153,9 +153,10 @@ public class PostController {
 			if (e.getErrorCode() != ErrorCode.INVALID_PASSWORD) {
 				throw e;
 			}
-			// 상세 화면으로 돌아가서 삭제 칸 아래에 메시지를 보여 준다. (새로고침해도 메시지는 다시 나오지 않는다)
+			// 상세 화면으로 돌아가서 "글 삭제" 칸을 펼친 채 메시지를 보여 준다. (새로고침해도 메시지는 다시 나오지 않는다)
 			redirectAttributes.addFlashAttribute("deleteError", e.getErrorCode().getMessage());
-			return "redirect:/posts/" + id;
+			// #post-delete: 돌아간 화면에서 삭제 칸 자리로 바로 내려간다 (평소에는 접혀 있는 칸이라, 그냥 돌아가면 메시지를 놓치기 쉽다)
+			return "redirect:/posts/" + id + "#post-delete";
 		}
 		return "redirect:/";
 	}

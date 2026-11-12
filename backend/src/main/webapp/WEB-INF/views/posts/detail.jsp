@@ -34,23 +34,41 @@
 				<p class="memo" id="memo-text"><c:out value="${post.memo}" /></p>
 			</c:if>
 
-			<%-- 메모 수정 (JM-53, 피드백 7번): "메모 수정"을 누르면 그 자리에 메모 칸과 비밀번호 칸이 펼쳐진다.
+			<%-- 글쓴이가 쓰는 두 가지: 메모 수정, 글 삭제 (JM-53). 작은 글자로 한 줄에 놓고, 누르면 그 자리에 칸이 펼쳐진다.
 			     details/summary: JavaScript 없이 되는 HTML 기본 기능이고, 댓글의 "답글", "삭제"와 같은 방식이다.
-			     글을 올릴 때 넣은 비밀번호가 맞아야 저장된다. 가입이 없어 누가 작성자인지 미리 알 수 없으므로 누구에게나 보인다.
-			     memoError, memoDraft: 저장하지 못했을 때 Controller가 redirect하면서 넘긴 메시지와 고쳐 쓰던 메모 (한 번만 보인다).
-			     그때는 칸을 펼친 채로(open) 쓰던 메모를 다시 채워서 보여 준다. --%>
-			<details class="memo-edit" id="memo-edit"<c:if test="${not empty memoError}"> open</c:if>>
-				<summary>메모 수정</summary>
-				<form class="memo-edit-form" action="/posts/${post.id}/memo" method="post">
-					<textarea name="memo" maxlength="300" rows="3" placeholder="메모" aria-label="메모"><c:out value="${not empty memoError ? memoDraft : post.memo}" /></textarea>
-					<input type="password" name="password" maxlength="20" placeholder="비밀번호" aria-label="비밀번호" required>
-					<button type="submit">저장</button>
-					<p class="hint">글을 올릴 때 넣은 비밀번호를 입력해 주세요. 메모를 비우고 저장하면 메모가 없어져요.</p>
-					<c:if test="${not empty memoError}">
-						<p class="error"><c:out value="${memoError}" /></p>
-					</c:if>
-				</form>
-			</details>
+			     name이 같은 details는 하나를 펼치면 다른 하나가 접힌다 (이 기능이 없는 옛 브라우저에서는 둘 다 펼쳐질 뿐이다).
+			     가입이 없어 누가 작성자인지 미리 알 수 없으므로 누구에게나 보인다. 그래서 펼치기 전에는 작은 글자만 둔다:
+			     처음에는 삭제용 비밀번호 칸과 빨간 버튼이 늘 보였는데, 지울 일이 없는 사람도 계속 보게 돼서 접었다 (운영자 검토). --%>
+			<div class="post-actions">
+				<%-- 메모 수정 (피드백 7번): 글을 올릴 때 넣은 비밀번호가 맞아야 저장된다.
+				     memoError, memoDraft: 저장하지 못했을 때 Controller가 redirect하면서 넘긴 메시지와 고쳐 쓰던 메모 (한 번만 보인다).
+				     그때는 칸을 펼친 채로(open) 쓰던 메모를 다시 채워서 보여 준다. --%>
+				<details class="memo-edit" id="memo-edit" name="post-action"<c:if test="${not empty memoError}"> open</c:if>>
+					<summary>메모 수정</summary>
+					<form class="memo-edit-form" action="/posts/${post.id}/memo" method="post">
+						<textarea name="memo" maxlength="300" rows="3" placeholder="메모" aria-label="메모"><c:out value="${not empty memoError ? memoDraft : post.memo}" /></textarea>
+						<input type="password" name="password" maxlength="20" placeholder="비밀번호" aria-label="비밀번호" required>
+						<button type="submit">저장</button>
+						<p class="hint">글을 올릴 때 넣은 비밀번호를 입력해 주세요. 메모를 비우고 저장하면 메모가 없어져요.</p>
+						<c:if test="${not empty memoError}">
+							<p class="error"><c:out value="${memoError}" /></p>
+						</c:if>
+					</form>
+				</details>
+
+				<%-- 글 삭제: 작성할 때 입력한 비밀번호가 맞아야 지워진다. 확인 창과 연속 누름 막기는 아래 script에서 처리한다.
+				     deleteError: 비밀번호가 틀렸을 때 Controller가 redirect하면서 넘긴 메시지 (한 번만 보인다). 그때는 칸을 펼친 채로 보여 준다. --%>
+				<details class="post-delete" id="post-delete" name="post-action"<c:if test="${not empty deleteError}"> open</c:if>>
+					<summary>글 삭제</summary>
+					<form class="post-delete-form" action="/posts/${post.id}/delete" method="post">
+						<input type="password" name="password" maxlength="20" placeholder="비밀번호" aria-label="비밀번호" required>
+						<button type="submit" class="danger">삭제</button>
+						<c:if test="${not empty deleteError}">
+							<p class="error"><c:out value="${deleteError}" /></p>
+						</c:if>
+					</form>
+				</details>
+			</div>
 
 			<%-- AI 분석 결과. AI 분석을 넣기 전에 올린 글은 ${analysis}가 비어 있어서 이 칸이 나오지 않는다. --%>
 			<%-- 음식 이름과 설명도 사용자 입력처럼 c:out으로 찍는다. 사진 속 글자가 AI를 거쳐 HTML로 끼어들 수 있기 때문이다. --%>
@@ -108,17 +126,6 @@
 					<span class="like-icon" aria-hidden="true"></span>좋아요 <span id="like-count">${post.likeCount}</span>
 				</button>
 			</p>
-
-			<%-- 삭제: 작성할 때 입력한 비밀번호가 맞아야 지워진다. 확인 창과 연속 누름 막기는 아래 script에서 처리한다. --%>
-			<form class="delete-form" action="/posts/${post.id}/delete" method="post">
-				<label for="password">비밀번호</label>
-				<input type="password" id="password" name="password" maxlength="20" required>
-				<%-- deleteError: 비밀번호가 틀렸을 때 Controller가 redirect하면서 넘긴 메시지 (한 번만 보인다) --%>
-				<c:if test="${not empty deleteError}">
-					<p class="error"><c:out value="${deleteError}" /></p>
-				</c:if>
-				<button type="submit" class="danger">삭제</button>
-			</form>
 		</div>
 	</div>
 
@@ -164,7 +171,7 @@
 		</c:if>
 
 		<%-- 댓글 쓰기. 검사에 걸리면 CommentController가 입력값과 메시지를 flash로 보내고, 여기서 칸을 채우고 메시지를 보여 준다. --%>
-		<%-- 칸 id에 comment-를 붙이는 이유: 위의 글 삭제 form에도 password 칸이 있어서 id가 겹치지 않게 --%>
+		<%-- 칸 id에 comment-를 붙이는 이유: 한 화면에 비밀번호 칸이 여럿(메모 수정, 글 삭제, 댓글)이라 서로 헷갈리지 않게 --%>
 		<form:form modelAttribute="commentForm" action="/posts/${post.id}/comments" method="post" cssClass="comment-form">
 			<label for="comment-nickname">닉네임</label>
 			<form:input path="nickname" id="comment-nickname" maxlength="20" />
@@ -188,7 +195,7 @@
 </main>
 
 <script>
-	const deleteForm = document.querySelector('.delete-form');
+	const deleteForm = document.querySelector('.post-delete-form');
 	const deleteButton = deleteForm.querySelector('button[type="submit"]');
 
 	deleteForm.addEventListener('submit', function (event) {

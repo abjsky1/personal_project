@@ -240,11 +240,9 @@ button {
 	white-space: pre-wrap;
 }
 
-/* ---- 메모 수정 (상세 화면, JM-53, 피드백 7번) ---- */
-/* 메모 아래의 작은 "메모 수정"을 누르면 그 자리에 칸이 펼쳐진다. 글자 모양은 댓글의 "답글", "삭제"와 같다 (아래 .comment-actions summary) */
-.memo-edit {
-	margin-top: 4px;
-}
+/* ---- 글의 "메모 수정", "글 삭제" (상세 화면, JM-53) ---- */
+/* 메모 아래에 작은 글자로 한 줄에 놓고, 누르면 그 자리에 칸이 펼쳐진다.
+   줄과 글자 모양은 댓글의 "답글", "삭제"와 같아서 아래 .comment-actions 규칙을 함께 쓴다 (.post-actions) */
 
 /* 펼쳐진 뒤: 메모 칸이 한 줄을 다 쓰고, 그 아래 한 줄에 비밀번호 칸과 작은 저장 버튼 */
 .memo-edit-form {
@@ -408,9 +406,8 @@ button.danger {
 }
 
 /* ---- 댓글 (상세 화면 아래) ---- */
-/* 긴 글이 읽기 좋은 폭으로 제한한다 (개인정보처리방침과 같은 760px) */
+/* 가로폭을 다 쓴다. 처음에는 긴 글이 읽기 좋게 760px로 제한했는데, PC에서 왼쪽으로 쏠려 보인다는 운영자 검토로 풀었다 (JM-53) */
 .comments {
-	max-width: 760px;
 	margin-top: 40px;
 	padding-top: 16px;
 	border-top: 1px solid #eee;
@@ -463,20 +460,23 @@ button.danger {
 	border-bottom: none;
 }
 
-/* "답글", "삭제"를 한 줄에 놓고, 펼치면 그 칸이 한 줄을 다 쓴다. 글자는 작고 흐리게 */
-.comment-actions {
+/* "답글", "삭제"를 한 줄에 놓고, 펼치면 그 칸이 한 줄을 다 쓴다. 글자는 작고 흐리게
+   글의 "메모 수정", "글 삭제"(.post-actions)도 같은 모양이다 (JM-53) */
+.comment-actions,
+.post-actions {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 4px 12px;
 	margin-top: 4px;
 }
 
-.comment-actions details[open] {
+.comment-actions details[open],
+.post-actions details[open] {
 	flex-basis: 100%;
 }
 
 .comment-actions summary,
-.memo-edit summary {
+.post-actions summary {
 	color: #999;
 	font-size: 0.85rem;
 	cursor: pointer;
@@ -507,8 +507,9 @@ button.danger {
 	font-size: 0.85rem;
 }
 
-/* 펼쳐진 뒤: 비밀번호 칸과 작은 삭제 버튼을 한 줄에 */
-.comment-delete form {
+/* 펼쳐진 뒤: 비밀번호 칸과 작은 삭제 버튼을 한 줄에 (댓글 삭제와 글 삭제가 같은 모양) */
+.comment-delete form,
+.post-delete-form {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
@@ -516,19 +517,22 @@ button.danger {
 	margin-top: 8px;
 }
 
-.comment-delete input[type="password"] {
+.comment-delete input[type="password"],
+.post-delete-form input[type="password"] {
 	width: 160px;
 }
 
-/* 댓글 삭제 버튼은 form button의 "가득 채우기" 규칙 대신 작게 */
-.comment-delete button {
+/* 삭제 버튼은 form button의 "가득 채우기" 규칙 대신 작게 */
+.comment-delete button,
+.post-delete-form button {
 	width: auto;
 	margin-top: 0;
 	padding: 6px 12px;
 	font-size: 0.85rem;
 }
 
-.comment-delete .error {
+.comment-delete .error,
+.post-delete-form .error {
 	width: 100%;
 	margin: 0;
 }
@@ -651,6 +655,12 @@ textarea {
 	width: 100%;
 	padding: 8px;
 	font-size: 1rem;
+}
+
+/* 글 쓰는 칸은 모서리를 끌어서 크기를 바꿀 수 없게 고정한다 (운영자 검토, JM-53).
+   정해 둔 줄 수(rows)만큼만 보이고, 글이 더 길면 칸 안에서 스크롤된다 */
+textarea {
+	resize: none;
 }
 
 /* 체크박스와 글자를 한 줄에 나란히 (일반 label처럼 굵게 하지 않는다) */

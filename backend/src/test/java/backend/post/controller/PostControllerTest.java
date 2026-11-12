@@ -324,7 +324,8 @@ class PostControllerTest {
 
 		mockMvc.perform(post("/posts/" + post.getId() + "/delete").param("password", "0000"))
 				.andExpect(status().is3xxRedirection())
-				.andExpect(redirectedUrl("/posts/" + post.getId()))
+				// 상세 화면의 "글 삭제" 칸 자리로 돌아간다 (평소에는 접혀 있고, 이때는 펼쳐서 메시지를 보여 준다)
+				.andExpect(redirectedUrl("/posts/" + post.getId() + "#post-delete"))
 				// flash: redirect한 다음 화면에 한 번만 넘어가는 값
 				.andExpect(flash().attribute("deleteError", ErrorCode.INVALID_PASSWORD.getMessage()));
 
