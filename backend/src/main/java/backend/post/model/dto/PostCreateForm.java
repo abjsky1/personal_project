@@ -2,6 +2,7 @@ package backend.post.model.dto;
 
 import org.springframework.web.multipart.MultipartFile;
 
+import backend.analysis.model.entity.ConfirmMode;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -29,6 +30,10 @@ public class PostCreateForm {
 
 	// 위치, 촬영 시각 제공 동의 (체크박스). 기본값 false = 동의하지 않음
 	private boolean locationConsent;
+
+	// 칼로리 확정 방식 (JM-74, 고쳐 쓰는 AI). 화면의 둥근 선택 칸 둘 중 하나가 온다 (AUTO, USER).
+	// 기본값은 처음부터 있던 방식(AI가 바로 확정)이다. 고르지 않고 보내도 이 값이 된다.
+	private ConfirmMode confirmMode = ConfirmMode.AUTO;
 
 	// Spring이 form 값을 채울 때 setter를, JSP가 값을 다시 보여 줄 때 getter를 쓴다.
 	public String getNickname() {
@@ -61,6 +66,14 @@ public class PostCreateForm {
 
 	public void setImage(MultipartFile image) {
 		this.image = image;
+	}
+
+	public ConfirmMode getConfirmMode() {
+		return confirmMode;
+	}
+
+	public void setConfirmMode(ConfirmMode confirmMode) {
+		this.confirmMode = confirmMode;
 	}
 
 	// boolean 필드의 getter는 get 대신 is로 시작하는 것이 자바의 관례다.

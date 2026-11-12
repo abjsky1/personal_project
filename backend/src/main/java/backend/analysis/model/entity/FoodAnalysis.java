@@ -3,6 +3,7 @@ package backend.analysis.model.entity;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -90,12 +91,55 @@ public class FoodAnalysis {
 	// AI 호출이 끝난 시각. 하루 분석 횟수를 셀 때도 쓴다. AI를 부르지 않았으면(PENDING, LIMIT_EXCEEDED) 비어 있다.
 	private Instant completedAt;
 
+	// ---- 고쳐 쓰는 AI (JM-74) ----
+	// 글을 올릴 때 고른 확정 방식. @ColumnDefault: 이미 있는 글들은 컬럼을 더할 때 AUTO(처음부터 있던 방식)로 채워진다.
+	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@ColumnDefault("'AUTO'")
+	@Column(nullable = false, length = 10)
+	private ConfirmMode confirmMode;
+
+	// AI가 낸 후보 전체 (JSON 글자). 음식마다 후보 세 개와 양. "내가 보고 확정"으로 올려서 분석이 끝난 글에만 있다.
+	@Column(columnDefinition = "TEXT")
+	private String candidates;
+
+	// 사용자가 확정한 결과. 확정하기 전에는 모두 비어 있다.
+	// 위의 totalKcal, items 등(AI의 첫 답)은 확정해도 덮어쓰지 않는다 → 둘을 언제든 비교할 수 있다.
+	@Column(columnDefinition = "TEXT")
+	private String confirmedItems;
+
+	@Column(precision = 7, scale = 1)
+	private BigDecimal confirmedTotalKcal;
+
+	@Column(name = "confirmed_carbs_g", precision = 7, scale = 1)
+	private BigDecimal confirmedCarbsG;
+
+	@Column(name = "confirmed_protein_g", precision = 7, scale = 1)
+	private BigDecimal confirmedProteinG;
+
+	@Column(name = "confirmed_fat_g", precision = 7, scale = 1)
+	private BigDecimal confirmedFatG;
+
+	// 마지막으로 확정한 시각과, 확정한 횟수 (고쳐서 다시 확정할 수 있다)
+	private Instant confirmedAt;
+
+	@ColumnDefault("0")
+	@Column(nullable = false)
+	private int confirmCount;
+
 	protected FoodAnalysis() {
 	}
 
+	// 처음부터 있던 방식("AI가 바로 확정")으로 만든다
 	public FoodAnalysis(Post post) {
+		this(post, ConfirmMode.AUTO);
+	}
+
+	// confirmMode: 글을 올릴 때 고른 확정 방식 (JM-74)
+	public FoodAnalysis(Post post, ConfirmMode confirmMode) {
 		this.post = post;
 		this.status = AnalysisStatus.PENDING;
+		this.confirmMode = confirmMode;
 		this.createdAt = Instant.now();
 	}
 
@@ -131,6 +175,32 @@ public class FoodAnalysis {
 	// 오늘 분석 횟수 상한을 넘었을 때. AI를 부르지 않았으므로 시도 횟수와 완료 시각은 그대로 둔다.
 	public void markLimitExceeded() {
 		this.status = AnalysisStatus.LIMIT_EXCEEDED;
+	}
+
+	// AI가 낸 후보 전체를 보관한다 ("내가 보고 확정"으로 올린 글의 분석이 끝났을 때). 사용자가 확정할 때 꺼내 쓴다.
+	public void keepCandidates(String candidatesJson) {
+		this.candidates = candidatesJson;
+	}
+
+	// 사용자가 고쳐서 확정했을 때 (JM-74). AI의 첫 답은 그대로 두고 확정한 값만 따로 쓴다.
+	// 다시 확정하면 확정한 값을 새로 쓰고 횟수를 올린다.
+	public void confirm(String confirmedItemsJson, BigDecimal totalKcal, BigDecimal carbsG, BigDecimal proteinG, BigDecimal fatG) {
+		this.confirmedItems = confirmedItemsJson;
+		this.confirmedTotalKcal = totalKcal;
+		this.confirmedCarbsG = carbsG;
+		this.confirmedProteinG = proteinG;
+		this.confirmedFatG = fatG;
+		this.confirmedAt = Instant.now();
+		this.confirmCount++;
+	}
+
+	public boolean isConfirmed() {
+		return confirmedAt != null;
+	}
+
+	// 화면에 보여 줄 칼로리 합계: 확정했으면 확정한 값, 아니면 AI의 첫 답 (목록 카드가 쓴다)
+	public BigDecimal getShownTotalKcal() {
+		return isConfirmed() ? confirmedTotalKcal : totalKcal;
 	}
 
 	private void finishCall(FoodAnalyzerResponse response, long latencyMs) {
@@ -213,5 +283,41 @@ public class FoodAnalysis {
 
 	public Instant getCompletedAt() {
 		return completedAt;
+	}
+
+	public ConfirmMode getConfirmMode() {
+		return confirmMode;
+	}
+
+	public String getCandidates() {
+		return candidates;
+	}
+
+	public String getConfirmedItems() {
+		return confirmedItems;
+	}
+
+	public BigDecimal getConfirmedTotalKcal() {
+		return confirmedTotalKcal;
+	}
+
+	public BigDecimal getConfirmedCarbsG() {
+		return confirmedCarbsG;
+	}
+
+	public BigDecimal getConfirmedProteinG() {
+		return confirmedProteinG;
+	}
+
+	public BigDecimal getConfirmedFatG() {
+		return confirmedFatG;
+	}
+
+	public Instant getConfirmedAt() {
+		return confirmedAt;
+	}
+
+	public int getConfirmCount() {
+		return confirmCount;
 	}
 }

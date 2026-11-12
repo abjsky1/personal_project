@@ -29,10 +29,17 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 
+import tools.jackson.databind.json.JsonMapper;
+
 import backend.analysis.model.dto.FoodAnalysisResult;
 import backend.analysis.model.dto.FoodAnalysisResult.FoodItem;
+import backend.analysis.model.dto.FoodAnalysisView;
 import backend.analysis.model.dto.FoodAnalyzerResponse;
+import backend.analysis.model.dto.FoodCandidates;
+import backend.analysis.model.dto.FoodCandidates.Candidate;
+import backend.analysis.model.dto.FoodCandidates.CandidateItem;
 import backend.analysis.model.entity.AnalysisStatus;
+import backend.analysis.model.entity.ConfirmMode;
 import backend.analysis.model.entity.FoodAnalysis;
 import backend.analysis.model.repository.FoodAnalysisRepository;
 import backend.common.error.ErrorCode;
@@ -75,6 +82,10 @@ class PostControllerTest {
 
 	@Autowired
 	private FoodAnalysisRepository foodAnalysisRepository;
+
+	// 후보를 JSON 글자로 바꿔 저장할 때 쓴다 (서버가 쓰는 것과 같은 변환기)
+	@Autowired
+	private JsonMapper jsonMapper;
 
 	// 테스트용 사진 파일: (form의 칸 이름, 파일 이름, 형식, 내용)
 	// 서버가 파일 내용을 진짜 사진인지 검사하므로, 코드로 만든 실제 JPEG(300 × 200)를 넣는다.
@@ -521,5 +532,146 @@ class PostControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(view().name("posts/new"))
 				.andExpect(model().attributeHasFieldErrorCode("form", "image", ErrorCode.INVALID_IMAGE.name()));
+	}
+
+	// ---- 고쳐 쓰는 AI (JM-74) ----
+
+	@Test
+	void 올릴_때_고른_확정_방식이_분석_기록에_저장되고_고르지_않으면_AI가_바로_확정이다() throws Exception {
+		mockMvc.perform(multipart("/posts").file(photo)
+				.param("nickname", "테스터")
+				.param("password", "1234")
+				.param("confirmMode", "USER"))
+				.andExpect(status().is3xxRedirection());
+		assertThat(foodAnalysisRepository.findById(latestPost().getId()).orElseThrow().getConfirmMode()).isEqualTo(ConfirmMode.USER);
+
+		mockMvc.perform(multipart("/posts").file(photo)
+				.param("nickname", "테스터")
+				.param("password", "1234"))
+				.andExpect(status().is3xxRedirection());
+		assertThat(foodAnalysisRepository.findById(latestPost().getId()).orElseThrow().getConfirmMode()).isEqualTo(ConfirmMode.AUTO);
+	}
+
+	@Test
+	void 확정_방식에_엉뚱한_값이_오면_글쓰기_화면으로_돌아간다() throws Exception {
+		mockMvc.perform(multipart("/posts").file(photo)
+				.param("nickname", "테스터")
+				.param("password", "1234")
+				.param("confirmMode", "아무거나"))
+				.andExpect(view().name("posts/new"))
+				.andExpect(model().attributeHasFieldErrors("form", "confirmMode"));
+	}
+
+	@Test
+	void 비밀번호가_맞으면_고른_대로_확정하고_상세와_목록에_확정한_값이_나간다() throws Exception {
+		Post post = savePost("1234");
+		saveUserAnalysis(post);
+
+		// 첫 음식은 둘째 후보(부대찌개) 300g으로, 둘째 음식은 첫 후보(공기밥) 105g으로
+		mockMvc.perform(post("/posts/" + post.getId() + "/confirm")
+				.param("password", "1234")
+				.param("pick", "1", "0")
+				.param("amount", "300", "105"))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/posts/" + post.getId()))
+				.andExpect(flash().attributeCount(0));
+
+		FoodAnalysis confirmed = foodAnalysisRepository.findById(post.getId()).orElseThrow();
+		assertThat(confirmed.isConfirmed()).isTrue();
+		assertThat(confirmed.getConfirmedTotalKcal()).isEqualByComparingTo("410.4");
+		// AI의 첫 답은 그대로
+		assertThat(confirmed.getTotalKcal()).isEqualByComparingTo("530.8");
+
+		MvcResult detail = mockMvc.perform(get("/posts/" + post.getId())).andExpect(status().isOk()).andReturn();
+		FoodAnalysisView view = (FoodAnalysisView) detail.getModelAndView().getModel().get("analysis");
+		assertThat(view.confirmed()).isTrue();
+		assertThat(view.totalKcal()).isEqualByComparingTo("410.4");
+		assertThat(view.aiTotalKcal()).isEqualByComparingTo("530.8");
+
+		// 목록 카드의 칼로리도 확정한 값
+		assertThat(summaryOf(feedOf(get("/")), post).totalKcal()).isEqualByComparingTo("410.4");
+	}
+
+	@Test
+	void 비밀번호가_틀리면_확정하지_않고_고르던_값과_함께_상세로_돌아간다() throws Exception {
+		Post post = savePost("1234");
+		saveUserAnalysis(post);
+
+		mockMvc.perform(post("/posts/" + post.getId() + "/confirm")
+				.param("password", "0000")
+				.param("pick", "1", "0")
+				.param("amount", "300", "105"))
+				.andExpect(status().is3xxRedirection())
+				// 상세 화면의 확정 칸 자리로 돌아간다
+				.andExpect(redirectedUrl("/posts/" + post.getId() + "#analysis-confirm"))
+				.andExpect(flash().attribute("confirmError", ErrorCode.INVALID_PASSWORD.getMessage()))
+				// 고르던 값을 칸에 다시 채울 수 있게 함께 넘긴다
+				.andExpect(flash().attribute("confirmPicks", List.of("1", "0")))
+				.andExpect(flash().attribute("confirmAmounts", List.of("300", "105")));
+
+		assertThat(foodAnalysisRepository.findById(post.getId()).orElseThrow().isConfirmed()).isFalse();
+	}
+
+	@Test
+	void 양을_잘못_적으면_확정하지_않고_메시지를_보여준다() throws Exception {
+		Post post = savePost("1234");
+		saveUserAnalysis(post);
+
+		MvcResult result = mockMvc.perform(post("/posts/" + post.getId() + "/confirm")
+				.param("password", "1234")
+				.param("pick", "0", "0")
+				.param("amount", "많이", "210"))
+				.andExpect(redirectedUrl("/posts/" + post.getId() + "#analysis-confirm"))
+				.andExpect(flash().attribute("confirmError", ErrorCode.INVALID_CONFIRMATION.getMessage()))
+				.andReturn();
+
+		// 숫자가 아닌 글자가 섞인 양은 화면에 다시 넘기지 않는다 (화면은 저장돼 있는 값으로 그려진다). 고른 후보는 숫자라 넘긴다
+		assertThat(result.getFlashMap().get("confirmAmounts")).isNull();
+		assertThat(result.getFlashMap().get("confirmPicks")).isEqualTo(List.of("0", "0"));
+
+		assertThat(foodAnalysisRepository.findById(post.getId()).orElseThrow().isConfirmed()).isFalse();
+	}
+
+	@Test
+	void 후보가_없는_글이나_없는_글은_확정할_수_없다() throws Exception {
+		// "AI가 바로 확정"으로 올려서 분석이 끝난 글: 고를 후보가 없다
+		Post auto = savePost("1234");
+		FoodAnalysis done = new FoodAnalysis(auto);
+		done.markDone(new FoodAnalyzerResponse(
+				new FoodAnalysisResult(true, List.of(new FoodItem("공기밥", 210, 310, 68, 5, 1)), "HIGH", "1공기"),
+				"test-model", 1300, 100), "[]", 2000);
+		foodAnalysisRepository.save(done);
+
+		mockMvc.perform(post("/posts/" + auto.getId() + "/confirm")
+				.param("password", "1234")
+				.param("pick", "0")
+				.param("amount", "210"))
+				.andExpect(status().isBadRequest())
+				.andExpect(view().name("common/error"));
+
+		mockMvc.perform(post("/posts/999999999/confirm")
+				.param("password", "1234")
+				.param("pick", "0")
+				.param("amount", "210"))
+				.andExpect(status().isNotFound());
+	}
+
+	// "내가 보고 확정"으로 올려서 분석이 끝난 글의 분석 기록: 음식 둘(찌개 400g, 밥 210g)에 후보 셋씩
+	private FoodAnalysis saveUserAnalysis(Post post) {
+		FoodCandidates candidates = new FoodCandidates(true, List.of(
+				new CandidateItem(400, List.of(
+						new Candidate("김치찌개", 55, 3, 4.5, 2.5),
+						new Candidate("부대찌개", 85, 5, 5, 5),
+						new Candidate("순두부찌개", 48, 2, 4.3, 2.5))),
+				new CandidateItem(210, List.of(
+						new Candidate("공기밥", 148, 32.4, 2.7, 0.3),
+						new Candidate("잡곡밥", 150, 31.8, 3.5, 0.6),
+						new Candidate("볶음밥", 185, 27, 4.2, 6.4)))),
+				"MEDIUM", "1인분 기준");
+		FoodAnalysisResult first = candidates.firstAnswer();
+		FoodAnalysis analysis = new FoodAnalysis(post, ConfirmMode.USER);
+		analysis.markDone(new FoodAnalyzerResponse(first, "test-model", 1400, 300), jsonMapper.writeValueAsString(first.items()), 3000);
+		analysis.keepCandidates(jsonMapper.writeValueAsString(candidates.items()));
+		return foodAnalysisRepository.save(analysis);
 	}
 }

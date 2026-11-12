@@ -1,6 +1,7 @@
 package backend.post.controller;
 
 import java.net.URI;
+import java.util.List;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Controller;
@@ -139,6 +140,40 @@ public class PostController {
 		redirectAttributes.addFlashAttribute("memoDraft", form.getMemo() == null ? "" : form.getMemo());
 		// #memo-edit: 돌아간 화면에서 메모 수정 칸 자리로 바로 내려간다
 		return "redirect:/posts/" + id + "#memo-edit";
+	}
+
+	// AI 분석을 고쳐서 확정 (JM-74, 고쳐 쓰는 AI). 상세 화면의 분석 자리에 펼쳐지는 확정 칸에서 보낸 값을 받는다.
+	// pick: 음식마다 고른 후보의 순서, amount: 음식마다 양(g). 이름이 같은 칸이 음식 수만큼 오므로 목록으로 받는다.
+	// 숫자가 아니라 글자로 받는 이유: 양을 비우거나 잘못 적어 보내도 에러 화면이 아니라 확정 칸 아래 메시지로 알려 주려고.
+	// 저장했든 못 했든 그 글의 상세로 돌아간다 (메모 수정과 같은 방식).
+	@PostMapping("/posts/{id}/confirm")
+	public String confirm(@PathVariable Long id, @RequestParam(required = false) String password,
+			@RequestParam(name = "pick", required = false) List<String> picks,
+			@RequestParam(name = "amount", required = false) List<String> amounts, RedirectAttributes redirectAttributes) {
+		try {
+			postService.confirmAnalysis(id, password == null ? "" : password, picks, amounts);
+		} catch (BusinessException e) {
+			// 비밀번호가 틀렸거나 보낸 값이 맞지 않는 경우만 여기서 처리하고, 다른 에러(글 없음 등)는 그대로 던져서 에러 화면으로 보낸다.
+			ErrorCode code = e.getErrorCode();
+			if (code != ErrorCode.INVALID_PASSWORD && code != ErrorCode.INVALID_CONFIRMATION) {
+				throw e;
+			}
+			// 상세 화면으로 돌아가서 확정 칸을 펼친 채 메시지를 보여 준다. 고르던 값도 함께 넘겨 다시 채운다 (flash: 한 번만 보인다)
+			redirectAttributes.addFlashAttribute("confirmError", code.getMessage());
+			redirectAttributes.addFlashAttribute("confirmPicks", numbersOnly(picks));
+			redirectAttributes.addFlashAttribute("confirmAmounts", numbersOnly(amounts));
+			return "redirect:/posts/" + id + "#analysis-confirm";
+		}
+		return "redirect:/posts/" + id;
+	}
+
+	// 화면에 다시 채울 값은 숫자 모양일 때만 넘긴다. 숫자가 아닌 글자가 섞여 있으면 넘기지 않아서, 화면은 저장돼 있는 값으로 그려진다.
+	// (화면이 이 값을 숫자와 비교하고 숫자 칸에 넣기 때문에, 엉뚱한 글자가 가면 화면을 그리다 오류가 난다)
+	private List<String> numbersOnly(List<String> values) {
+		if (values == null || !values.stream().allMatch(value -> value != null && value.matches("-?\\d{1,5}(\\.\\d{1,2})?"))) {
+			return null;
+		}
+		return values;
 	}
 
 	// 삭제 (HTML form은 GET, POST만 보낼 수 있어서 DELETE 대신 POST로 받는다)

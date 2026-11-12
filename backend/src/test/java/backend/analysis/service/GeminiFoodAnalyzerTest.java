@@ -21,6 +21,7 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import backend.analysis.model.dto.FoodAnalyzerResponse;
+import backend.analysis.model.dto.FoodCandidatesResponse;
 import tools.jackson.databind.json.JsonMapper;
 
 // Gemini로 보내는 요청과 응답 처리를 확인하는 테스트. 실제 Gemini는 부르지 않는다.
@@ -129,5 +130,35 @@ class GeminiFoodAnalyzerTest {
 		return jsonMapper.writeValueAsString(Map.of(
 				"candidates", List.of(Map.of("content", Map.of("parts", List.of(Map.of("text", text))))),
 				"usageMetadata", Map.of("promptTokenCount", 1300, "candidatesTokenCount", 100)));
+	}
+
+	// 후보 분석 (JM-74): 응답 형식에 후보 칸을 넣어 보내고, 음식마다 후보 여러 개를 읽는다
+	@Test
+	void 후보_분석은_후보용_형식을_보내고_음식마다_후보를_읽는다() {
+		String result = """
+				{"isFood":true,
+				 "items":[{"amountG":400,"candidates":[
+				   {"name":"김치찌개","kcalPer100g":55,"carbsPer100g":3,"proteinPer100g":4.5,"fatPer100g":2.5},
+				   {"name":"부대찌개","kcalPer100g":85,"carbsPer100g":5,"proteinPer100g":5,"fatPer100g":5}]}],
+				 "confidence":"MEDIUM","comment":"1인분 기준"}
+				""";
+		server.expect(requestTo(URL))
+				.andExpect(header("x-goog-api-key", "test-key"))
+				.andExpect(jsonPath("$.contents[0].parts[1].inline_data.data").value("AQID"))
+				.andExpect(jsonPath("$.generationConfig.responseSchema.properties.items.items.properties.candidates.type").value("ARRAY"))
+				.andExpect(jsonPath("$.generationConfig.responseSchema.properties.items.items.properties.candidates.items.required[1]").value("kcalPer100g"))
+				.andRespond(withSuccess(geminiResponse(result), MediaType.APPLICATION_JSON));
+
+		FoodCandidatesResponse response = analyzer.analyzeCandidates(jpeg);
+
+		server.verify();
+		assertThat(response.result().isFood()).isTrue();
+		assertThat(response.result().items().get(0).amountG()).isEqualTo(400);
+		assertThat(response.result().items().get(0).candidates()).hasSize(2);
+		assertThat(response.result().items().get(0).candidates().get(1).name()).isEqualTo("부대찌개");
+		assertThat(response.result().items().get(0).candidates().get(1).kcalPer100g()).isEqualTo(85);
+		// 첫 번째 후보로 만든 "AI의 첫 답": 100g당 55kcal × 400g = 220kcal
+		assertThat(response.result().firstAnswer().items().get(0).kcal()).isEqualTo(220);
+		assertThat(response.model()).isEqualTo("test-model");
 	}
 }

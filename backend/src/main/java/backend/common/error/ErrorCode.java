@@ -27,13 +27,19 @@ public enum ErrorCode {
 	// ---- 게시글 ----
 	// 404: 없는 글이거나 삭제된 글
 	POST_NOT_FOUND(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."),
-	// 403: 삭제하거나 메모를 고칠 때 입력한 비밀번호가 다름
+	// 403: 삭제하거나 메모를 고치거나 분석을 확정할 때 입력한 비밀번호가 다름
 	INVALID_PASSWORD(HttpStatus.FORBIDDEN, "비밀번호가 맞지 않습니다."),
 	// 429: 같은 곳(IP)에서 너무 자주 올림 (application.properties의 app.rate-limit.*)
 	// (제한 숫자는 설정으로 바뀔 수 있어서 메시지에 숫자를 넣지 않는다)
 	TOO_MANY_UPLOADS(HttpStatus.TOO_MANY_REQUESTS, "업로드가 너무 잦습니다. 잠시 후 다시 올려 주세요."),
 	// 429: 한 글에 좋아요가 짧은 시간 동안 너무 많이 눌림 (JM-59, app.rate-limit.like-per-post-*). IP가 아니라 글마다 센다
 	TOO_MANY_LIKES(HttpStatus.TOO_MANY_REQUESTS, "이 글에 좋아요가 한꺼번에 너무 많이 눌렸습니다. 잠시 후 다시 눌러 주세요."),
+
+	// ---- 분석 확정 (JM-74, 고쳐 쓰는 AI) ----
+	// 400: 확정하려고 보낸 값이 맞지 않음 (없는 후보 번호, 범위를 벗어난 양, 음식을 전부 뺌)
+	INVALID_CONFIRMATION(HttpStatus.BAD_REQUEST, "확정할 수 없는 값이에요. 양은 1g부터 5,000g까지 적고, 음식은 하나 이상 남겨 주세요."),
+	// 400: 고를 후보가 없는 글 ("AI가 바로 확정"으로 올린 글, 분석이 끝나지 않았거나 실패한 글)
+	NOT_CONFIRMABLE(HttpStatus.BAD_REQUEST, "이 글은 고쳐서 확정할 수 없습니다."),
 
 	// ---- 댓글 ----
 	// 404: 없는 댓글이거나 삭제된 댓글 (또는 주소의 글 번호와 맞지 않는 댓글)

@@ -355,6 +355,95 @@ button {
 	text-align: left;
 }
 
+/* ---- 고쳐서 확정하기 (상세 화면의 분석 자리, JM-74 고쳐 쓰는 AI) ---- */
+/* 칼로리 옆의 작은 표시: 확정 전에는 노란 바탕, 확정하면 초록 바탕 */
+.confirm-badge {
+	display: inline-block;
+	margin-left: 8px;
+	padding: 2px 8px;
+	border-radius: 8px;
+	background: #fff4d6;
+	color: #7a5200;
+	font-size: 0.75rem;
+	font-weight: 600;
+	vertical-align: middle;
+}
+
+.confirm-badge.confirmed {
+	background: #e3f2e4;
+	color: #1f5f24;
+}
+
+/* 작은 글자("후보에서 골라 확정하기")를 누르면 그 자리에 펼쳐진다. 글자 모양은 메모 수정, 댓글의 "답글"과 같다 (.comment-actions summary) */
+.analysis-confirm {
+	margin-top: 12px;
+}
+
+/* 펼쳐진 뒤: 음식마다 한 묶음(후보 고르는 칸, 그 아래 양과 칼로리), 맨 아래에 합계와 비밀번호 칸과 작은 확정 버튼 */
+.analysis-confirm-form {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.confirm-row {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: 96px auto minmax(0, 1fr);
+	align-items: center;
+	gap: 6px 8px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid #eee;
+}
+
+/* 후보 고르는 칸은 한 줄을 다 쓴다. 아이폰이 화면을 확대하지 않게 글자는 16px */
+.confirm-row select {
+	grid-column: 1 / -1;
+	width: 100%;
+	padding: 8px;
+	font-size: 1rem;
+}
+
+.confirm-row input[type="number"] {
+	width: 100%;
+	padding: 8px;
+	font-size: 1rem;
+}
+
+/* 그 줄의 칼로리는 오른쪽 끝에 */
+.confirm-kcal {
+	justify-self: end;
+	font-weight: 600;
+}
+
+/* "이 음식 아님"으로 뺀 줄은 양과 칼로리를 흐리게 */
+.confirm-row.removed input,
+.confirm-row.removed .confirm-unit,
+.confirm-row.removed .confirm-kcal {
+	opacity: 0.4;
+}
+
+.confirm-total {
+	grid-column: 1 / -1;
+	margin: 0;
+	text-align: right;
+}
+
+.analysis-confirm-form .hint,
+.analysis-confirm-form .error {
+	grid-column: 1 / -1;
+	margin: 0;
+}
+
+/* 확정 버튼은 form button의 "가득 채우기" 규칙 대신 작게 */
+.analysis-confirm-form button {
+	width: auto;
+	margin-top: 0;
+	padding: 8px 16px;
+	font-size: 0.9rem;
+}
+
 /* ---- 좋아요 버튼 (상세 화면, JM-59) ---- */
 /* 흰 바탕에 테두리만 있는 버튼. 위의 button 공통 규칙(초록 바탕)을 덮어쓴다 */
 .like-row {
@@ -476,7 +565,8 @@ button.danger {
 }
 
 .comment-actions summary,
-.post-actions summary {
+.post-actions summary,
+.analysis-confirm summary {
 	color: #999;
 	font-size: 0.85rem;
 	cursor: pointer;
@@ -661,6 +751,22 @@ textarea {
    정해 둔 줄 수(rows)만큼만 보이고, 글이 더 길면 칸 안에서 스크롤된다 */
 textarea {
 	resize: none;
+}
+
+/* 둘 중 하나를 고르는 묶음 (작성 화면의 "칼로리 확정 방식", JM-74). 테두리 없이, 묶음 이름은 다른 칸의 이름(label)과 같은 굵기 */
+fieldset.choice {
+	margin: 16px 0 0;
+	padding: 0;
+	border: 0;
+}
+
+fieldset.choice legend {
+	padding: 0;
+	font-weight: 600;
+}
+
+fieldset.choice label.checkbox {
+	margin-top: 8px;
 }
 
 /* 체크박스와 글자를 한 줄에 나란히 (일반 label처럼 굵게 하지 않는다) */
