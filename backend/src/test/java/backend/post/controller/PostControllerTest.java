@@ -40,7 +40,6 @@ import backend.image.TestImages;
 import backend.location.model.entity.PostLocation;
 import backend.location.model.repository.PostLocationRepository;
 import backend.post.model.dto.FeedPage;
-import backend.post.model.dto.PostMemoForm;
 import backend.post.model.dto.PostSummary;
 import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
@@ -404,32 +403,18 @@ class PostControllerTest {
 	}
 
 	// ---- 메모 수정 (JM-53, 지인 피드백 7번) ----
+	// 따로 수정 화면이 없다. 상세 화면의 "메모 수정" 칸에서 보낸 값을 받아 처리하고, 어느 쪽이든 그 글의 상세로 돌아간다.
 
 	@Test
-	void 메모_수정_화면은_지금_메모를_칸에_채워서_보여주고_조회수는_세지_않는다() throws Exception {
-		Post post = savePost("1234", "점심");
-
-		MvcResult result = mockMvc.perform(get("/posts/" + post.getId() + "/edit").header(HttpHeaders.USER_AGENT, BROWSER))
-				.andExpect(status().isOk())
-				.andExpect(view().name("posts/edit"))
-				.andExpect(model().attributeExists("post"))
-				.andReturn();
-
-		PostMemoForm form = (PostMemoForm) result.getModelAndView().getModel().get("form");
-		assertThat(form.getMemo()).isEqualTo("점심");
-		// 비밀번호 칸은 비어 있어야 한다
-		assertThat(form.getPassword()).isNull();
-		assertThat(viewCountOf(post)).isZero();
-	}
-
-	@Test
-	void 비밀번호가_맞으면_메모만_바뀌고_그_글의_상세로_이동한다() throws Exception {
+	void 비밀번호가_맞으면_메모만_바뀌고_그_글의_상세로_돌아간다() throws Exception {
 		Post post = savePost("1234", "점심");
 		Instant createdAt = post.getCreatedAt();
 
-		mockMvc.perform(post("/posts/" + post.getId() + "/edit").param("memo", "  저녁으로 고침  ").param("password", "1234"))
+		mockMvc.perform(post("/posts/" + post.getId() + "/memo").param("memo", "  저녁으로 고침  ").param("password", "1234"))
 				.andExpect(status().is3xxRedirection())
-				.andExpect(redirectedUrl("/posts/" + post.getId()));
+				.andExpect(redirectedUrl("/posts/" + post.getId()))
+				// 저장됐으면 보여 줄 메시지가 없다
+				.andExpect(flash().attributeCount(0));
 
 		Post edited = postRepository.findById(post.getId()).orElseThrow();
 		// 앞뒤 공백은 떼고 저장한다 (글을 올릴 때와 같음)
@@ -447,7 +432,7 @@ class PostControllerTest {
 	void 메모를_비우고_저장하면_메모가_없어진다() throws Exception {
 		Post post = savePost("1234", "점심");
 
-		mockMvc.perform(post("/posts/" + post.getId() + "/edit").param("memo", "   ").param("password", "1234"))
+		mockMvc.perform(post("/posts/" + post.getId() + "/memo").param("memo", "   ").param("password", "1234"))
 				.andExpect(redirectedUrl("/posts/" + post.getId()));
 
 		assertThat(postRepository.findById(post.getId()).orElseThrow().getMemo()).isNull();
@@ -457,48 +442,44 @@ class PostControllerTest {
 	void 메모가_없던_글에_메모를_새로_쓸_수_있다() throws Exception {
 		Post post = savePost("1234");
 
-		mockMvc.perform(post("/posts/" + post.getId() + "/edit").param("memo", "나중에 쓴 메모").param("password", "1234"))
+		mockMvc.perform(post("/posts/" + post.getId() + "/memo").param("memo", "나중에 쓴 메모").param("password", "1234"))
 				.andExpect(redirectedUrl("/posts/" + post.getId()));
 
 		assertThat(postRepository.findById(post.getId()).orElseThrow().getMemo()).isEqualTo("나중에 쓴 메모");
 	}
 
 	@Test
-	void 비밀번호가_틀리면_메모를_바꾸지_않고_수정_화면에_메시지를_보여준다() throws Exception {
+	void 비밀번호가_틀리면_메모를_바꾸지_않고_상세로_돌아가_메시지와_쓰던_메모를_보여준다() throws Exception {
 		Post post = savePost("1234", "점심");
 
-		MvcResult result = mockMvc.perform(post("/posts/" + post.getId() + "/edit")
-				.param("memo", "남이 고친 메모")
-				.param("password", "0000"))
-				.andExpect(status().isOk())
-				.andExpect(view().name("posts/edit"))
-				.andExpect(model().attributeHasFieldErrorCode("form", "password", ErrorCode.INVALID_PASSWORD.name()))
-				.andReturn();
+		mockMvc.perform(post("/posts/" + post.getId() + "/memo").param("memo", "남이 고친 메모").param("password", "0000"))
+				.andExpect(status().is3xxRedirection())
+				// 상세 화면의 메모 수정 칸 자리로 돌아간다
+				.andExpect(redirectedUrl("/posts/" + post.getId() + "#memo-edit"))
+				// flash: redirect한 다음 화면에 한 번만 넘어가는 값. 메시지와, 칸에 다시 채울 고쳐 쓰던 메모
+				.andExpect(flash().attribute("memoError", ErrorCode.INVALID_PASSWORD.getMessage()))
+				.andExpect(flash().attribute("memoDraft", "남이 고친 메모"));
 
-		// 고쳐 쓰던 메모는 칸에 그대로 남는다 (다시 쓰지 않아도 되게). DB의 메모는 그대로다.
-		PostMemoForm form = (PostMemoForm) result.getModelAndView().getModel().get("form");
-		assertThat(form.getMemo()).isEqualTo("남이 고친 메모");
 		assertThat(postRepository.findById(post.getId()).orElseThrow().getMemo()).isEqualTo("점심");
 	}
 
 	@Test
-	void 비밀번호를_비우거나_메모가_300자를_넘으면_저장하지_않고_수정_화면으로_돌아간다() throws Exception {
+	void 비밀번호를_비우거나_메모가_300자를_넘으면_저장하지_않고_메시지를_보여준다() throws Exception {
 		Post post = savePost("1234", "점심");
 
-		mockMvc.perform(post("/posts/" + post.getId() + "/edit").param("memo", "고친 메모").param("password", ""))
-				.andExpect(view().name("posts/edit"))
-				.andExpect(model().attributeHasFieldErrors("form", "password"));
+		mockMvc.perform(post("/posts/" + post.getId() + "/memo").param("memo", "고친 메모").param("password", ""))
+				.andExpect(redirectedUrl("/posts/" + post.getId() + "#memo-edit"))
+				.andExpect(flash().attribute("memoError", "비밀번호를 입력해 주세요."));
 
 		// 비밀번호가 맞아도 301자는 저장하지 않는다
-		mockMvc.perform(post("/posts/" + post.getId() + "/edit").param("memo", "가".repeat(301)).param("password", "1234"))
-				.andExpect(status().isOk())
-				.andExpect(view().name("posts/edit"))
-				.andExpect(model().attributeHasFieldErrors("form", "memo"));
+		mockMvc.perform(post("/posts/" + post.getId() + "/memo").param("memo", "가".repeat(301)).param("password", "1234"))
+				.andExpect(redirectedUrl("/posts/" + post.getId() + "#memo-edit"))
+				.andExpect(flash().attribute("memoError", "메모는 300자까지 쓸 수 있어요."));
 
 		assertThat(postRepository.findById(post.getId()).orElseThrow().getMemo()).isEqualTo("점심");
 
 		// 300자까지는 저장된다
-		mockMvc.perform(post("/posts/" + post.getId() + "/edit").param("memo", "가".repeat(300)).param("password", "1234"))
+		mockMvc.perform(post("/posts/" + post.getId() + "/memo").param("memo", "가".repeat(300)).param("password", "1234"))
 				.andExpect(redirectedUrl("/posts/" + post.getId()));
 		assertThat(postRepository.findById(post.getId()).orElseThrow().getMemo()).hasSize(300);
 	}
@@ -509,29 +490,14 @@ class PostControllerTest {
 		mockMvc.perform(post("/posts/" + deleted.getId() + "/delete").param("password", "1234"))
 				.andExpect(redirectedUrl("/"));
 
-		// 지운 글: 수정 화면도, 저장도 404. 비밀번호가 맞아도 메모는 그대로다
-		mockMvc.perform(get("/posts/" + deleted.getId() + "/edit")).andExpect(status().isNotFound());
-		mockMvc.perform(post("/posts/" + deleted.getId() + "/edit").param("memo", "지운 글 고치기").param("password", "1234"))
+		// 지운 글: 비밀번호가 맞아도 404이고 메모는 그대로다
+		mockMvc.perform(post("/posts/" + deleted.getId() + "/memo").param("memo", "지운 글 고치기").param("password", "1234"))
 				.andExpect(status().isNotFound());
 		assertThat(postRepository.findById(deleted.getId()).orElseThrow().getMemo()).isEqualTo("점심");
 
 		// 없는 글
-		mockMvc.perform(get("/posts/999999999/edit")).andExpect(status().isNotFound());
-		mockMvc.perform(post("/posts/999999999/edit").param("memo", "메모").param("password", "1234"))
+		mockMvc.perform(post("/posts/999999999/memo").param("memo", "메모").param("password", "1234"))
 				.andExpect(status().isNotFound());
-	}
-
-	@Test
-	void 메모_수정_화면에서_돌아온_것은_조회수를_세지_않는다() throws Exception {
-		Post post = savePost("1234", "점심");
-		String url = "/posts/" + post.getId();
-
-		// 메모를 저장한 뒤 서버가 열어 주는 상세, 또는 "← 글로 돌아가기"를 누른 경우: 앞 화면(Referer)이 이 글의 수정 화면이다
-		mockMvc.perform(get(url).header(HttpHeaders.USER_AGENT, BROWSER)
-				.header(HttpHeaders.REFERER, "https://jjikmuk.com" + url + "/edit"))
-				.andExpect(status().isOk());
-
-		assertThat(viewCountOf(post)).isZero();
 	}
 
 	// 테스트용 글을 DB에 바로 저장한다. (사진 파일은 만들지 않고 이름만 넣는다)

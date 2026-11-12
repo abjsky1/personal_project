@@ -240,6 +240,35 @@ button {
 	white-space: pre-wrap;
 }
 
+/* ---- 메모 수정 (상세 화면, JM-53, 피드백 7번) ---- */
+/* 메모 아래의 작은 "메모 수정"을 누르면 그 자리에 칸이 펼쳐진다. 글자 모양은 댓글의 "답글", "삭제"와 같다 (아래 .comment-actions summary) */
+.memo-edit {
+	margin-top: 4px;
+}
+
+/* 펼쳐진 뒤: 메모 칸이 한 줄을 다 쓰고, 그 아래 한 줄에 비밀번호 칸과 작은 저장 버튼 */
+.memo-edit-form {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.memo-edit-form textarea,
+.memo-edit-form .hint,
+.memo-edit-form .error {
+	grid-column: 1 / -1;
+	margin: 0;
+}
+
+/* 저장 버튼은 form button의 "가득 채우기" 규칙 대신 작게 */
+.memo-edit-form button {
+	width: auto;
+	margin-top: 0;
+	padding: 8px 16px;
+	font-size: 0.9rem;
+}
+
 .empty,
 .more {
 	display: block;
@@ -330,26 +359,8 @@ button {
 
 /* ---- 좋아요 버튼 (상세 화면, JM-59) ---- */
 /* 흰 바탕에 테두리만 있는 버튼. 위의 button 공통 규칙(초록 바탕)을 덮어쓴다 */
-/* 한 줄의 왼쪽에 좋아요 버튼, 오른쪽 끝에 "메모 수정" 링크 (JM-53) */
 .like-row {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
 	margin: 20px 0 0;
-}
-
-/* 메모 수정 링크 (JM-53, 피드백 7번): 작성자만 쓰는 기능이라 작고 흐리게 둔다 (댓글의 "답글", "삭제"와 같은 크기).
-   마우스를 올리거나 키보드로 옮겨 오면 초록 */
-.edit-link {
-	color: #777;
-	font-size: 0.85rem;
-	text-decoration: none;
-}
-
-.edit-link:hover,
-.edit-link:focus-visible {
-	color: #2f7d32;
 }
 
 .like-button {
@@ -389,25 +400,6 @@ button {
 	margin-top: 24px;
 	padding-top: 16px;
 	border-top: 1px solid #eee;
-}
-
-/* ---- 메모 수정 화면 (JM-53): 어느 글을 고치는지 보여 주는 작은 사진과 닉네임, 올린 시각 ---- */
-.edit-post {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-}
-
-.edit-post img {
-	width: 72px;
-	height: 72px;
-	object-fit: cover;
-	border-radius: 8px;
-	background: #eee;
-}
-
-.edit-post .meta {
-	margin: 0;
 }
 
 /* 지우기처럼 되돌리기 어려운 버튼은 빨간색 */
@@ -483,7 +475,8 @@ button.danger {
 	flex-basis: 100%;
 }
 
-.comment-actions summary {
+.comment-actions summary,
+.memo-edit summary {
 	color: #999;
 	font-size: 0.85rem;
 	cursor: pointer;

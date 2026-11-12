@@ -29,9 +29,28 @@
 		<div>
 			<%-- 조회수 (JM-72): 사람이 이 화면을 열 때마다 1 오른다. 댓글을 쓰고 돌아온 화면, 봇은 세지 않는다 (PostController) --%>
 			<p class="meta"><strong><c:out value="${post.nickname}" /></strong><span><c:out value="${post.createdAt}" /></span><span>조회 ${post.viewCount}</span></p>
+			<%-- id="memo-text": 메모 수정 칸이 펼쳐져 있는 동안 아래 script가 이 글자를 숨긴다 --%>
 			<c:if test="${not empty post.memo}">
-				<p class="memo"><c:out value="${post.memo}" /></p>
+				<p class="memo" id="memo-text"><c:out value="${post.memo}" /></p>
 			</c:if>
+
+			<%-- 메모 수정 (JM-53, 피드백 7번): "메모 수정"을 누르면 그 자리에 메모 칸과 비밀번호 칸이 펼쳐진다.
+			     details/summary: JavaScript 없이 되는 HTML 기본 기능이고, 댓글의 "답글", "삭제"와 같은 방식이다.
+			     글을 올릴 때 넣은 비밀번호가 맞아야 저장된다. 가입이 없어 누가 작성자인지 미리 알 수 없으므로 누구에게나 보인다.
+			     memoError, memoDraft: 저장하지 못했을 때 Controller가 redirect하면서 넘긴 메시지와 고쳐 쓰던 메모 (한 번만 보인다).
+			     그때는 칸을 펼친 채로(open) 쓰던 메모를 다시 채워서 보여 준다. --%>
+			<details class="memo-edit" id="memo-edit"<c:if test="${not empty memoError}"> open</c:if>>
+				<summary>메모 수정</summary>
+				<form class="memo-edit-form" action="/posts/${post.id}/memo" method="post">
+					<textarea name="memo" maxlength="300" rows="3" placeholder="메모" aria-label="메모"><c:out value="${not empty memoError ? memoDraft : post.memo}" /></textarea>
+					<input type="password" name="password" maxlength="20" placeholder="비밀번호" aria-label="비밀번호" required>
+					<button type="submit">저장</button>
+					<p class="hint">글을 올릴 때 넣은 비밀번호를 입력해 주세요. 메모를 비우고 저장하면 메모가 없어져요.</p>
+					<c:if test="${not empty memoError}">
+						<p class="error"><c:out value="${memoError}" /></p>
+					</c:if>
+				</form>
+			</details>
 
 			<%-- AI 분석 결과. AI 분석을 넣기 전에 올린 글은 ${analysis}가 비어 있어서 이 칸이 나오지 않는다. --%>
 			<%-- 음식 이름과 설명도 사용자 입력처럼 c:out으로 찍는다. 사진 속 글자가 AI를 거쳐 HTML로 끼어들 수 있기 때문이다. --%>
@@ -88,9 +107,6 @@
 				<button type="button" class="like-button" id="like-button" data-post-id="${post.id}" aria-pressed="false">
 					<span class="like-icon" aria-hidden="true"></span>좋아요 <span id="like-count">${post.likeCount}</span>
 				</button>
-				<%-- 메모 수정 (JM-53, 피드백 7번): 수정 화면으로 간다. 글을 올릴 때 넣은 비밀번호는 거기서 저장할 때 확인한다.
-				     가입이 없어 누가 작성자인지 미리 알 수 없으므로 누구에게나 보인다. 그래서 좋아요 줄의 오른쪽 끝에 작게 둔다. --%>
-				<a class="edit-link" href="/posts/${post.id}/edit">메모 수정</a>
 			</p>
 
 			<%-- 삭제: 작성할 때 입력한 비밀번호가 맞아야 지워진다. 확인 창과 연속 누름 막기는 아래 script에서 처리한다. --%>
@@ -206,6 +222,31 @@
 		});
 	});
 
+	// 메모 수정 (JM-53): 칸이 펼쳐져 있는 동안에는 위의 메모 글자를 숨긴다 (같은 글이 두 번 보이지 않게). 접으면 다시 보인다.
+	// 칸을 펼치는 것 자체는 HTML(details)이 하므로, 이 부분이 실행되지 않아도 메모는 고칠 수 있다.
+	const memoEdit = document.getElementById('memo-edit');
+	const memoText = document.getElementById('memo-text');
+	const memoForm = memoEdit.querySelector('form');
+	const memoButton = memoForm.querySelector('button[type="submit"]');
+
+	function syncMemoText() {
+		// 메모가 없는 글에는 memoText가 없다
+		if (memoText) {
+			memoText.hidden = memoEdit.open;
+		}
+	}
+
+	// toggle: 펼치거나 접을 때마다 실행된다
+	memoEdit.addEventListener('toggle', syncMemoText);
+	// 저장하지 못해 돌아온 화면은 처음부터 펼쳐져 있으므로, 화면이 뜰 때도 한 번 맞춘다
+	syncMemoText();
+
+	// 연속으로 눌러 같은 요청이 여러 번 가지 않게, 첫 번째 누름에서 버튼을 막는다.
+	memoForm.addEventListener('submit', function () {
+		memoButton.disabled = true;
+		memoButton.textContent = '저장하는 중…';
+	});
+
 	// 좋아요 (JM-59)
 	const likeButton = document.getElementById('like-button');
 	const likeCount = document.getElementById('like-count');
@@ -263,6 +304,8 @@
 	window.addEventListener('pageshow', function () {
 		deleteButton.disabled = false;
 		deleteButton.textContent = '삭제';
+		memoButton.disabled = false;
+		memoButton.textContent = '저장';
 		commentButton.disabled = false;
 		commentButton.textContent = '댓글 남기기';
 		replyForms.forEach(function (form) {

@@ -3,9 +3,9 @@ package backend.post.model.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-// 메모 수정 화면의 form에서 보낸 값을 받는 클래스 (JM-53, 지인 피드백 7번)
+// 글 상세의 "메모 수정" 칸에서 보낸 값을 받는 클래스 (JM-53, 지인 피드백 7번)
 // 고칠 수 있는 것은 메모뿐이라 칸이 둘이다: 새 메모와, 글을 올릴 때 넣은 비밀번호.
-// 검사 규칙과 화면에 메시지를 보여 주는 방식은 글쓰기의 PostCreateForm과 같다.
+// 검사 규칙을 적는 방식은 글쓰기의 PostCreateForm과 같다. 걸리면 상세 화면으로 돌아가 메모 수정 칸 아래에 메시지를 보여 준다.
 public class PostMemoForm {
 
 	// 글을 올릴 때와 같은 규칙(300자). 비워서 보내면 메모를 지운다.

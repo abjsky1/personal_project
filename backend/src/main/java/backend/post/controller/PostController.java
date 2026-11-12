@@ -23,7 +23,6 @@ import backend.common.error.ErrorCode;
 import backend.common.web.Visitors;
 import backend.post.model.dto.PostCreateForm;
 import backend.post.model.dto.PostMemoForm;
-import backend.post.model.dto.PostSummary;
 import backend.post.service.PostService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -110,41 +109,36 @@ public class PostController {
 		return "posts/detail";
 	}
 
-	// 메모 수정 화면 (JM-53, 지인 피드백 7번). 고칠 수 있는 것은 메모뿐이다.
-	// 지금 메모를 칸에 채워서 보여 준다. 비밀번호는 여기서 묻지 않고 저장할 때 확인한다:
-	// 메모는 상세 화면에서 누구나 보는 값이라 이 화면을 여는 것만으로 새로 드러나는 것이 없다.
-	// 이 화면을 여는 것은 조회수로 세지 않는다 (getDetail의 둘째 값 false).
-	@GetMapping("/posts/{id}/edit")
-	public String editForm(@PathVariable Long id, Model model) {
-		PostSummary post = postService.getDetail(id, false);
-		PostMemoForm form = new PostMemoForm();
-		form.setMemo(post.memo());
-		model.addAttribute("post", post);
-		model.addAttribute("form", form);
-		return "posts/edit";
-	}
-
-	// 메모 수정 form 제출
-	// 메모가 너무 길거나 비밀번호가 틀리면 저장하지 않고 수정 화면을 다시 보여 준다. (고쳐 쓰던 메모는 칸에 그대로 남는다)
-	@PostMapping("/posts/{id}/edit")
-	public String edit(@PathVariable Long id, @Valid @ModelAttribute("form") PostMemoForm form, BindingResult bindingResult,
-			Model model) {
-		if (!bindingResult.hasErrors()) {
+	// 메모 수정 (JM-53, 지인 피드백 7번). 고칠 수 있는 것은 메모뿐이다.
+	// 따로 수정 화면이 없다: 상세 화면의 메모 아래 "메모 수정"을 누르면 그 자리에 칸이 펼쳐지고, 거기서 보낸 값을 여기서 받는다.
+	// 저장했든 못 했든 그 글의 상세로 돌아간다. (화면을 바로 보여 주면 새로고침할 때 같은 요청이 한 번 더 간다)
+	// @Valid: PostMemoForm에 적어 둔 규칙(메모 300자, 비밀번호 빈칸)으로 검사하고, 걸린 내용은 바로 뒤의 BindingResult에 담긴다.
+	@PostMapping("/posts/{id}/memo")
+	public String updateMemo(@PathVariable Long id, @Valid @ModelAttribute PostMemoForm form, BindingResult bindingResult,
+			RedirectAttributes redirectAttributes) {
+		String error = null;
+		if (bindingResult.hasErrors()) {
+			error = bindingResult.getFieldErrors().get(0).getDefaultMessage();
+		} else {
 			try {
 				postService.updateMemo(id, form.getMemo(), form.getPassword());
-				// 저장 후에는 그 글의 상세로 이동한다. (화면을 바로 보여 주면 새로고침할 때 같은 요청이 한 번 더 간다)
-				return "redirect:/posts/" + id;
 			} catch (BusinessException e) {
-				// 비밀번호가 틀린 경우만 비밀번호 칸 아래에 메시지를 보여 주고, 다른 에러(글 없음 등)는 그대로 던져서 에러 화면으로 보낸다.
+				// 비밀번호가 틀린 경우만 여기서 처리하고, 다른 에러(글 없음 등)는 그대로 던져서 에러 화면으로 보낸다.
 				if (e.getErrorCode() != ErrorCode.INVALID_PASSWORD) {
 					throw e;
 				}
-				bindingResult.rejectValue("password", e.getErrorCode().name(), e.getErrorCode().getMessage());
+				error = e.getErrorCode().getMessage();
 			}
 		}
-		// 수정 화면 위쪽에 보여 줄 글(사진, 닉네임). 없거나 지운 글이면 여기서 에러 화면(404)으로 간다.
-		model.addAttribute("post", postService.getDetail(id, false));
-		return "posts/edit";
+		if (error == null) {
+			return "redirect:/posts/" + id;
+		}
+		// 저장하지 못했으면 상세 화면으로 돌아가서 메모 수정 칸을 펼친 채 메시지를 보여 준다. (삭제의 deleteError와 같은 방식)
+		// 고쳐 쓰던 메모도 함께 넘겨서 칸에 다시 채운다. flash라서 한 번만 보이고 새로고침하면 사라진다.
+		redirectAttributes.addFlashAttribute("memoError", error);
+		redirectAttributes.addFlashAttribute("memoDraft", form.getMemo() == null ? "" : form.getMemo());
+		// #memo-edit: 돌아간 화면에서 메모 수정 칸 자리로 바로 내려간다
+		return "redirect:/posts/" + id + "#memo-edit";
 	}
 
 	// 삭제 (HTML form은 GET, POST만 보낼 수 있어서 DELETE 대신 POST로 받는다)
@@ -168,19 +162,17 @@ public class PostController {
 
 	// 이번에 연 것을 조회수로 셀지 정한다 (JM-72).
 	// - 사람이 연 것만 센다. 검색 엔진, 링크 미리보기, 캡처 도구는 뺀다 (Visitors)
-	// - 같은 글 화면에서 넘어온 것은 세지 않는다: 댓글을 쓰거나 지우면 서버가 이 화면을 새로 열어 주는데,
+	// - 같은 글 화면에서 넘어온 것은 세지 않는다: 댓글을 쓰거나 지우거나 메모를 고치면 서버가 이 화면을 새로 열어 주는데,
 	//   그때마다 올리면 조회수가 댓글 수만큼 부풀려진다
 	// - 작성 화면에서 넘어온 것도 세지 않는다: 글을 올린 사람의 첫 화면과, 분석이 끝나 저절로 새로 열리는 화면이다
 	//   (/posts는 입력 검사에 한 번 걸렸다가 다시 올린 경우의 작성 화면 주소)
-	// - 이 글의 메모 수정 화면에서 넘어온 것도 세지 않는다: 작성자가 메모를 저장했거나 그냥 돌아온 화면이다 (JM-53)
 	// 같은 사람이 나갔다가 다시 들어오면 또 센다 (가려 내려면 쿠키나 IP 저장이 필요하다)
 	private boolean countsAsView(Long id, String userAgent, String referer) {
 		if (!Visitors.isPerson(userAgent)) {
 			return false;
 		}
 		String from = pathOf(referer);
-		String thisPost = "/posts/" + id;
-		return !from.equals(thisPost) && !from.equals(thisPost + "/edit") && !from.equals("/posts/new") && !from.equals("/posts");
+		return !from.equals("/posts/" + id) && !from.equals("/posts/new") && !from.equals("/posts");
 	}
 
 	// 주소에서 경로만 꺼낸다 (https://jjikmuk.com/posts/3?commentCursor=5 → /posts/3). 없거나 주소 모양이 아니면 빈 글자
