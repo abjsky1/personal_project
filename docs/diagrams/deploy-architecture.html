@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>찍먹 배포 아키텍처</title>
+<style>
+:root {
+  --ink: #17212b; --sub: #556272; --faint: #8693a1; --line: #dbe0e6; --bg: #f3f4ef;
+  --green: #2f7d32; --green-bg: #e9f4ea; --green-line: #a9d3ab;
+  --blue: #1f5fd0; --blue-bg: #eaf1fd; --blue-line: #b4cbf3;
+  --aws: #b45f06; --aws-bg: #fff7ec; --aws-line: #efc38f;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Noto Sans KR", "Malgun Gothic", sans-serif; color: var(--ink); background: var(--bg); word-break: keep-all; }
+.stage { position: relative; width: 1600px; height: 1100px; overflow: hidden; }
+.abs { position: absolute; }
+
+h1 { position: absolute; left: 50px; top: 30px; font-size: 31px; font-weight: 800; letter-spacing: -0.6px; }
+.subtitle { position: absolute; left: 52px; top: 80px; font-size: 14px; color: var(--sub); font-weight: 500; }
+.subtitle b { color: var(--ink); font-weight: 700; margin-right: 10px; }
+.legend { position: absolute; right: 50px; top: 48px; display: flex; gap: 22px; font-size: 13px; color: var(--sub); font-weight: 600; }
+.legend span { display: flex; align-items: center; gap: 8px; }
+.legend i { display: inline-block; width: 34px; height: 0; border-top: 3px solid var(--green); }
+.legend i.b { border-color: var(--blue); }
+.legend i.g { border-top: 2.5px dashed var(--faint); }
+
+.panel { position: absolute; left: 40px; width: 1520px; background: #fff; border: 1.5px solid var(--line); border-radius: 22px; }
+.plabel { position: absolute; left: 64px; display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 800; letter-spacing: -0.3px; }
+.plabel em { font-style: normal; display: inline-flex; width: 28px; height: 28px; border-radius: 50%; align-items: center; justify-content: center; font-size: 15px; color: #fff; background: var(--ink); }
+.pnote { position: absolute; right: 64px; font-size: 13px; color: var(--sub); font-weight: 500; }
+.pnote b { color: var(--green); font-weight: 700; }
+
+/* step cards (panel 1) */
+.step { position: absolute; top: 190px; width: 216px; height: 218px; background: #fff; border: 1.5px solid var(--line); border-radius: 16px; padding: 14px 15px; overflow: hidden; }
+.step .top { display: flex; align-items: center; justify-content: space-between; }
+.step .num { display: inline-flex; width: 26px; height: 26px; border-radius: 50%; align-items: center; justify-content: center; font-size: 13.5px; font-weight: 800; color: #fff; background: var(--green); }
+.step .where { font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #eef0f3; color: #46525f; }
+.step .where.gh { background: #17212b; color: #fff; }
+.step .where.aws { background: var(--aws-bg); color: var(--aws); border: 1px solid var(--aws-line); }
+.step h3 { font-size: 16.5px; font-weight: 800; margin-top: 13px; letter-spacing: -0.3px; }
+.step p { font-size: 12.8px; line-height: 1.5; color: var(--sub); margin-top: 6px; font-weight: 500; }
+.step p + p { margin-top: 3px; }
+.step.last { border-color: var(--green-line); background: #fbfefb; }
+.step .out { position: absolute; left: 15px; right: 15px; bottom: 12px; padding-top: 8px; border-top: 1.5px dashed #e3e7ec; font-size: 11.8px; font-weight: 700; color: #6b7785; }
+.step .out b { color: var(--green); font-weight: 800; margin-right: 4px; }
+
+/* boxes (panel 2) */
+.box { position: absolute; background: #fff; border: 1.5px solid var(--line); border-radius: 14px; padding: 11px 14px; overflow: hidden; }
+.box h4 { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 7px; letter-spacing: -0.2px; }
+.box h4 small { font-size: 11.5px; font-weight: 700; color: var(--faint); }
+.box p { font-size: 12.5px; line-height: 1.48; color: var(--sub); margin-top: 3px; font-weight: 500; }
+.box h4 + p { margin-top: 6px; }
+.ic { width: 19px; height: 19px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.zone { position: absolute; background: var(--aws-bg); border: 1.5px solid var(--aws-line); border-radius: 20px; }
+.zlabel { position: absolute; font-size: 13px; font-weight: 800; color: var(--aws); letter-spacing: 0.1px; }
+.ec2 { position: absolute; background: #fff; border: 1.5px solid var(--aws-line); border-radius: 16px; }
+.ec2 > h4 { position: absolute; left: 20px; top: 13px; font-size: 15.5px; font-weight: 800; display: flex; align-items: center; gap: 7px; }
+.ec2 > p { position: absolute; left: 20px; top: 40px; font-size: 12.5px; color: var(--sub); font-weight: 500; }
+.box.req { background: var(--blue-bg); border-color: var(--blue-line); }
+.box.req h4 { color: #173f8f; }
+.box.app { background: var(--green-bg); border-color: var(--green-line); }
+.box.app h4 { color: #1f5a22; }
+.box.mini { padding: 9px 13px; background: #f7f8fa; }
+.box.mini h4 { font-size: 13.5px; }
+.box.mini p { font-size: 12px; margin-top: 2px; }
+.box.store h4 .ic { color: var(--blue); }
+.box.ext { background: #fafbfc; }
+.box.who { background: #17212b; border-color: #17212b; }
+.box.who h4, .box.who p { color: #fff; }
+.box.who p { opacity: 0.82; }
+
+.lbl { position: absolute; font-size: 11.5px; font-weight: 800; background: #fff; padding: 0 5px; border-radius: 6px; line-height: 17px; white-space: nowrap; }
+.lbl.b { color: var(--blue); }
+.lbl.g { color: var(--green); }
+.lbl.d { color: #6b7785; }
+.lbl.z { background: var(--aws-bg); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <h1>찍먹 배포 아키텍처</h1>
+  <div class="subtitle"><b>jjikmuk.com</b>Spring Boot + JSP, Docker Compose, AWS 서울 리전 &nbsp;|&nbsp; 2026-11-13 기준</div>
+  <div class="legend">
+    <span><i></i>배포 흐름</span>
+    <span><i class="b"></i>사용자 요청</span>
+    <span><i class="g"></i>로그와 알림</span>
+  </div>
+
+  <!-- panel 1: deploy pipeline -->
+  <div class="panel" style="top:124px; height:300px;"></div>
+  <div class="plabel" style="top:142px;"><em>1</em>코드가 서버까지 가는 길</div>
+  <div class="pnote" style="top:148px;">main에 머지하면 <b>약 4분 뒤 반영</b> (app이 바뀌는 약 20초 동안은 접속이 끊긴다)</div>
+
+  <div class="step" style="left:64px;" data-fit="step1">
+    <div class="top"><span class="num">1</span><span class="where">내 PC</span></div>
+    <h3>개발과 push</h3>
+    <p>브랜치에서 고치고 로컬에서 먼저 테스트한다.</p>
+    <p>push 한 뒤 PR을 연다.</p>
+    <div class="out"><b>→</b>PR</div>
+  </div>
+  <div class="step" style="left:315px;" data-fit="step2">
+    <div class="top"><span class="num">2</span><span class="where gh">GitHub</span></div>
+    <h3>PR과 머지</h3>
+    <p>검사(backend)를 통과해야 머지할 수 있다.</p>
+    <p>main에는 직접 push 할 수 없다.</p>
+    <div class="out"><b>→</b>main의 머지 커밋</div>
+  </div>
+  <div class="step" style="left:566px;" data-fit="step3">
+    <div class="top"><span class="num">3</span><span class="where gh">Actions: backend</span></div>
+    <h3>테스트</h3>
+    <p>MySQL을 띄우고 Gradle로 빌드한다.</p>
+    <p>자동 테스트가 모두 통과해야 다음으로 간다.</p>
+    <div class="out"><b>→</b>테스트 통과</div>
+  </div>
+  <div class="step" style="left:817px;" data-fit="step4">
+    <div class="top"><span class="num">4</span><span class="where gh">Actions: image</span></div>
+    <h3>이미지 빌드</h3>
+    <p>Docker 이미지를 만들어 GHCR에 올린다.</p>
+    <p>태그는 커밋 SHA라서 예전 버전으로 되돌릴 수 있다.</p>
+    <div class="out"><b>→</b>이미지 macros-app:SHA</div>
+  </div>
+  <div class="step" style="left:1068px;" data-fit="step5">
+    <div class="top"><span class="num">5</span><span class="where gh">Actions: deploy</span></div>
+    <h3>배포 명령</h3>
+    <p>OIDC로 임시 권한을 받아 SSM으로 서버에 명령을 보낸다.</p>
+    <p>GitHub에 맡긴 비밀값은 0개.</p>
+    <div class="out"><b>→</b>서버에서 deploy.sh 실행</div>
+  </div>
+  <div class="step last" style="left:1319px;" data-fit="step6">
+    <div class="top"><span class="num">6</span><span class="where aws">AWS EC2</span></div>
+    <h3>서버 교체</h3>
+    <p>deploy.sh가 새 이미지를 받아 app 컨테이너만 바꾼다.</p>
+    <p>healthy를 확인하고 nginx를 reload 한다.</p>
+    <div class="out"><b>→</b>CI가 사이트 응답을 확인</div>
+  </div>
+
+  <!-- panel 2: runtime -->
+  <div class="panel" style="top:452px; height:612px;"></div>
+  <div class="plabel" style="top:470px;"><em>2</em>사용자의 요청이 지나가는 길</div>
+
+  <div class="box ext" style="left:70px; top:566px; width:200px; height:74px;" data-fit="dns">
+    <h4><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.800 0 18M12 3c-3 3.2-3 14.800 0 18"/></svg>가비아 DNS</h4>
+    <p>jjikmuk.com → 서버의 고정 IP</p>
+  </div>
+  <div class="box who" style="left:70px; top:692px; width:200px; height:86px;" data-fit="user">
+    <h4><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.400 3.600-7 8-7s8 2.600 8 7"/></svg>사용자</h4>
+    <p>휴대폰, PC의 브라우저</p>
+  </div>
+
+  <div class="zone" style="left:320px; top:516px; width:950px; height:524px;"></div>
+  <div class="zlabel" style="left:340px; top:527px;">AWS 서울 리전 (ap-northeast-2)</div>
+
+  <div class="ec2" style="left:345px; top:566px; width:480px; height:334px;">
+    <h4><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.500h.010M7 16.500h.010"/></svg>EC2 macros-server</h4>
+    <p>t3.small (2GB), Docker Compose</p>
+  </div>
+  <div class="box req" style="left:368px; top:668px; width:200px; height:134px;" data-fit="nginx">
+    <h4>nginx</h4>
+    <p>443 HTTPS (Sectigo 인증서)</p>
+    <p>http, www 주소는 301로 모은다</p>
+    <p>업로드는 20MB까지</p>
+  </div>
+  <div class="box app" style="left:602px; top:668px; width:200px; height:134px;" data-fit="app">
+    <h4>app <small>Spring Boot + JSP</small></h4>
+    <p>게시판, 사진 줄이기</p>
+    <p>AI 분석 요청, 운영자 API</p>
+    <p>힙 512MB, 포트 8080</p>
+  </div>
+  <div class="box mini" style="left:368px; top:818px; width:200px; height:62px;" data-fit="certbot">
+    <h4>certbot</h4>
+    <p>예비 인증서 자동 갱신</p>
+  </div>
+  <div class="box mini" style="left:602px; top:818px; width:200px; height:62px;" data-fit="health">
+    <h4>상태 확인</h4>
+    <p>/actuator/health, 30초마다</p>
+  </div>
+  <div class="box" style="left:345px; top:916px; width:480px; height:100px; border-color:var(--aws-line);" data-fit="iam">
+    <h4><svg class="ic" viewBox="0 0 24 24" style="color:var(--aws)"><path d="M12 3l7 3v5c0 5-3.500 8-7 10-3.500-2-7-5-7-10V6z"/></svg>IAM 역할 <small>열쇠를 저장하지 않는다</small></h4>
+    <p>macros-ec2: 서버가 액세스 키 없이 S3를 읽고 쓴다</p>
+    <p>macros-deploy: GitHub Actions가 OIDC 임시 권한으로 SSM 명령을 보낸다</p>
+  </div>
+
+  <div class="box store" style="left:905px; top:580px; width:340px; height:128px;" data-fit="rds">
+    <h4><svg class="ic" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.700 3.100 3 7 3s7-1.300 7-3V6"/><path d="M5 12c0 1.700 3.100 3 7 3s7-1.300 7-3"/></svg>RDS MySQL 8.4 <small>macros-db</small></h4>
+    <p>글, 댓글, 피드백, 분석 결과가 여기에 저장된다</p>
+    <p>밖에서는 접속할 수 없다 (EC2에서만 3306)</p>
+    <p>자동 백업 매일</p>
+  </div>
+  <div class="box store" style="left:905px; top:724px; width:340px; height:100px;" data-fit="s3">
+    <h4><svg class="ic" viewBox="0 0 24 24"><path d="M4.500 7l1.800 12.200c.100.500.500.800 1 .800h9.400c.500 0 .900-.300 1-.800L19.500 7"/><ellipse cx="12" cy="7" rx="7.500" ry="2.600"/></svg>S3 버킷</h4>
+    <p>사진 원본과 썸네일</p>
+    <p>공개는 막혀 있고, app이 읽어서 내려 준다</p>
+  </div>
+  <div class="box store" style="left:905px; top:840px; width:340px; height:124px;" data-fit="cw">
+    <h4><svg class="ic" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>CloudWatch Logs <small>/macros/server</small></h4>
+    <p>app 로그를 90일 보관, traceId로 검색</p>
+    <p>ERROR가 한 번이라도 찍히면 경보 → SNS 메일</p>
+    <p>nginx 접속 기록은 서버 안에 남는다 (IP 없이)</p>
+  </div>
+
+  <div class="box ext" style="left:1310px; top:580px; width:225px; height:128px;" data-fit="gemini">
+    <h4><svg class="ic" viewBox="0 0 24 24" style="color:#7a4fd0"><path d="M12 3l1.900 5.600L19.500 10.500l-5.600 1.900L12 18l-1.900-5.600L4.500 10.500l5.600-1.900z"/></svg>Google Gemini API</h4>
+    <p>gemini-3.5-flash-lite</p>
+    <p>사진으로 음식과 칼로리를 추정</p>
+    <p>하루 호출 수에 상한을 둔다</p>
+  </div>
+  <div class="box ext" style="left:1310px; top:724px; width:225px; height:100px;" data-fit="uptime">
+    <h4><svg class="ic" viewBox="0 0 24 24" style="color:#0f8a7a"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.500 2"/></svg>UptimeRobot</h4>
+    <p>밖에서 5분마다 사이트가 살아 있는지 확인</p>
+  </div>
+  <div class="box who" style="left:1310px; top:840px; width:225px; height:124px;" data-fit="mail">
+    <h4><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.500 7.500l8.500 6 8.500-6"/></svg>운영자 메일</h4>
+    <p>에러 경보 (5분 안)</p>
+    <p>다운 알림, 요금 알림 (월 50달러)</p>
+  </div>
+
+  <!-- connectors -->
+  <svg class="abs" style="left:0; top:0;" width="1600" height="1100" viewBox="0 0 1600 1100" fill="none">
+    <defs>
+      <marker id="ag" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto"><path d="M2 2.500l10 4.500-10 4.500z" fill="#2f7d32"/></marker>
+      <marker id="ab" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto"><path d="M2 2.500l10 4.500-10 4.500z" fill="#1f5fd0"/></marker>
+      <marker id="ad" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto"><path d="M2 2.500l10 4.500-10 4.500z" fill="#8693a1"/></marker>
+    </defs>
+    <!-- pipeline chevrons -->
+    <g stroke="#2f7d32" stroke-width="3" marker-end="url(#ag)" stroke-linecap="round">
+      <path d="M286 299H307"/><path d="M537 299H558"/><path d="M788 299H809"/><path d="M1039 299H1060"/><path d="M1290 299H1311"/>
+    </g>
+    <!-- deploy reaches the app container -->
+    <path d="M1427 408V438H660V662" stroke="#2f7d32" stroke-width="3" stroke-linejoin="round" marker-end="url(#ag)"/>
+    <!-- request path -->
+    <g stroke="#1f5fd0" stroke-width="3" stroke-linejoin="round" marker-end="url(#ab)">
+      <path d="M270 735H362"/>
+      <path d="M568 735H596"/>
+      <path d="M802 690H899"/>
+      <path d="M802 750H899"/>
+      <path d="M760 668V548H1422V574"/>
+    </g>
+    <!-- logs and alerts -->
+    <g stroke="#8693a1" stroke-width="2.500" stroke-dasharray="6 5" stroke-linejoin="round" marker-end="url(#ad)">
+      <path d="M802 786H862V902H899"/>
+      <path d="M1245 902H1304"/>
+      <path d="M1422 824V835"/>
+      <path d="M170 692V646"/>
+    </g>
+  </svg>
+
+  <div class="lbl g" style="left:672px; top:488px;">새 이미지로 app만 교체</div>
+  <div class="lbl b" style="left:276px; top:714px;">HTTPS</div>
+  <div class="lbl b z" style="left:836px; top:669px;">데이터</div>
+  <div class="lbl b z" style="left:842px; top:729px;">사진</div>
+  <div class="lbl d z" style="left:868px; top:838px;">로그</div>
+  <div class="lbl b z" style="left:1000px; top:539px;">사진 분석 요청</div>
+  <div class="lbl d" style="left:1259px; top:882px;">경보</div>
+  <div class="lbl d" style="left:180px; top:659px;">주소 찾기</div>
+</div>
+</body>
+</html>

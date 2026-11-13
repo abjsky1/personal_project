@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>찍먹 자원 지도</title>
+<style>
+:root {
+  --ink: #17212b; --sub: #556272; --faint: #8693a1; --line: #dbe0e6; --bg: #f3f4ef;
+  --aws: #b45f06; --aws-bg: #fff7ec; --aws-line: #efc38f;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Noto Sans KR", "Malgun Gothic", sans-serif; color: var(--ink); background: var(--bg); word-break: keep-all; }
+.stage { width: 1600px; padding: 30px 40px 40px; }
+
+.head { display: flex; justify-content: space-between; align-items: flex-end; padding: 0 10px; }
+h1 { font-size: 31px; font-weight: 800; letter-spacing: -0.6px; }
+.subtitle { font-size: 14px; color: var(--sub); font-weight: 500; margin-top: 6px; }
+.subtitle b { color: var(--ink); font-weight: 700; margin-right: 10px; }
+.legend { display: flex; gap: 16px; font-size: 12.5px; color: var(--sub); font-weight: 600; align-items: center; }
+.legend span { display: flex; align-items: center; gap: 7px; }
+.legend i { display: inline-block; width: 22px; height: 12px; border-radius: 4px; }
+
+.layout { display: grid; grid-template-columns: 1fr 410px; gap: 22px; margin-top: 22px; align-items: stretch; }
+
+.aws { background: var(--aws-bg); border: 1.5px solid var(--aws-line); border-radius: 22px; padding: 16px 18px 18px; }
+.zlabel { font-size: 13.5px; font-weight: 800; color: var(--aws); margin: 0 4px 12px; }
+.awsgrid { display: grid; grid-template-columns: 500px 1fr; gap: 16px; align-items: stretch; }
+.col { display: flex; flex-direction: column; gap: 16px; }
+.awsfoot { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+
+.outside { display: flex; flex-direction: column; gap: 14px; }
+.olabel { font-size: 13.5px; font-weight: 800; color: var(--sub); margin: 16px 4px -2px; }
+
+.card { background: #fff; border: 1.5px solid var(--line); border-top: 5px solid var(--c, var(--line)); border-radius: 14px; padding: 13px 16px 14px; display: flex; flex-direction: column; }
+.ch { display: flex; align-items: center; gap: 9px; }
+.ch h3 { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; color: var(--c); }
+.ic { width: 21px; height: 21px; flex: none; fill: none; stroke: var(--c); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.meta { font-size: 12.3px; color: var(--faint); font-weight: 600; margin-top: 4px; }
+.grp { font-size: 12.3px; font-weight: 800; color: var(--sub); margin: 13px 0 5px; padding-bottom: 4px; border-bottom: 1.5px dashed #e3e7ec; }
+.rows { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
+.grp + .rows { margin-top: 2px; }
+.row { display: grid; grid-template-columns: var(--kw, 150px) 1fr; gap: 10px; align-items: baseline; }
+.k { font-size: 12.2px; font-weight: 700; letter-spacing: 0.1px; background: #eef0f3; color: #2c3a47; padding: 2px 8px; border-radius: 6px; justify-self: start; white-space: nowrap; }
+.v { font-size: 12.8px; line-height: 1.5; color: var(--sub); font-weight: 500; }
+.v b { color: var(--ink); font-weight: 700; }
+.nw { white-space: nowrap; }
+.foot { margin-top: auto; padding-top: 11px; }
+.foot p { font-size: 12.3px; line-height: 1.5; color: #46525f; font-weight: 600; background: #f7f8fa; border: 1px solid #e6e9ee; border-radius: 10px; padding: 8px 11px; }
+.card.mini { border-top-width: 4px; padding: 11px 13px 12px; }
+.card.mini .ch h3 { font-size: 15px; }
+.card.mini .ic { width: 18px; height: 18px; }
+.card.mini .v { margin-top: 6px; font-size: 12.3px; }
+.card.plain .v { margin-top: 8px; }
+
+.secrets { margin-top: 22px; background: #fff; border: 1.5px solid var(--line); border-radius: 18px; padding: 15px 18px 16px; display: grid; grid-template-columns: 170px repeat(5, 1fr); gap: 12px; align-items: stretch; }
+.secrets h2 { font-size: 17px; font-weight: 800; letter-spacing: -0.3px; align-self: center; display: flex; align-items: center; gap: 8px; }
+.secrets h2 .ic { stroke: #8a5a00; }
+.sc { background: #fffaf0; border: 1.5px solid #f0dcae; border-radius: 12px; padding: 9px 12px 10px; }
+.sc strong { display: block; font-size: 13px; font-weight: 800; color: #6d4700; }
+.sc span { display: block; font-size: 12.3px; line-height: 1.45; color: var(--sub); font-weight: 500; margin-top: 3px; }
+.sc.no { background: #f7f8fa; border-color: #e3e7ec; }
+.sc.no strong { color: #46525f; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="head">
+    <div>
+      <h1>찍먹 자원 지도</h1>
+      <div class="subtitle"><b>무엇이 어디에 있나</b>AWS 서울 리전과 바깥 서비스 &nbsp;|&nbsp; 2026-11-13 기준</div>
+    </div>
+    <div class="legend">
+      <span><i style="background:#b45f06"></i>서버</span>
+      <span><i style="background:#1f5fd0"></i>데이터베이스</span>
+      <span><i style="background:#2f7d32"></i>사진</span>
+      <span><i style="background:#0f8a7a"></i>로그와 경보</span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <section class="aws">
+      <div class="zlabel">AWS 서울 리전 (ap-northeast-2)</div>
+      <div class="awsgrid">
+        <div class="card" style="--c:#b45f06" data-fit="ec2">
+          <div class="ch"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg><h3>EC2</h3></div>
+          <div class="meta">macros-server &nbsp;|&nbsp; t3.small (2 vCPU, 2GB) &nbsp;|&nbsp; Amazon Linux 2023</div>
+
+          <div class="grp">Docker 컨테이너 (deploy/compose.yaml)</div>
+          <div class="rows" style="--kw:96px">
+            <div class="row"><span class="k">nginx</span><span class="v">HTTPS 입구. 접속 기록은 IP 없이 서버 안에만 (10MB 파일 3개까지)</span></div>
+            <div class="row"><span class="k">app</span><span class="v">Spring Boot. 이미지는 GHCR에서 받고, 로그는 CloudWatch로 보낸다</span></div>
+            <div class="row"><span class="k">certbot</span><span class="v">예비 인증서(Let's Encrypt)를 12시간마다 갱신해 본다</span></div>
+          </div>
+
+          <div class="grp">파일 (~/personal_project, 저장소를 clone 한 것)</div>
+          <div class="rows" style="--kw:172px">
+            <div class="row"><span class="k">deploy/.env</span><span class="v"><b>비밀값.</b> DB 주소와 비밀번호, 버킷 이름, Gemini 키, 운영자 토큰, 지금 이미지 태그. 저장소에는 없다</span></div>
+            <div class="row"><span class="k">deploy/nginx/ssl/</span><span class="v">Sectigo 인증서와 <b>개인 키</b>. 서버 밖으로 나가지 않는다</span></div>
+            <div class="row"><span class="k">deploy/deploy.sh</span><span class="v">새 이미지로 app만 바꾸는 배포 스크립트</span></div>
+            <div class="row"><span class="k">deploy/nginx/default.conf</span><span class="v">nginx 설정 (주소 모으기, 업로드 20MB 제한)</span></div>
+          </div>
+
+          <div class="grp">그 밖</div>
+          <div class="rows" style="--kw:120px">
+            <div class="row"><span class="k">certbot-etc 볼륨</span><span class="v">Let's Encrypt 예비 인증서</span></div>
+            <div class="row"><span class="k">/swapfile</span><span class="v">스왑 2GB. 메모리가 모자랄 때의 안전판</span></div>
+            <div class="row"><span class="k">디스크</span><span class="v">20GB 중 약 6GB 사용</span></div>
+          </div>
+
+          <div class="grp">열린 문 (보안 그룹 macros-web)</div>
+          <div class="rows" style="--kw:120px">
+            <div class="row"><span class="k">443, 80</span><span class="v">누구나. 80으로 오면 https 주소로 넘긴다</span></div>
+            <div class="row"><span class="k">22 (SSH)</span><span class="v">운영자 IP에서만</span></div>
+            <div class="row"><span class="k">8080, 3306</span><span class="v">밖에서 닫혀 있다. app과 DB에는 nginx와 서버 안에서만 닿는다</span></div>
+          </div>
+
+          <div class="foot"><p>사진과 DB 데이터는 서버에 두지 않는다. 서버를 새로 만들어도 데이터는 RDS와 S3에 남는다.</p></div>
+        </div>
+
+        <div class="col">
+          <div class="card" style="--c:#1f5fd0" data-fit="rds">
+            <div class="ch"><svg class="ic" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg><h3>RDS</h3></div>
+            <div class="meta">macros-db &nbsp;|&nbsp; MySQL 8.4 &nbsp;|&nbsp; DB 이름 macros &nbsp;|&nbsp; 테이블 7개</div>
+            <div class="rows" style="--kw:128px">
+              <div class="row"><span class="k">posts</span><span class="v">글. 닉네임, 비밀번호 해시, 메모, 사진 파일 이름, 좋아요 수, 조회수</span></div>
+              <div class="row"><span class="k">comments</span><span class="v">댓글과 답글</span></div>
+              <div class="row"><span class="k">food_analyses</span><span class="v">AI 분석. AI의 답과 후보, 확정한 값, 모델, 토큰, 걸린 시간</span></div>
+              <div class="row"><span class="k">post_locations</span><span class="v">사진의 위치. 동의했을 때만 저장하고, 글을 지우면 함께 지운다</span></div>
+              <div class="row"><span class="k">feedbacks</span><span class="v">피드백 글과 처리 상태</span></div>
+              <div class="row"><span class="k">feedback_replies</span><span class="v">운영자 답변 (달린 순서대로)</span></div>
+              <div class="row"><span class="k">notice_views</span><span class="v">공지 조회수. 공지 글 자체는 GitHub의 notices.json</span></div>
+            </div>
+            <div class="foot"><p>글, 댓글, 피드백은 지워도 행이 남고 상태만 바뀐다. 자동 백업 매일(1일 보관), 삭제 방지, 저장 암호화. 밖에서는 접속할 수 없다 (3306은 EC2에서만).</p></div>
+          </div>
+
+          <div class="card" style="--c:#2f7d32" data-fit="s3">
+            <div class="ch"><svg class="ic" viewBox="0 0 24 24"><path d="M4.5 7l1.8 12.2c.1.5.5.8 1 .8h9.4c.5 0 .9-.3 1-.8L19.5 7"/><ellipse cx="12" cy="7" rx="7.5" ry="2.6"/></svg><h3>S3</h3></div>
+            <div class="meta">사진 버킷 &nbsp;|&nbsp; 버킷 이름은 서버 .env에만</div>
+            <div class="rows" style="--kw:128px">
+              <div class="row"><span class="k">images/</span><span class="v">글마다 두 장. 큰 사진(긴 변 1280px)과 썸네일(600px 정사각형)</span></div>
+              <div class="row"><span class="k">파일 이름</span><span class="v">무작위 이름.jpg. 위치 같은 숨은 정보(EXIF)를 지운 JPEG</span></div>
+            </div>
+            <div class="foot"><p>공개 접근은 막혀 있다. app이 IAM 역할로 읽어서 /images/파일이름으로 내려 준다. 글을 지워도 사진 파일은 남는다.</p></div>
+          </div>
+
+          <div class="card" style="--c:#0f8a7a" data-fit="cw">
+            <div class="ch"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><h3>CloudWatch</h3></div>
+            <div class="meta">로그, 경보, 지표</div>
+            <div class="rows" style="--kw:150px">
+              <div class="row"><span class="k">/macros/server</span><span class="v">app 로그 (JSON, 요청마다 traceId). 90일 보관</span></div>
+              <div class="row"><span class="k">macros-app-error</span><span class="v">경보. app 로그에 ERROR가 찍히면 5분 안에 울린다</span></div>
+              <div class="row"><span class="k">SNS macros-alerts</span><span class="v">경보를 운영자 메일로 보낸다</span></div>
+              <div class="row"><span class="k">지표</span><span class="v">EC2, RDS의 CPU와 네트워크 그래프. AWS가 자동으로 모은다</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="awsfoot">
+        <div class="card mini" style="--c:#7a6a55" data-fit="iam">
+          <div class="ch"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6z"/></svg><h3>IAM 역할</h3></div>
+          <div class="v"><b>macros-ec2</b> 서버가 키 없이 S3와 SSM을 쓴다. <b>macros-deploy</b> GitHub Actions의 배포 전용</div>
+        </div>
+        <div class="card mini" style="--c:#7a6a55" data-fit="eip">
+          <div class="ch"><svg class="ic" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><h3>Elastic IP</h3></div>
+          <div class="v"><b>macros-ip</b> 서버의 고정 주소. 도메인이 이 주소를 가리킨다</div>
+        </div>
+        <div class="card mini" style="--c:#7a6a55" data-fit="ssm">
+          <div class="ch"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10l3 2-3 2M12.5 14H17"/></svg><h3>Systems Manager</h3></div>
+          <div class="v">배포 명령이 서버로 들어가는 길. SSH 키를 GitHub에 맡기지 않는다</div>
+        </div>
+        <div class="card mini" style="--c:#7a6a55" data-fit="budget">
+          <div class="ch"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M14.8 9.2c-.5-.9-1.6-1.4-2.8-1.4-1.6 0-2.8.9-2.8 2.1 0 2.8 5.6 1.5 5.6 4.2 0 1.2-1.2 2.1-2.8 2.1-1.3 0-2.4-.6-2.9-1.5M12 6v1.8M12 16.2V18"/></svg><h3>Budgets</h3></div>
+          <div class="v">한 달 요금이 50달러를 넘으면 메일</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="outside">
+      <div class="olabel" style="margin-top:0">AWS 바깥</div>
+      <div class="card" style="--c:#17212b" data-fit="github">
+        <div class="ch"><svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-6 3-11.2 7.5"/></svg><h3>GitHub</h3></div>
+        <div class="meta">abjsky1/personal_project</div>
+        <div class="rows" style="--kw:78px">
+          <div class="row"><span class="k">저장소</span><span class="v">코드, 문서, 공지 글(notices.json), 배포 설정</span></div>
+          <div class="row"><span class="k">Actions</span><span class="v">테스트, 이미지 빌드, 배포</span></div>
+          <div class="row"><span class="k">GHCR</span><span class="v">앱 이미지 macros-app:커밋SHA. 되돌릴 때 쓴다</span></div>
+        </div>
+        <div class="foot"><p>비밀값은 하나도 없다. AWS 권한은 OIDC 임시 권한으로 받는다.</p></div>
+      </div>
+
+      <div class="card" style="--c:#0b7285" data-fit="gabia">
+        <div class="ch"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><h3>가비아</h3></div>
+        <div class="rows" style="--kw:78px">
+          <div class="row"><span class="k">도메인</span><span class="v">jjikmuk.com. DNS가 Elastic IP를 가리킨다. <span class="nw">2027-11-03</span> 만기</span></div>
+          <div class="row"><span class="k">인증서</span><span class="v">Sectigo 구입처. <span class="nw">2027-05-28까지</span>, 직접 교체</span></div>
+        </div>
+      </div>
+
+      <div class="card plain" style="--c:#6a3fc4" data-fit="gemini">
+        <div class="ch"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"/></svg><h3>Google Gemini API</h3></div>
+        <div class="v">사진을 받아 칼로리를 추정해 돌려준다. 답은 RDS에 저장하고, API 키는 서버 .env에만 둔다</div>
+      </div>
+
+      <div class="card plain" style="--c:#0f8a7a" data-fit="uptime">
+        <div class="ch"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg><h3>UptimeRobot</h3></div>
+        <div class="v">밖에서 5분마다 /actuator/health를 확인하고, 응답이 없으면 메일</div>
+      </div>
+
+      <div class="card" style="--c:#5b6876" data-fit="pc">
+        <div class="ch"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><h3>운영자 PC</h3></div>
+        <div class="rows" style="--kw:96px">
+          <div class="row"><span class="k">개발용 MySQL</span><span class="v">Docker, localhost:3311. 시험 데이터만</span></div>
+          <div class="row"><span class="k">records</span><span class="v">비공개 기록 저장소. 바꾸기 전과 뒤의 화면 사진</span></div>
+          <div class="row"><span class="k">SSH 키</span><span class="v">macros-key.pem. 서버 접속용</span></div>
+        </div>
+      </div>
+
+      <div class="card plain" style="--c:#8693a1" data-fit="notion">
+        <div class="ch"><svg class="ic" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg><h3>노션과 Jira</h3></div>
+        <div class="v">운영 노트(명령 모음)와 작업 일감. 비밀값은 적지 않는다</div>
+      </div>
+    </section>
+  </div>
+
+  <div class="secrets">
+    <h2><svg class="ic" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>비밀값은 어디에</h2>
+    <div class="sc"><strong>서버 deploy/.env</strong><span>DB 비밀번호, Gemini 키, 운영자 토큰</span></div>
+    <div class="sc"><strong>서버 deploy/nginx/ssl</strong><span>인증서 개인 키</span></div>
+    <div class="sc"><strong>비밀번호 관리자</strong><span>RDS 마스터 비밀번호</span></div>
+    <div class="sc"><strong>운영자 PC</strong><span>서버 접속 키 (SSH)</span></div>
+    <div class="sc no"><strong>두지 않는 곳</strong><span>GitHub, 노션, Jira, 채팅</span></div>
+  </div>
+</div>
+</body>
+</html>
