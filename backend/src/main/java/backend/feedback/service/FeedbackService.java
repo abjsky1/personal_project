@@ -47,6 +47,8 @@ public class FeedbackService {
 	}
 
 	// 목록: 최신순 20개씩 쪽 번호 방식 (PostService.getFeed와 같은 방식, JM-57)
+	// 삭제된 글도 함께 읽는다 (JM-76): 목록에 번호와 "삭제된 피드백입니다."만 남겨서, 글이 지워져도 번호와 자리가 당겨지지 않게 한다.
+	// 삭제된 글의 제목, 닉네임은 FeedbackSummary가 화면으로 넘기지 않는다. 상세(getDetail)는 지금처럼 404다
 	@Transactional(readOnly = true)
 	public FeedbackPage getPage(int requestedPage) {
 		Page<Feedback> page = loadPage(Math.max(1, requestedPage));
@@ -59,8 +61,7 @@ public class FeedbackService {
 	}
 
 	private Page<Feedback> loadPage(int pageNumber) {
-		return feedbackRepository.findByStatus(PostStatus.ACTIVE,
-				PageRequest.of(pageNumber - 1, PAGE_SIZE, Sort.by(Sort.Direction.DESC, "id")));
+		return feedbackRepository.findAll(PageRequest.of(pageNumber - 1, PAGE_SIZE, Sort.by(Sort.Direction.DESC, "id")));
 	}
 
 	// 상세. 없거나 삭제된 글이면 FEEDBACK_NOT_FOUND (404 화면)

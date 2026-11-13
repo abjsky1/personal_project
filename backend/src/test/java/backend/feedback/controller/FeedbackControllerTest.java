@@ -94,18 +94,32 @@ class FeedbackControllerTest {
 	}
 
 	@Test
-	void 목록은_최신순이고_삭제된_글은_빠진다() throws Exception {
+	void 목록은_최신순이고_삭제된_글은_번호와_자리만_남는다() throws Exception {
 		Feedback older = save("먼저 쓴 글");
+		Feedback byAuthor = save("작성자가 지운 글");
+		Feedback byAdmin = save("운영자가 지운 글");
 		Feedback newer = save("나중에 쓴 글");
-		Feedback deleted = save("지운 글");
-		deleted.deleteByAuthor();
-		feedbackRepository.save(deleted);
+		byAuthor.deleteByAuthor();
+		byAdmin.deleteByAdmin();
+		feedbackRepository.save(byAuthor);
+		feedbackRepository.save(byAdmin);
 
 		FeedbackPage page = pageOf(get("/feedback"));
 
-		// 개발 DB에 다른 글이 있어도 되도록, 방금 저장한 둘이 "나중 글 → 먼저 글" 순서로 맨 앞에 오는지와 지운 글이 없는지만 본다
-		assertThat(page.feedbacks()).extracting(FeedbackSummary::id).startsWith(newer.getId(), older.getId());
-		assertThat(page.feedbacks()).extracting(FeedbackSummary::id).doesNotContain(deleted.getId());
+		// 개발 DB에 다른 글이 있어도 되도록, 방금 저장한 넷이 번호가 큰 순서로 맨 앞에 오는지만 본다.
+		// 지운 글도 줄이 빠지지 않는다 (JM-76): 번호가 당겨지지 않게 번호와 자리를 남긴다
+		assertThat(page.feedbacks()).extracting(FeedbackSummary::id)
+				.startsWith(newer.getId(), byAdmin.getId(), byAuthor.getId(), older.getId());
+		assertThat(page.feedbacks().subList(0, 4)).extracting(FeedbackSummary::deleted).containsExactly(false, true, true, false);
+		// 지운 글의 내용은 화면으로 넘기지 않는다 (누가 지웠든 같다)
+		for (FeedbackSummary gone : page.feedbacks().subList(1, 3)) {
+			assertThat(gone.title()).isNull();
+			assertThat(gone.nickname()).isNull();
+			assertThat(gone.createdAt()).isNull();
+			assertThat(gone.progress()).isNull();
+			assertThat(gone.hasReply()).isFalse();
+		}
+		assertThat(page.feedbacks().get(0).title()).isEqualTo("나중에 쓴 글");
 		assertThat(page.feedbacks().get(0).progress()).isEqualTo(FeedbackProgress.RECEIVED);
 	}
 

@@ -60,6 +60,12 @@ public class NoticeCatalog {
 		return notices;
 	}
 
+	// 가장 큰 공지 번호. 공지가 하나도 없으면 0.
+	// 목록은 이 번호부터 1번까지 번호마다 한 줄을 만든다 (JM-76): 중간에 없는 번호는 "지운 공지"의 자리다
+	public long maxId() {
+		return notices.isEmpty() ? 0 : notices.get(0).id();
+	}
+
 	public Optional<Notice> find(long id) {
 		return notices.stream().filter(notice -> notice.id() == id).findFirst();
 	}
