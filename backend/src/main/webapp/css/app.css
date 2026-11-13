@@ -845,6 +845,11 @@ button.danger {
 	background: #f7f7f7;
 }
 
+/* 답변이 여러 개면 (JM-77) 달린 순서대로 위에서 아래로 쌓인다. 둘째 답변부터는 앞의 답변에 가깝게 붙인다 */
+.admin-reply + .admin-reply {
+	margin-top: 10px;
+}
+
 .admin-reply .meta {
 	margin: 0;
 }

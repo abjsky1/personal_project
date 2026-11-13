@@ -51,7 +51,9 @@ public class Feedback {
 	@Column(nullable = false, length = 20)
 	private FeedbackProgress progress;
 
-	// 운영자 답변. 아직 없으면 null
+	// JM-77 전의 운영자 답변 칸 (답변을 하나만 담을 수 있어서, 다시 달면 앞의 답변이 덮어써졌다).
+	// 이제는 여기에 쓰지 않는다: 답변은 FeedbackReply(feedback_replies 테이블)에 한 줄씩 쌓인다.
+	// 예전 답변을 새 테이블로 옮길 때만 읽는다 (FeedbackReplyBackfill). 옮겨진 것을 확인한 뒤에는 이 두 칸을 지워도 된다
 	@Column(length = 1000)
 	private String adminReply;
 
@@ -90,12 +92,6 @@ public class Feedback {
 
 	public void changeProgress(FeedbackProgress progress) {
 		this.progress = progress;
-	}
-
-	// 답변을 달거나 고친다. 답변 시각은 마지막으로 쓴 시각
-	public void reply(String adminReply) {
-		this.adminReply = adminReply;
-		this.repliedAt = Instant.now();
 	}
 
 	public Long getId() {

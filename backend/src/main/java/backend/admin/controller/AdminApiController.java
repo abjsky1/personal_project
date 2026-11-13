@@ -54,10 +54,20 @@ public class AdminApiController {
 	}
 
 	// 피드백 처리 상태 바꾸기 / 답변 달기. 바뀐 뒤의 피드백 내용을 돌려준다.
+	// 답변은 보낼 때마다 한 줄씩 이어서 달린다 (JM-77): 전에 단 답변은 그대로 남는다.
+	// 응답의 replies에 지금까지의 답변이 달린 순서대로, 답변 번호(id)와 함께 실린다
 	// @RequestBody: 요청 본문의 JSON을 객체로 읽는다. @Valid: 답변 길이 검사
 	@PatchMapping("/feedback/{id}")
 	public FeedbackDetail updateFeedback(@PathVariable Long id, @Valid @RequestBody AdminFeedbackUpdateRequest request) {
 		return feedbackService.updateByAdmin(id, request.progress(), request.reply());
+	}
+
+	// 잘못 단 답변 지우기 (JM-77). 주소의 id는 피드백 번호가 아니라 답변 번호다: 답변을 달 때 받은 응답의 replies 안에 있다.
+	// 다른 삭제와 같이 상태만 바꾼다. 화면에서는 그 답변만 빠진다
+	@PostMapping("/feedback/replies/{id}/delete")
+	public AdminDeleteResponse deleteFeedbackReply(@PathVariable Long id) {
+		feedbackService.deleteReplyByAdmin(id);
+		return new AdminDeleteResponse(id, PostStatus.DELETED_BY_ADMIN);
 	}
 
 	// 운영 통계 (JM-68). days: 오늘을 포함해 며칠을 볼지 (안 주면 7일, 1~90일)

@@ -1,8 +1,10 @@
 package backend.feedback.model.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import backend.feedback.model.entity.Feedback;
 import backend.post.model.entity.PostStatus;
@@ -16,4 +18,10 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Long> {
 
 	// 상세, 삭제: ACTIVE인 것만
 	Optional<Feedback> findByIdAndStatus(Long id, PostStatus status);
+
+	// 예전 답변 옮기기용 (JM-77, FeedbackReplyBackfill):
+	// 예전 칸(admin_reply)에 답변이 있는데 feedback_replies에는 그 글의 답변이 한 줄도 없는 글 = 아직 옮기지 않은 글
+	@Query("select f from Feedback f where f.adminReply is not null"
+			+ " and not exists (select r.id from FeedbackReply r where r.feedbackId = f.id) order by f.id asc")
+	List<Feedback> findWithOldReplyNotMoved();
 }
