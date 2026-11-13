@@ -37,6 +37,8 @@ dependencies {
 	implementation 'net.coobird:thumbnailator:0.4.21'
 	// metadata-extractor: 사진 원본의 EXIF에서 GPS 위치와 촬영 시각을 읽는다. (버전 직접 지정)
 	implementation 'com.drewnoakes:metadata-extractor:2.21.0'
+	// QR 코드 만들기 (관리자 휴대폰 인증 앱 등록 화면, JM-82)
+	implementation 'com.google.zxing:core:3.5.3'
 	// AWS SDK: 배포 서버에서 사진을 S3에 저장하고 꺼낸다.
 	// platform(bom): 여러 AWS 라이브러리의 버전을 한 번에 맞춰 주는 목록. 아래 s3에는 버전을 따로 적지 않는다.
 	implementation platform('software.amazon.awssdk:bom:2.55.16')
