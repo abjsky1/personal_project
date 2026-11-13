@@ -64,8 +64,10 @@ import tools.jackson.databind.json.JsonMapper;
 @Transactional
 @TestPropertySource(properties = {
 		"app.upload-dir=build/test-uploads",
-		"app.rate-limit.upload-per-minute=1000",
-		"app.rate-limit.upload-per-day=1000" })
+		"app.rate-limit.upload-per-browser-per-minute=1000",
+		"app.rate-limit.upload-per-browser-per-day=1000",
+		"app.rate-limit.upload-per-ip-per-day=1000",
+		"app.rate-limit.upload-total-per-day=1000000" })
 class PostConfirmTest {
 
 	@Autowired

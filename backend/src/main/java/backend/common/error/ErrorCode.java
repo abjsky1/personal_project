@@ -29,9 +29,14 @@ public enum ErrorCode {
 	POST_NOT_FOUND(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."),
 	// 403: 삭제하거나 메모를 고치거나 분석을 확정할 때 입력한 비밀번호가 다름
 	INVALID_PASSWORD(HttpStatus.FORBIDDEN, "비밀번호가 맞지 않습니다."),
-	// 429: 같은 곳(IP)에서 너무 자주 올림 (application.properties의 app.rate-limit.*)
+	// 429: 글을 너무 자주 올림 (application.properties의 app.rate-limit.upload-*, UploadLimiter, 기획서 7절)
 	// (제한 숫자는 설정으로 바뀔 수 있어서 메시지에 숫자를 넣지 않는다)
+	// 같은 브라우저에서 1분 동안 너무 자주
 	TOO_MANY_UPLOADS(HttpStatus.TOO_MANY_REQUESTS, "업로드가 너무 잦습니다. 잠시 후 다시 올려 주세요."),
+	// 같은 브라우저, 또는 같은 IP(와이파이)에서 오늘 올릴 수 있는 횟수를 다 씀 (JM-79)
+	TOO_MANY_UPLOADS_TODAY(HttpStatus.TOO_MANY_REQUESTS, "오늘은 더 올릴 수 없습니다. 내일 다시 올려 주세요."),
+	// 서비스 전체에서 오늘 받을 수 있는 글 수가 다 참 (JM-79)
+	UPLOADS_FULL_TODAY(HttpStatus.TOO_MANY_REQUESTS, "오늘 찍먹에 올라온 사진이 많아 더 받을 수 없습니다. 내일 다시 올려 주세요."),
 	// 429: 한 글에 좋아요가 짧은 시간 동안 너무 많이 눌림 (JM-59, app.rate-limit.like-per-post-*). IP가 아니라 글마다 센다
 	TOO_MANY_LIKES(HttpStatus.TOO_MANY_REQUESTS, "이 글에 좋아요가 한꺼번에 너무 많이 눌렸습니다. 잠시 후 다시 눌러 주세요."),
 
