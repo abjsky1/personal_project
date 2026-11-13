@@ -157,9 +157,9 @@ class FeedbackControllerTest {
 		feedback.changeProgress(FeedbackProgress.DONE);
 		feedbackRepository.save(feedback);
 		// 답변 셋 중 가운데 것은 운영자가 지운 답변이라 화면에 나오지 않는다
-		feedbackReplyRepository.save(new FeedbackReply(feedback.getId(), "업데이트 목록에 넣었어요."));
+		feedbackReplyRepository.save(new FeedbackReply(feedback.getId(), "업데이트 목록에 추가했습니다. 피드백 감사합니다 :)"));
 		saveDeletedReply(feedback);
-		feedbackReplyRepository.save(new FeedbackReply(feedback.getId(), "반영했어요. 고마워요!"));
+		feedbackReplyRepository.save(new FeedbackReply(feedback.getId(), "반영했습니다."));
 
 		FeedbackDetail detail = detailOf(feedback);
 
@@ -167,7 +167,7 @@ class FeedbackControllerTest {
 		assertThat(detail.progress()).isEqualTo(FeedbackProgress.DONE);
 		// 먼저 단 답변이 위, 나중에 단 답변이 아래 (JM-77: 다시 달아도 덮어쓰지 않고 이어서 달린다)
 		assertThat(detail.replies()).extracting(FeedbackReplyView::content)
-				.containsExactly("업데이트 목록에 넣었어요.", "반영했어요. 고마워요!");
+				.containsExactly("업데이트 목록에 추가했습니다. 피드백 감사합니다 :)", "반영했습니다.");
 		assertThat(detail.replies()).allSatisfy(reply -> assertThat(reply.createdAt()).isNotBlank());
 		// 목록에도 "답변 있음"이 표시된다
 		FeedbackPage page = pageOf(get("/feedback"));

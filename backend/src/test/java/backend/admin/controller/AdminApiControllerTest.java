@@ -124,18 +124,18 @@ class AdminApiControllerTest {
 		mockMvc.perform(patch("/api/admin/feedback/" + feedback.getId())
 				.header(AdminTokenInterceptor.HEADER, TOKEN)
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"progress\":\"DONE\",\"reply\":\"  고쳤어요. 고마워요!  \"}"))
+				.content("{\"progress\":\"DONE\",\"reply\":\"  수정했습니다. 피드백 감사합니다 :)  \"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.progress").value("DONE"))
 				.andExpect(jsonPath("$.replies.length()").value(1))
 				.andExpect(jsonPath("$.replies[0].id").isNumber())
-				.andExpect(jsonPath("$.replies[0].content").value("고쳤어요. 고마워요!"));
+				.andExpect(jsonPath("$.replies[0].content").value("수정했습니다. 피드백 감사합니다 :)"));
 
 		Feedback updated = feedbackRepository.findById(feedback.getId()).orElseThrow();
 		assertThat(updated.getProgress()).isEqualTo(FeedbackProgress.DONE);
 		List<FeedbackReply> replies = repliesOf(feedback);
 		assertThat(replies).hasSize(1);
-		assertThat(replies.get(0).getContent()).isEqualTo("고쳤어요. 고마워요!");
+		assertThat(replies.get(0).getContent()).isEqualTo("수정했습니다. 피드백 감사합니다 :)");
 		assertThat(replies.get(0).getCreatedAt()).isNotNull();
 	}
 
@@ -147,22 +147,22 @@ class AdminApiControllerTest {
 		mockMvc.perform(patch("/api/admin/feedback/" + feedback.getId())
 				.header(AdminTokenInterceptor.HEADER, TOKEN)
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"reply\":\"업데이트 목록에 넣었어요.\"}"))
+				.content("{\"reply\":\"업데이트 목록에 추가했습니다. 피드백 감사합니다 :)\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.replies.length()").value(1));
 
 		mockMvc.perform(patch("/api/admin/feedback/" + feedback.getId())
 				.header(AdminTokenInterceptor.HEADER, TOKEN)
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"progress\":\"DONE\",\"reply\":\"반영했어요.\"}"))
+				.content("{\"progress\":\"DONE\",\"reply\":\"반영했습니다.\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.progress").value("DONE"))
 				.andExpect(jsonPath("$.replies.length()").value(2))
-				.andExpect(jsonPath("$.replies[0].content").value("업데이트 목록에 넣었어요."))
-				.andExpect(jsonPath("$.replies[1].content").value("반영했어요."));
+				.andExpect(jsonPath("$.replies[0].content").value("업데이트 목록에 추가했습니다. 피드백 감사합니다 :)"))
+				.andExpect(jsonPath("$.replies[1].content").value("반영했습니다."));
 
 		assertThat(repliesOf(feedback)).extracting(FeedbackReply::getContent)
-				.containsExactly("업데이트 목록에 넣었어요.", "반영했어요.");
+				.containsExactly("업데이트 목록에 추가했습니다. 피드백 감사합니다 :)", "반영했습니다.");
 	}
 
 	@Test

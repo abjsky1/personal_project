@@ -23,7 +23,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
 // 예전 답변 옮기기(JM-77)를 확인하는 테스트
-// 앞의 둘은 DB에 예전 방식의 답변을 만들어 놓고 실제로 옮겨 본다. 뒤의 넷은 "어떤 답변들을 어떤 순서로 만들지"만 본다 (DB를 쓰지 않는다)
+// 앞의 둘은 DB에 예전 방식의 답변을 만들어 놓고 실제로 옮겨 본다. 뒤의 다섯은 "어떤 답변들을 어떤 순서로 만들지"만 본다 (DB를 쓰지 않는다)
 @SpringBootTest
 @Transactional
 class FeedbackReplyBackfillTest {
@@ -130,6 +130,32 @@ class FeedbackReplyBackfillTest {
 		assertThat(replies).hasSize(1);
 		assertThat(replies.get(0).getContent()).isEqualTo("지금 남아 있는 답변");
 		assertThat(replies.get(0).getCreatedAt()).isEqualTo(current);
+	}
+
+	// 운영자 요청 (2026-11-13): 답변은 문어체로 쓰고, 한 글의 첫 답변은 "피드백 감사합니다 :)"로 끝낸다
+	@Test
+	void 해요체로_달았던_답변_둘은_옮기면서_문어체로_고쳐_넣고_시각은_그대로_둔다() {
+		Instant firstAt = kst("2026-11-05T11:25:07");
+		List<FeedbackReply> first = FeedbackReplyBackfill.repliesOf(1L,
+				"네, 누구나 볼 수 있는 공개 게시판이에요. 로그인 없이 쓰고, 삭제는 쓸 때 정한 비밀번호로 해요.", firstAt);
+
+		// 1번 글: 첫 답변이라 끝인사까지 붙는다
+		assertThat(first).hasSize(1);
+		assertThat(first.get(0).getContent()).isEqualTo(
+				"네, 누구나 볼 수 있는 공개 게시판입니다. 로그인 없이 쓰고, 삭제는 쓸 때 정한 비밀번호로 할 수 있습니다. 피드백 감사합니다 :)");
+		assertThat(first.get(0).getCreatedAt()).isEqualTo(firstAt);
+
+		Instant thirdAt = kst("2026-11-07T15:24:21");
+		List<FeedbackReply> third = FeedbackReplyBackfill.repliesOf(3L,
+				"요청하신 대로 휴대폰에서 피드가 한 줄에 세 장으로 보이게 바꿨어요. 새로고침해서 확인해 보세요! 함께 적어 주신 소통 공간은 따로 고민 중이에요.",
+				thirdAt);
+
+		// 3번 글: 덮어써졌던 첫 답변(그대로) → 고쳐 넣은 둘째 답변 (첫 답변이 아니라서 끝인사는 없다)
+		assertThat(third).hasSize(2);
+		assertThat(third.get(0).getContent()).startsWith("여러칸이 뜰 수 있도록").endsWith("피드백 감사합니다 :)");
+		assertThat(third.get(1).getContent()).isEqualTo(
+				"요청하신 대로 휴대폰에서 피드가 한 줄에 세 장으로 보이게 바꿨습니다. 함께 적어 주신 소통 공간은 따로 고민 중입니다. 조만간 업데이트 하겠습니다.");
+		assertThat(third.get(1).getCreatedAt()).isEqualTo(thirdAt);
 	}
 
 	// 한국 시각으로 적은 글자를 Instant로
