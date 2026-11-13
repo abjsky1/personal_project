@@ -20,6 +20,7 @@ import backend.analysis.model.dto.FoodAnalysisResult;
 import backend.analysis.model.dto.FoodAnalysisResult.FoodItem;
 import backend.analysis.model.dto.FoodAnalysisView;
 import backend.analysis.model.dto.FoodAnalysisView.ConfirmRow;
+import backend.analysis.model.dto.FoodAnalysisView.FoodRow;
 import backend.analysis.model.dto.FoodAnalysisView.Option;
 import backend.analysis.model.dto.FoodAnalyzerResponse;
 import backend.analysis.model.dto.FoodCandidates;
@@ -516,28 +517,45 @@ public class FoodAnalysisService {
 		return foodAnalysisRepository.findById(postId).map(this::toView).orElse(null);
 	}
 
+	// 화면은 AI의 답을 언제나 보여 주고, 확정한 글이면 그 옆에 확정한 값을 함께 보여 준다 (확정했다고 AI의 답을 지우지 않는다).
 	private FoodAnalysisView toView(FoodAnalysis analysis) {
-		// 확정한 글: 확정한 음식(뺀 것은 제외)을 보여 준다. 확정은 한 번뿐이라 확정 칸은 더 그리지 않는다 (빈 목록).
+		List<FoodItem> aiItems = readItems(analysis.getItems());
+
+		// 확정한 글: 음식마다 AI의 답과 확정한 값을 짝지은 줄을 만든다. 확정은 한 번뿐이라 확정 칸은 더 그리지 않는다 (빈 목록).
 		if (analysis.isConfirmed()) {
-			List<FoodItem> kept = readConfirmed(analysis.getConfirmedItems()).stream()
-					.filter(ConfirmedItem::kept)
-					.map(ConfirmedItem::toFoodItem)
-					.toList();
-			return FoodAnalysisView.of(analysis, kept, List.of());
+			List<ConfirmedItem> confirmed = readConfirmed(analysis.getConfirmedItems());
+			List<FoodRow> rows = new ArrayList<>();
+			for (int i = 0; i < aiItems.size(); i++) {
+				// 확정한 값은 AI가 낸 음식과 같은 순서, 같은 개수로 저장돼 있다. 혹시 모자라면 AI의 줄만 그린다
+				rows.add(i < confirmed.size() ? compare(aiItems.get(i), confirmed.get(i)) : FoodRow.aiOnly(aiItems.get(i)));
+			}
+			return FoodAnalysisView.of(analysis, rows, List.of());
 		}
 
-		// 확정 전: AI의 첫 답을 보여 주고, 후보가 있는 글이면 확정 칸의 줄들을 만든다 (음식마다 후보와 AI가 추정한 양)
+		// 확정 전: AI의 줄만 그리고, 후보가 있는 글이면 확정 칸의 줄들을 만든다 (음식마다 후보와 AI가 추정한 양)
 		List<CandidateItem> candidates = readCandidates(analysis);
-		List<ConfirmRow> rows = new ArrayList<>();
+		List<ConfirmRow> confirmRows = new ArrayList<>();
 		for (int i = 0; i < candidates.size(); i++) {
 			CandidateItem item = candidates.get(i);
 			List<Option> options = new ArrayList<>();
 			for (int n = 0; n < item.candidates().size(); n++) {
 				options.add(new Option(String.valueOf(n), item.candidates().get(n).name(), item.candidates().get(n).kcalPer100g()));
 			}
-			rows.add(new ConfirmRow(i, options, item.amountG()));
+			confirmRows.add(new ConfirmRow(i, options, item.amountG()));
 		}
-		return FoodAnalysisView.of(analysis, readItems(analysis.getItems()), rows);
+		return FoodAnalysisView.of(analysis, aiItems.stream().map(FoodRow::aiOnly).toList(), confirmRows);
+	}
+
+	// 음식 하나에 대해 AI의 답과 확정한 값을 견주어, 화면의 줄을 만든다.
+	// "AI와 같음"의 기준: AI의 첫 답을 그대로 고르고 양도 그대로 둔 경우.
+	// 양은 g 단위의 정수로 견준다: 확정 칸이 AI의 양을 정수로 보여 주므로, AI가 152.4g이라고 했어도 손대지 않고 확정하면 152g으로 온다.
+	private FoodRow compare(FoodItem ai, ConfirmedItem confirmed) {
+		if (!confirmed.kept()) {
+			return new FoodRow(ai, null, FoodRow.REMOVED);
+		}
+		boolean keptFirst = ConfirmedItem.CANDIDATE.equals(confirmed.choice()) && Integer.valueOf(0).equals(confirmed.pick());
+		boolean sameAmount = Math.round(ai.amountG()) == Math.round(confirmed.amountG());
+		return new FoodRow(ai, confirmed.toFoodItem(), keptFirst && sameAmount ? FoodRow.SAME : FoodRow.CHANGED);
 	}
 
 	// JSON 글자로 저장해 둔 음식별 상세를 다시 목록으로 바꾼다. (DONE이 아니면 비어 있다)

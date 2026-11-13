@@ -33,8 +33,8 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 import backend.analysis.model.dto.FoodAnalysisResult;
-import backend.analysis.model.dto.FoodAnalysisResult.FoodItem;
 import backend.analysis.model.dto.FoodAnalysisView;
+import backend.analysis.model.dto.FoodAnalysisView.FoodRow;
 import backend.analysis.model.dto.FoodAnalyzerResponse;
 import backend.analysis.model.dto.FoodCandidates;
 import backend.analysis.model.dto.FoodCandidates.Candidate;
@@ -121,7 +121,9 @@ class PostConfirmTest {
 		// 확정한 글의 상세에는 다시 고칠 칸이 없다
 		FoodAnalysisView view = viewOf(url);
 		assertThat(view.confirmed()).isTrue();
-		assertThat(view.totalKcal()).isEqualByComparingTo("410.4");
+		// AI의 답과 확정한 값이 함께 넘어간다
+		assertThat(view.aiTotals().kcal()).isEqualByComparingTo("530.8");
+		assertThat(view.confirmedTotals().kcal()).isEqualByComparingTo("410.4");
 		assertThat(view.confirmRows()).isEmpty();
 
 		// 화면을 거치지 않고 다른 값으로 한 번 더 보내도 받지 않는다 (에러 화면, 409)
@@ -197,9 +199,14 @@ class PostConfirmTest {
 		assertThat(saved.getTypedInputTokens()).isEqualTo(1500);
 		assertThat(saved.getTypedOutputTokens()).isEqualTo(40);
 
+		// 상세 화면에는 AI가 본 음식과 직접 적은 음식이 한 줄로 짝지어 넘어간다
 		FoodAnalysisView view = viewOf(url);
-		assertThat(view.items()).extracting(FoodItem::name).containsExactly("밥, 계란후라이");
-		assertThat(view.totalKcal()).isEqualByComparingTo("640.0");
+		assertThat(view.rows()).hasSize(1);
+		assertThat(view.rows().get(0).change()).isEqualTo(FoodRow.CHANGED);
+		assertThat(view.rows().get(0).ai().name()).isEqualTo("김치볶음밥");
+		assertThat(view.rows().get(0).confirmed().name()).isEqualTo("밥, 계란후라이");
+		assertThat(view.aiTotals().kcal()).isEqualByComparingTo("630.0");
+		assertThat(view.confirmedTotals().kcal()).isEqualByComparingTo("640.0");
 	}
 
 	@Test

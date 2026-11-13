@@ -76,25 +76,70 @@
 				<section class="analysis">
 					<c:choose>
 						<c:when test="${analysis.status == 'DONE'}">
-							<%-- 보여 주는 값은 사용자가 확정했으면 확정한 값, 아니면 AI의 첫 답이다 (JM-74).
-							     "내가 보고 확정"으로 올린 글에는 칼로리 옆에 작은 표시가 붙는다: 확정 전 (AI 추정) → 직접 확정 --%>
-							<p class="total-kcal"><fmt:formatNumber value="${analysis.totalKcal}" maxFractionDigits="0" /> kcal<c:if test="${analysis.userMode}"><span class="confirm-badge${analysis.confirmed ? ' confirmed' : ''}">${analysis.confirmed ? '직접 확정' : '확정 전 (AI 추정)'}</span></c:if></p>
-							<p class="meta">
-								탄수화물 <fmt:formatNumber value="${analysis.carbsG}" maxFractionDigits="0" />g,
-								단백질 <fmt:formatNumber value="${analysis.proteinG}" maxFractionDigits="0" />g,
-								지방 <fmt:formatNumber value="${analysis.fatG}" maxFractionDigits="0" />g
-							</p>
+							<%-- 합계 (JM-74): 한 줄에 칼로리와 탄수화물, 단백질, 지방을 가로로 놓고, 줄 끝에 누구의 값인지 꼬리표를 붙인다.
+							       AI   = AI가 사진을 보고 추정한 값. 모든 글에 있다
+							       REAL = 사진을 올린 사람이 확정한 값. "내가 보고 확정"으로 올린 글에만 둘째 줄로 나온다
+							     확정했다고 AI의 줄을 지우지 않는다. 두 줄을 위아래로 놓아 비교할 수 있게 한다 (운영자 검토: "둘 다 보이면 좋겠다, 열이 맞으면 비교하는 재미도 있다").
+							     두 줄은 한 격자(.nut) 안에 이어서 넣는다 → 칼로리는 칼로리끼리, 탄수화물은 탄수화물끼리 열이 맞는다 (app.css).
+							     줄의 칸들은 nut-row.jspf가 그린다 (댓글의 comment-body.jspf와 같은 방식). 넘기는 값:
+							       nut = 그 줄의 합계, nutOld = 흐리게 보일지 (확정한 글의 AI 줄), nutTag와 nutTagClass = 꼬리표의 글자와 색 --%>
+							<div class="nut">
+								<c:set var="nut" value="${analysis.aiTotals}" />
+								<c:set var="nutOld" value="${analysis.confirmed}" />
+								<c:set var="nutTag" value="AI" />
+								<c:set var="nutTagClass" value="" />
+								<%@ include file="/WEB-INF/views/posts/nut-row.jspf" %>
+								<c:if test="${analysis.userMode}">
+									<c:choose>
+										<c:when test="${analysis.confirmed}">
+											<c:set var="nut" value="${analysis.confirmedTotals}" />
+											<c:set var="nutOld" value="${false}" />
+											<c:set var="nutTag" value="REAL" />
+											<c:set var="nutTagClass" value=" real" />
+											<%@ include file="/WEB-INF/views/posts/nut-row.jspf" %>
+										</c:when>
+										<c:otherwise>
+											<%-- 아직 확정하지 않은 글: 둘째 줄의 값 자리에는 "확정 전"만 둔다. 확정하면 이 자리에 값이 들어온다 --%>
+											<span class="pending"><span class="tag wait">확정 전</span></span>
+											<span class="who"><span class="tag real">REAL</span></span>
+										</c:otherwise>
+									</c:choose>
+								</c:if>
+							</div>
+							<%-- 음식 표: AI가 본 음식의 줄은 언제나 그대로 둔다. 확정한 글에서는 음식마다 어떻게 했는지에 따라 줄이 달라진다 (row.change, FoodAnalysisView.FoodRow).
+							       SAME    = AI의 답을 그대로 둠: 한 줄에 "AI와 같음"
+							       CHANGED = 다른 음식으로 바꾸거나 양을 고침: AI의 줄은 흐리게 두고, 바로 아래에 REAL 줄
+							       REMOVED = "이 음식 아님"으로 뺌: AI의 줄은 흐리게 두고, 아래에 뺐다는 REAL 줄
+							     확정하지 않은 글(NONE)은 AI의 줄만 나온다. 양과 칼로리는 오른쪽으로 맞춰서 위아래 숫자를 견주기 쉽게 한다.
+							     음식 이름은 사용자 입력처럼 c:out으로 찍는다 (직접 적은 이름은 실제로 사용자 입력이다). --%>
 							<table>
 								<thead>
-									<tr><th>음식</th><th>양</th><th>칼로리</th></tr>
+									<tr><th>음식</th><th class="num">양</th><th class="num">칼로리</th></tr>
 								</thead>
 								<tbody>
-									<c:forEach var="item" items="${analysis.items}">
-										<tr>
-											<td><c:out value="${item.name}" /></td>
-											<td><fmt:formatNumber value="${item.amountG}" maxFractionDigits="0" />g</td>
-											<td><fmt:formatNumber value="${item.kcal}" maxFractionDigits="0" /> kcal</td>
+									<c:forEach var="row" items="${analysis.rows}">
+										<c:set var="replaced" value="${row.change == 'CHANGED' or row.change == 'REMOVED'}" />
+										<tr<c:if test="${replaced}"> class="old"</c:if>>
+											<td><c:out value="${row.ai.name}" /><c:if test="${row.change == 'SAME'}"> <span class="same">✓ AI와 같음</span></c:if></td>
+											<td class="num"><fmt:formatNumber value="${row.ai.amountG}" maxFractionDigits="0" />g</td>
+											<td class="num"><fmt:formatNumber value="${row.ai.kcal}" maxFractionDigits="0" /> kcal</td>
 										</tr>
+										<c:if test="${replaced}">
+											<tr>
+												<c:choose>
+													<c:when test="${row.change == 'REMOVED'}">
+														<td><span class="tag real">REAL</span> 이 음식 아님 (뺌)</td>
+														<td class="num"></td>
+														<td class="num">0 kcal</td>
+													</c:when>
+													<c:otherwise>
+														<td><span class="tag real">REAL</span> <c:out value="${row.confirmed.name}" /></td>
+														<td class="num"><fmt:formatNumber value="${row.confirmed.amountG}" maxFractionDigits="0" />g</td>
+														<td class="num"><fmt:formatNumber value="${row.confirmed.kcal}" maxFractionDigits="0" /> kcal</td>
+													</c:otherwise>
+												</c:choose>
+											</tr>
+										</c:if>
 									</c:forEach>
 								</tbody>
 							</table>
@@ -102,8 +147,8 @@
 							<c:if test="${not empty analysis.confidenceLabel}">
 								<p class="hint">AI의 확신 정도: <c:out value="${analysis.confidenceLabel}" /></p>
 							</c:if>
-							<c:if test="${analysis.confirmed}">
-								<p class="hint">글쓴이가 확정한 값이에요. AI의 첫 답은 <fmt:formatNumber value="${analysis.aiTotalKcal}" maxFractionDigits="0" /> kcal였어요.</p>
+							<c:if test="${analysis.userMode}">
+								<p class="hint">${analysis.confirmed ? 'REAL은 사진을 올린 사람이 확정한 값이에요.' : 'REAL은 사진을 올린 사람이 확정하면 나와요.'}</p>
 							</c:if>
 							<p class="hint">AI 추정치이며 실제와 다를 수 있습니다. 의료나 영양 상담을 대신하지 않습니다.</p>
 

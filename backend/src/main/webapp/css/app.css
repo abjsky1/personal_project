@@ -328,17 +328,89 @@ button {
 	background: #f0f0f0;
 }
 
-/* AI 분석 결과: 칼로리 합계를 가장 크게 보여 준다 */
+/* AI 분석 결과 */
 .analysis {
 	margin-top: 24px;
 	padding-top: 16px;
 	border-top: 1px solid #eee;
 }
 
-.analysis .total-kcal {
-	margin: 0;
-	font-size: 1.8rem;
+/* ---- 합계 한 줄 (JM-74): 칼로리 | 탄 | 단 | 지 | 꼬리표 ---- */
+/* 한 줄에 가로로 놓는다. "내가 보고 확정"으로 올린 글은 AI의 줄과 REAL의 줄, 두 줄이다.
+   두 줄을 한 격자에 이어서 넣는다: 열의 폭이 그 열에서 가장 넓은 칸에 맞춰지므로(max-content) 위아래 줄의 열이 저절로 맞는다.
+   열은 8개: 칼로리, (탄 이름, 탄 숫자), (단 이름, 단 숫자), (지 이름, 지 숫자), 꼬리표. 꼬리표 열이 남는 폭을 다 가져가서 줄 끝에 붙는다.
+   tabular-nums: 숫자마다 폭이 같은 글꼴 모양을 쓴다 → 1과 8의 폭이 달라 자리가 어긋나는 일이 없다
+   overflow-x: 숫자가 아주 큰 드문 경우에 화면 전체가 옆으로 밀리지 않고 이 줄 안에서만 밀리게 */
+.nut {
+	display: grid;
+	grid-template-columns: max-content repeat(6, max-content) 1fr;
+	column-gap: 4px;
+	row-gap: 6px;
+	align-items: baseline;
+	font-variant-numeric: tabular-nums;
+	overflow-x: auto;
+}
+
+/* 칼로리: 그 줄에서 가장 크게. 숫자는 오른쪽으로 맞춘다 (자릿수가 달라도 일의 자리가 위아래로 맞는다) */
+.nut .kcal {
+	font-size: 1.5rem;
 	font-weight: 700;
+	text-align: right;
+}
+
+.nut .kcal small {
+	margin-left: 3px;
+	font-size: 0.85rem;
+}
+
+/* 탄, 단, 지: 이름 칸(.l)과 숫자 칸(.n). 이름 앞을 띄워서 세 묶음으로 보이게 한다 */
+.nut .l {
+	margin-left: 8px;
+	color: #666;
+	font-size: 0.9rem;
+}
+
+.nut .n {
+	color: #666;
+	font-size: 0.9rem;
+	text-align: right;
+}
+
+/* 확정한 글의 AI 줄은 흐리게: 지워지지 않고 남아 있되, 진한 REAL 줄이 먼저 읽힌다 */
+.nut .old {
+	color: #999;
+}
+
+.nut .who {
+	justify-self: end;
+}
+
+/* 아직 확정하지 않은 글의 둘째 줄: 값 칸 7개 자리를 "확정 전" 하나가 차지한다 */
+.nut .pending {
+	grid-column: span 7;
+	justify-self: start;
+}
+
+/* 꼬리표: 누구의 값인지 알려 주는 작은 알약. 기본은 회색(AI), real은 초록(사진을 올린 사람이 확정한 값), wait는 노랑(확정 전) */
+.tag {
+	display: inline-block;
+	padding: 1px 7px;
+	border-radius: 8px;
+	background: #eee;
+	color: #555;
+	font-size: 0.72rem;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.tag.real {
+	background: #e3f2e4;
+	color: #1f5f24;
+}
+
+.tag.wait {
+	background: #fff4d6;
+	color: #7a5200;
 }
 
 .analysis table {
@@ -355,24 +427,29 @@ button {
 	text-align: left;
 }
 
-/* ---- 고쳐서 확정하기 (상세 화면의 분석 자리, JM-74 고쳐 쓰는 AI) ---- */
-/* 칼로리 옆의 작은 표시: 확정 전에는 노란 바탕, 확정하면 초록 바탕 */
-.confirm-badge {
-	display: inline-block;
-	margin-left: 8px;
-	padding: 2px 8px;
-	border-radius: 8px;
-	background: #fff4d6;
-	color: #7a5200;
-	font-size: 0.75rem;
-	font-weight: 600;
-	vertical-align: middle;
+/* 양과 칼로리는 오른쪽으로 맞춘다: AI의 줄과 REAL의 줄을 위아래로 견주기 쉽다 */
+.analysis th.num,
+.analysis td.num {
+	text-align: right;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
 }
 
-.confirm-badge.confirmed {
-	background: #e3f2e4;
-	color: #1f5f24;
+/* 확정한 글에서, 사진을 올린 사람이 바꾸거나 뺀 음식의 AI 줄: 흐리게 두고 아래의 REAL 줄과 한 묶음으로 붙인다 (사이의 줄을 없앤다) */
+.analysis tr.old td {
+	padding-bottom: 0;
+	border-bottom: 0;
+	color: #999;
 }
+
+/* AI의 답을 그대로 둔 음식에 붙는 "AI와 같음" */
+.same {
+	color: #2f7d32;
+	font-size: 0.75rem;
+	white-space: nowrap;
+}
+
+/* ---- 고쳐서 확정하기 (상세 화면의 분석 자리, JM-74 고쳐 쓰는 AI) ---- */
 
 /* 작은 글자("후보에서 고르거나 직접 적어서 확정하기")를 누르면 그 자리에 펼쳐진다. 글자 모양은 메모 수정, 댓글의 "답글"과 같다 (.comment-actions summary) */
 .analysis-confirm {
@@ -1076,6 +1153,27 @@ form button {
 	.detail {
 		grid-template-columns: 1fr;
 		gap: 16px;
+	}
+}
+
+/* ---- 아주 좁은 휴대폰 (가로 350px 이하) ---- */
+/* 합계 한 줄(칼로리, 탄, 단, 지, 꼬리표)은 가로 360px까지는 그대로 들어간다. 그보다 좁으면 글자를 조금 줄여서 한 줄을 지킨다 */
+@media (max-width: 350px) {
+	.nut .kcal {
+		font-size: 1.25rem;
+	}
+
+	.nut .kcal small {
+		font-size: 0.75rem;
+	}
+
+	.nut .l {
+		margin-left: 4px;
+		font-size: 0.8rem;
+	}
+
+	.nut .n {
+		font-size: 0.8rem;
 	}
 }
 

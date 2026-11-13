@@ -586,8 +586,9 @@ class PostControllerTest {
 		MvcResult detail = mockMvc.perform(get("/posts/" + post.getId())).andExpect(status().isOk()).andReturn();
 		FoodAnalysisView view = (FoodAnalysisView) detail.getModelAndView().getModel().get("analysis");
 		assertThat(view.confirmed()).isTrue();
-		assertThat(view.totalKcal()).isEqualByComparingTo("410.4");
-		assertThat(view.aiTotalKcal()).isEqualByComparingTo("530.8");
+		// 상세 화면에는 확정한 값과 AI의 첫 답이 함께 넘어간다 (확정해도 AI의 답을 지우지 않는다)
+		assertThat(view.confirmedTotals().kcal()).isEqualByComparingTo("410.4");
+		assertThat(view.aiTotals().kcal()).isEqualByComparingTo("530.8");
 
 		// 목록 카드의 칼로리도 확정한 값
 		assertThat(summaryOf(feedOf(get("/")), post).totalKcal()).isEqualByComparingTo("410.4");

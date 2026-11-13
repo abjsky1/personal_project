@@ -26,6 +26,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import backend.analysis.model.dto.FoodAnalysisResult;
 import backend.analysis.model.dto.FoodAnalysisResult.FoodItem;
 import backend.analysis.model.dto.FoodAnalysisView;
+import backend.analysis.model.dto.FoodAnalysisView.FoodRow;
 import backend.analysis.model.dto.FoodAnalyzerResponse;
 import backend.analysis.model.dto.FoodCandidates;
 import backend.analysis.model.dto.FoodCandidates.Candidate;
@@ -582,7 +583,11 @@ class FoodAnalysisServiceTest {
 
 		assertThat(view.userMode()).isTrue();
 		assertThat(view.confirmed()).isFalse();
-		assertThat(view.totalKcal()).isEqualByComparingTo("530.8");
+		assertThat(view.aiTotals().kcal()).isEqualByComparingTo("530.8");
+		assertThat(view.confirmedTotals()).isNull();
+		// 음식 표: AI의 줄만
+		assertThat(view.rows()).extracting(row -> row.ai().name()).containsExactly("김치찌개", "공기밥");
+		assertThat(view.rows()).extracting(FoodRow::change).containsOnly(FoodRow.NONE);
 		// 확정 칸: 음식 둘, 후보 셋씩 (고르는 칸의 값은 후보의 순서를 글자로 바꾼 것), 양은 AI가 추정한 값
 		assertThat(view.confirmRows()).hasSize(2);
 		assertThat(view.confirmRows().get(0).options()).extracting(FoodAnalysisView.Option::name)
@@ -606,7 +611,7 @@ class FoodAnalysisServiceTest {
 	}
 
 	@Test
-	void 확정한_글의_상세에는_확정한_값을_넘기고_확정_칸은_없다() {
+	void 확정한_글의_상세에는_AI의_답과_확정한_값을_함께_넘기고_확정_칸은_없다() {
 		analyzedInUserMode();
 		confirmWillBeSaved();
 		typedCanBeClaimed();
@@ -619,12 +624,52 @@ class FoodAnalysisServiceTest {
 		FoodAnalysisView view = service.getView(POST_ID);
 
 		assertThat(view.confirmed()).isTrue();
-		assertThat(view.totalKcal()).isEqualByComparingTo("450.0");
-		assertThat(view.aiTotalKcal()).isEqualByComparingTo("530.8");
-		// 뺀 음식은 보여 주지 않는다
-		assertThat(view.items()).extracting(FoodItem::name).containsExactly("마라샹궈");
+		// 합계는 둘 다: AI의 답은 확정해도 지워지지 않는다
+		assertThat(view.aiTotals().kcal()).isEqualByComparingTo("530.8");
+		assertThat(view.confirmedTotals().kcal()).isEqualByComparingTo("450.0");
+		assertThat(view.confirmedTotals().carbsG()).isEqualByComparingTo("24.0");
+		// 음식 표의 줄도 AI가 본 음식 그대로 둘. 첫 음식은 다른 것으로 바꿨고, 둘째 음식은 뺐다
+		assertThat(view.rows()).extracting(row -> row.ai().name()).containsExactly("김치찌개", "공기밥");
+		assertThat(view.rows()).extracting(FoodRow::change).containsExactly(FoodRow.CHANGED, FoodRow.REMOVED);
+		assertThat(view.rows().get(0).confirmed().name()).isEqualTo("마라샹궈");
+		assertThat(view.rows().get(0).confirmed().kcal()).isEqualTo(450);
+		assertThat(view.rows().get(1).confirmed()).isNull();
 		// 확정은 한 번뿐이라 다시 고칠 칸을 넘기지 않는다
 		assertThat(view.confirmRows()).isEmpty();
+	}
+
+	@Test
+	void AI의_답을_그대로_둔_음식은_같음으로_양만_고친_음식은_바꿈으로_넘긴다() {
+		analyzedInUserMode();
+		confirmWillBeSaved();
+		// 첫 음식은 AI의 첫 답(김치찌개 400g) 그대로, 둘째 음식은 같은 공기밥이지만 양을 절반으로
+		service.confirm(POST_ID, IMAGE_KEY, List.of("0", "0"), List.of("400", "105"), List.of());
+		markConfirmed(savedConfirmation(false));
+
+		FoodAnalysisView view = service.getView(POST_ID);
+
+		assertThat(view.rows()).extracting(FoodRow::change).containsExactly(FoodRow.SAME, FoodRow.CHANGED);
+		assertThat(view.rows().get(1).ai().amountG()).isEqualTo(210);
+		assertThat(view.rows().get(1).confirmed().amountG()).isEqualTo(105);
+		// 김치찌개 220 + 공기밥 100g당 148kcal × 105g = 155.4
+		assertThat(view.confirmedTotals().kcal()).isEqualByComparingTo("375.4");
+	}
+
+	@Test
+	void AI가_소수로_낸_양을_손대지_않고_확정하면_같음으로_본다() {
+		userMode();
+		// 확정 칸은 AI의 양을 정수로 보여 준다: 152.4g은 152로 보이고, 손대지 않고 확정하면 152가 온다
+		aiOffers(new FoodCandidates(true, List.of(new CandidateItem(152.4, List.of(
+				new Candidate("사과", 52, 14, 0.3, 0.2),
+				new Candidate("배", 51, 13, 0.3, 0.1)))), "HIGH", "사과 한 개"));
+		service.analyze(POST_ID, IMAGE_KEY);
+		confirmWillBeSaved();
+		service.confirm(POST_ID, IMAGE_KEY, List.of("0"), List.of("152"), List.of());
+		markConfirmed(savedConfirmation(false));
+
+		FoodAnalysisView view = service.getView(POST_ID);
+
+		assertThat(view.rows()).extracting(FoodRow::change).containsExactly(FoodRow.SAME);
 	}
 
 	@Test
@@ -636,7 +681,9 @@ class FoodAnalysisServiceTest {
 
 		assertThat(view.userMode()).isFalse();
 		assertThat(view.confirmRows()).isEmpty();
-		assertThat(view.totalKcal()).isEqualByComparingTo("310");
+		assertThat(view.aiTotals().kcal()).isEqualByComparingTo("310");
+		assertThat(view.confirmedTotals()).isNull();
+		assertThat(view.rows()).extracting(row -> row.ai().name()).containsExactly("공기밥");
 	}
 
 	// 이 테스트의 분석 기록을 "내가 보고 확정"으로 올린 글의 것으로 바꾼다
