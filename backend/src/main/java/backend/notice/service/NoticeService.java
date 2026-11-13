@@ -1,6 +1,7 @@
 package backend.notice.service;
 
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -31,19 +32,29 @@ public class NoticeService {
 	private final NoticeCatalog catalog;
 	private final NoticeViewRepository noticeViewRepository;
 
-	// 목록: 최신순 20개씩. 범위 밖 쪽 번호는 끝 쪽으로 맞춘다 (피드백 목록과 같은 방식)
+	// 목록: 번호가 큰 것(최신)부터 20개씩. 범위 밖 쪽 번호는 끝 쪽으로 맞춘다 (피드백 목록과 같은 방식)
+	//
+	// 줄은 "있는 공지"가 아니라 "번호"를 기준으로 만든다 (JM-76): 가장 큰 번호부터 1번까지, 번호마다 한 줄.
+	// 그 번호의 공지가 notices.json에 없으면(지운 공지) 줄을 빼지 않고 "삭제된 공지" 줄을 넣는다.
+	// → 공지를 지워도 다른 공지의 번호와 자리가 당겨지지 않는다. 공지를 지우는 방법은 notices.json에서 그 항목을 지우는 것이다
 	@Transactional(readOnly = true)
 	public NoticePage getPage(int requestedPage) {
-		List<Notice> all = catalog.all();
-		int totalPages = (all.size() + PAGE_SIZE - 1) / PAGE_SIZE;
+		long maxId = catalog.maxId();
+		int totalPages = (int) ((maxId + PAGE_SIZE - 1) / PAGE_SIZE);
 		int page = Math.max(1, Math.min(requestedPage, Math.max(totalPages, 1)));
-		int from = Math.min((page - 1) * PAGE_SIZE, all.size());
-		List<Notice> slice = all.subList(from, Math.min(from + PAGE_SIZE, all.size()));
-		Map<Long, Long> views = noticeViewRepository.findAllById(slice.stream().map(Notice::id).toList()).stream()
+		// 이 쪽에 들어갈 번호들: 1쪽이면 maxId부터 20개, 2쪽이면 그다음 20개. 1번보다 아래로는 내려가지 않는다
+		long first = maxId - (long) (page - 1) * PAGE_SIZE;
+		List<Long> numbers = new ArrayList<>();
+		for (long number = first; number >= 1 && numbers.size() < PAGE_SIZE; number--) {
+			numbers.add(number);
+		}
+		Map<Long, Long> views = noticeViewRepository.findAllById(numbers).stream()
 				.collect(Collectors.toMap(NoticeView::getNoticeId, NoticeView::getViewCount));
-		List<NoticeSummary> rows = slice.stream()
-				.map(notice -> new NoticeSummary(notice.id(), notice.category(), notice.title(),
-						notice.date().format(DATE), views.getOrDefault(notice.id(), 0L)))
+		List<NoticeSummary> rows = numbers.stream()
+				.map(number -> catalog.find(number)
+						.map(notice -> new NoticeSummary(notice.id(), notice.category(), notice.title(),
+								notice.date().format(DATE), views.getOrDefault(notice.id(), 0L), false))
+						.orElseGet(() -> NoticeSummary.deleted(number)))
 				.toList();
 		return new NoticePage(rows, PageNav.of(page, totalPages));
 	}

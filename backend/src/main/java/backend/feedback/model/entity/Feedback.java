@@ -17,7 +17,8 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
 // 피드백 엔티티: DB의 feedbacks 테이블과 짝을 이룬다 (Post, Comment와 같은 방식, 서버가 켜질 때 JPA가 테이블을 만든다)
-// 인덱스 (status, id): 목록 조회("ACTIVE인 피드백을 최신순으로 20개")용
+// 인덱스 (status, id): 처음에는 목록 조회("ACTIVE인 피드백을 최신순으로 20개")용이었다.
+// JM-76부터 목록은 삭제된 글의 번호와 자리도 지키려고 상태를 가리지 않고 번호(기본 키) 순으로 읽는다. 인덱스는 그대로 둔다
 @Entity
 @Table(name = "feedbacks", indexes = @Index(name = "idx_feedbacks_status_id", columnList = "status, id"))
 public class Feedback {

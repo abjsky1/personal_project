@@ -12,7 +12,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
+import backend.notice.model.dto.NoticePage;
+import backend.notice.model.dto.NoticeSummary;
 import backend.notice.model.entity.NoticeView;
 import backend.notice.model.repository.NoticeViewRepository;
 
@@ -36,10 +39,24 @@ class NoticeControllerTest {
 
 	@Test
 	void 공지_목록이_열린다() throws Exception {
-		mockMvc.perform(get("/notice"))
+		MvcResult result = mockMvc.perform(get("/notice"))
 				.andExpect(status().isOk())
 				.andExpect(view().name("notice/list"))
-				.andExpect(model().attributeExists("page"));
+				.andExpect(model().attributeExists("page"))
+				.andReturn();
+
+		// 줄마다 번호가 있고 (JM-76), 가장 큰 번호부터 1씩 내려간다. 지운 공지가 있어도 번호는 건너뛰지 않는다
+		NoticePage page = (NoticePage) result.getModelAndView().getModel().get("page");
+		assertThat(page.notices()).isNotEmpty();
+		long top = page.notices().get(0).id();
+		for (int i = 0; i < page.notices().size(); i++) {
+			NoticeSummary row = page.notices().get(i);
+			assertThat(row.id()).isEqualTo(top - i);
+			// 남아 있는 공지에는 제목이 있고, 지운 공지의 자리에는 없다
+			assertThat(row.title() == null).isEqualTo(row.deleted());
+		}
+		// 가장 최신 공지는 지운 자리일 수 없다 (가장 큰 번호는 남아 있는 공지의 번호다)
+		assertThat(page.notices().get(0).deleted()).isFalse();
 	}
 
 	@Test

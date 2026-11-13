@@ -29,15 +29,29 @@
 		<p class="empty">아직 피드백이 없어요.</p>
 	</c:if>
 
+	<%-- 목록의 한 줄: 맨 왼쪽에 글 번호, 그 오른쪽에 내용 (JM-76, 운영자 요청).
+	     번호는 글의 번호 그대로다 (주소 /feedback/번호의 번호, 운영자가 답변을 달 때 쓰는 번호와 같다).
+	     삭제된 글도 줄을 빼지 않는다: 번호는 그대로 두고, 내용 자리에 링크 없이 "삭제된 피드백입니다."만 보여 준다.
+	     → 글이 지워져도 다른 글의 번호와 자리가 당겨지지 않는다. 삭제된 글의 제목, 닉네임은 서버가 화면으로 넘기지 않는다 --%>
 	<ul class="feedback-list">
 		<c:forEach var="feedback" items="${page.feedbacks}">
 			<li>
-				<%-- 처리 상태 배지: 글자와 색은 FeedbackProgress에서 가져온다 --%>
-				<span class="badge ${feedback.progress.cssClass}"><c:out value="${feedback.progress.label}" /></span>
-				<%-- 제목, 닉네임은 사용자 입력이라 c:out (XSS 방지) --%>
-				<a href="/feedback/${feedback.id}"><c:out value="${feedback.title}" /></a>
-				<c:if test="${feedback.hasReply}"><span class="reply-mark">답변 있음</span></c:if>
-				<p class="meta"><strong><c:out value="${feedback.nickname}" /></strong><span><c:out value="${feedback.createdAt}" /></span></p>
+				<span class="list-no">${feedback.id}</span>
+				<div class="list-main">
+					<c:choose>
+						<c:when test="${feedback.deleted}">
+							<span class="list-deleted">삭제된 피드백입니다.</span>
+						</c:when>
+						<c:otherwise>
+							<%-- 처리 상태 배지: 글자와 색은 FeedbackProgress에서 가져온다 --%>
+							<span class="badge ${feedback.progress.cssClass}"><c:out value="${feedback.progress.label}" /></span>
+							<%-- 제목, 닉네임은 사용자 입력이라 c:out (XSS 방지) --%>
+							<a href="/feedback/${feedback.id}"><c:out value="${feedback.title}" /></a>
+							<c:if test="${feedback.hasReply}"><span class="reply-mark">답변 있음</span></c:if>
+							<p class="meta"><strong><c:out value="${feedback.nickname}" /></strong><span><c:out value="${feedback.createdAt}" /></span></p>
+						</c:otherwise>
+					</c:choose>
+				</div>
 			</li>
 		</c:forEach>
 	</ul>

@@ -732,8 +732,25 @@ button.danger {
 	margin-top: 24px;
 }
 
+/* ---- 목록의 글 번호 (공지와 피드백 목록 공통, JM-76) ---- */
+/* 줄의 맨 왼쪽에 좁은 칸으로 둔다. 숫자를 오른쪽으로 맞춰서 한 자리, 두 자리, 세 자리 번호의 끝이 위아래로 맞는다.
+   tabular-nums: 숫자마다 폭이 같은 글꼴 모양 (1과 8의 폭이 달라 어긋나지 않게) */
+.list-no {
+	flex: none;
+	min-width: 2.2em;
+	color: #999;
+	font-size: 0.9rem;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+/* 삭제된 글의 줄: 번호는 그대로 두고, 내용 자리에 흐린 안내 글만 둔다 (링크 없음). 삭제된 댓글의 안내 글과 같은 색 */
+.list-deleted {
+	color: #999;
+}
+
 /* ---- 피드백 게시판 ---- */
-/* 목록: 한 줄에 배지 + 제목, 아래에 닉네임, 시간. 긴 글이라 760px로 제한 */
+/* 목록: 맨 왼쪽에 번호, 그 오른쪽에 배지 + 제목, 아래에 닉네임, 시간. 긴 글이라 760px로 제한 */
 .feedback-list {
 	max-width: 760px;
 	margin: 16px 0 0;
@@ -741,12 +758,22 @@ button.danger {
 	list-style: none;
 }
 
+/* 번호 칸과 내용 칸을 가로로 놓는다. baseline: 번호와 제목 첫 줄의 글자 밑선을 맞춘다 */
 .feedback-list li {
+	display: flex;
+	align-items: baseline;
+	gap: 12px;
 	padding: 12px 0;
 	border-bottom: 1px solid #eee;
 }
 
-.feedback-list li > a {
+/* 내용 칸이 남는 폭을 다 쓴다. min-width: 0 — 긴 제목이 칸을 밀어 넓히지 않고 줄을 바꾸게 */
+.feedback-list .list-main {
+	flex: 1;
+	min-width: 0;
+}
+
+.feedback-list .list-main > a {
 	color: inherit;
 	font-weight: 600;
 	text-decoration: none;
@@ -938,7 +965,7 @@ form button {
 }
 
 /* ---- 공지 (JM-65) ---- */
-/* 목록: 게임 공지 게시판처럼 한 줄에 [안내] 제목, 오른쪽에 조회수와 날짜. 가는 줄로만 나눠 깔끔하게 */
+/* 목록: 게임 공지 게시판처럼 한 줄에 번호, [안내] 제목, 오른쪽에 조회수와 날짜. 가는 줄로만 나눠 깔끔하게 */
 /* 위쪽 선은 머리(.top)의 아래 선이 대신한다 (두 줄로 겹쳐 보이지 않게) */
 .notice-list {
 	max-width: 960px;
@@ -951,7 +978,8 @@ form button {
 	border-bottom: 1px solid #eee;
 }
 
-.notice-list a {
+/* 한 줄(.notice-row): 보통은 줄 전체가 링크(a)이고, 지운 공지의 자리는 링크가 아닌 div다 (JM-76). 둘의 자리와 높이가 같다 */
+.notice-row {
 	display: flex;
 	align-items: center;
 	gap: 20px;
@@ -960,7 +988,7 @@ form button {
 	text-decoration: none;
 }
 
-.notice-list a:hover {
+a.notice-row:hover {
 	background: #f7faf7;
 }
 
@@ -1033,9 +1061,18 @@ form button {
 
 /* 좁은 화면: 조회수와 날짜를 위아래로 쌓아 제목 칸을 넓힌다 */
 @media (max-width: 768px) {
-	.notice-list a {
+	.notice-row {
 		gap: 12px;
 		padding: 14px 4px;
+	}
+
+	/* 휴대폰에서는 번호 칸을 조금 좁혀 제목 칸을 넓힌다 (공지와 피드백 목록 둘 다) */
+	.list-no {
+		min-width: 1.8em;
+	}
+
+	.feedback-list li {
+		gap: 10px;
 	}
 
 	.notice-meta {
