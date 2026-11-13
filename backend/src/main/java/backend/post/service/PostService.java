@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import backend.analysis.model.entity.ConfirmMode;
 import backend.analysis.model.entity.FoodAnalysis;
 import backend.analysis.model.repository.FoodAnalysisRepository;
 import backend.analysis.service.FoodAnalysisService;
@@ -92,6 +93,9 @@ public class PostService {
 				thumbnailKey,
 				metadata.takenAt());
 
+		// 칼로리 확정 방식 (JM-74). 고르지 않고 온 요청(직접 만든 요청 등)은 처음부터 있던 방식으로 본다.
+		ConfirmMode confirmMode = form.getConfirmMode() == null ? ConfirmMode.AUTO : form.getConfirmMode();
+
 		// 글과 위치, 분석 대기 기록을 하나의 트랜잭션으로 묶는다. (위치 저장이 실패하면 글 저장도 되돌린다)
 		// @Transactional을 붙인 메서드를 따로 만들어 같은 클래스 안에서 부르면 트랜잭션이 걸리지 않는다.
 		// (Spring은 클래스 바깥에서 들어오는 호출에만 트랜잭션을 씌우기 때문 = "self-invocation" 문제)
@@ -99,7 +103,7 @@ public class PostService {
 		Long postId = transactionTemplate.execute(status -> {
 			Post saved = postRepository.save(post);
 			saveLocation(saved, consent, metadata);
-			foodAnalysisRepository.save(new FoodAnalysis(saved));
+			foodAnalysisRepository.save(new FoodAnalysis(saved, confirmMode));
 			return saved.getId();
 		});
 
@@ -212,6 +216,25 @@ public class PostService {
 		// 값만 바꾸면 메서드가 끝날 때(트랜잭션 종료) JPA가 UPDATE를 실행한다 (변경 감지). 비어 있는 메모는 null로 저장한다.
 		post.changeMemo(normalizeMemo(memo));
 		log.info("Post memo edited: postId={}", id);
+	}
+
+	// AI 분석을 고쳐서 확정한다 (JM-74, 고쳐 쓰는 AI). 글마다 한 번만 할 수 있다.
+	// 글쓴이인지 확인하는 방법이 둘이다.
+	// - uploader가 true: 이 글을 방금 올린 브라우저가 보낸 요청이다 (Controller가 세션으로 안다). 비밀번호를 다시 묻지 않는다.
+	//   올리자마자 확정하는데 방금 넣은 비밀번호를 또 넣게 하면 번거롭다는 운영자 검토로 넣었다.
+	// - 그 밖의 경우(다른 기기, 시간이 지난 뒤): 글을 올릴 때 넣은 비밀번호가 맞아야 한다 (메모 수정, 삭제와 같은 확인)
+	// 무엇을 골랐는지 검사하고 합계를 계산하는 일은 FoodAnalysisService가 한다.
+	// picks: 음식마다 고른 것 (후보의 순서, 직접 적기, 빼기), amounts: 음식마다 양(g), names: 음식마다 직접 적은 이름
+	//
+	// 이 메서드에는 @Transactional을 붙이지 않는다: 직접 적은 음식이 있으면 AI의 답을 몇 초 기다리는데,
+	// 트랜잭션 안에서 기다리면 그동안 DB 연결을 붙잡고 있게 된다 (create에서 사진 처리를 트랜잭션 밖에 둔 것과 같은 이유).
+	// 사진 파일 이름(imageKey)을 넘기는 이유: 직접 적은 음식은 AI가 사진과 이름을 함께 보고 계산한다.
+	public void confirmAnalysis(Long id, String password, List<String> picks, List<String> amounts, List<String> names, boolean uploader) {
+		Post post = findActivePost(id);
+		if (!uploader) {
+			checkPassword(post, password);
+		}
+		foodAnalysisService.confirm(id, post.getImageKey(), picks, amounts, names);
 	}
 
 	// 작성자 삭제: 비밀번호가 맞으면 상태를 DELETED_BY_AUTHOR로 바꾼다. (DB에서 지우지 않는다)

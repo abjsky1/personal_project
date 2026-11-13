@@ -27,13 +27,33 @@ public enum ErrorCode {
 	// ---- 게시글 ----
 	// 404: 없는 글이거나 삭제된 글
 	POST_NOT_FOUND(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."),
-	// 403: 삭제하거나 메모를 고칠 때 입력한 비밀번호가 다름
+	// 403: 삭제하거나 메모를 고치거나 분석을 확정할 때 입력한 비밀번호가 다름
 	INVALID_PASSWORD(HttpStatus.FORBIDDEN, "비밀번호가 맞지 않습니다."),
 	// 429: 같은 곳(IP)에서 너무 자주 올림 (application.properties의 app.rate-limit.*)
 	// (제한 숫자는 설정으로 바뀔 수 있어서 메시지에 숫자를 넣지 않는다)
 	TOO_MANY_UPLOADS(HttpStatus.TOO_MANY_REQUESTS, "업로드가 너무 잦습니다. 잠시 후 다시 올려 주세요."),
 	// 429: 한 글에 좋아요가 짧은 시간 동안 너무 많이 눌림 (JM-59, app.rate-limit.like-per-post-*). IP가 아니라 글마다 센다
 	TOO_MANY_LIKES(HttpStatus.TOO_MANY_REQUESTS, "이 글에 좋아요가 한꺼번에 너무 많이 눌렸습니다. 잠시 후 다시 눌러 주세요."),
+
+	// ---- 분석 확정 (JM-74, 고쳐 쓰는 AI) ----
+	// 400: 확정하려고 보낸 값이 맞지 않음 (없는 후보 번호, 범위를 벗어난 양, 비었거나 너무 긴 이름, 음식을 전부 뺌)
+	INVALID_CONFIRMATION(HttpStatus.BAD_REQUEST, "확정할 수 없는 값이에요. 양은 1g부터 5,000g까지, 직접 적는 이름은 30자까지 적고, 음식은 하나 이상 남겨 주세요."),
+	// 400: 확정하려는 합계가 터무니없이 큼 (칼로리나 영양소의 합계가 10,000을 넘음)
+	CONFIRMATION_TOO_LARGE(HttpStatus.BAD_REQUEST, "합계가 너무 커서 확정할 수 없어요. 양을 다시 확인해 주세요."),
+	// 400: 고를 후보가 없는 글 ("AI가 바로 확정"으로 올린 글, 분석이 끝나지 않았거나 실패한 글)
+	NOT_CONFIRMABLE(HttpStatus.BAD_REQUEST, "이 글은 고쳐서 확정할 수 없습니다."),
+	// 409: 이미 확정한 글. 확정은 글마다 한 번뿐이다
+	ALREADY_CONFIRMED(HttpStatus.CONFLICT, "이미 확정한 글입니다. 확정은 한 번만 할 수 있습니다."),
+
+	// ---- 직접 적기 (JM-74): 후보에 없는 음식의 이름을 적으면 AI가 한 번 더 계산한다. 글마다 한 번만 쓸 수 있다 ----
+	// 409: 이 글은 직접 적기를 이미 씀
+	TYPED_ALREADY_USED(HttpStatus.CONFLICT, "직접 적기는 글마다 한 번만 쓸 수 있어요. 후보에서 골라 확정해 주세요."),
+	// 400: 직접 적은 글자를 AI가 음식 이름이 아니라고 봄 (AI가 답을 줬으므로 한 번을 쓴 것으로 센다)
+	TYPED_NOT_FOOD(HttpStatus.BAD_REQUEST, "직접 적은 이름을 AI가 음식으로 보지 않아서 확정하지 못했어요. 직접 적기는 글마다 한 번이라, 이제 후보에서 골라 확정해 주세요."),
+	// 502: AI가 쓸 수 없는 답을 줌 (개수가 다름, 범위를 벗어난 값. 이 경우도 한 번을 쓴 것으로 센다)
+	TYPED_AI_FAILED(HttpStatus.BAD_GATEWAY, "AI가 직접 적은 음식을 계산하지 못했어요. 직접 적기는 글마다 한 번이라, 이제 후보에서 골라 확정해 주세요."),
+	// 503: AI에게서 답을 받지 못함 (연결 실패, AI 서버 오류, 오늘 분석 횟수가 다 참). 한 번을 쓴 것으로 세지 않는다
+	TYPED_AI_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "AI가 지금 직접 적은 음식을 계산할 수 없어요. 후보에서 골라 확정하거나, 나중에 다시 적어 주세요."),
 
 	// ---- 댓글 ----
 	// 404: 없는 댓글이거나 삭제된 댓글 (또는 주소의 글 번호와 맞지 않는 댓글)

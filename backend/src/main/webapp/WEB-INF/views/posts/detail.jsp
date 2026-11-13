@@ -76,23 +76,70 @@
 				<section class="analysis">
 					<c:choose>
 						<c:when test="${analysis.status == 'DONE'}">
-							<p class="total-kcal"><fmt:formatNumber value="${analysis.totalKcal}" maxFractionDigits="0" /> kcal</p>
-							<p class="meta">
-								탄수화물 <fmt:formatNumber value="${analysis.carbsG}" maxFractionDigits="0" />g,
-								단백질 <fmt:formatNumber value="${analysis.proteinG}" maxFractionDigits="0" />g,
-								지방 <fmt:formatNumber value="${analysis.fatG}" maxFractionDigits="0" />g
-							</p>
+							<%-- 합계 (JM-74): 한 줄에 칼로리와 탄수화물, 단백질, 지방을 가로로 놓고, 줄 끝에 누구의 값인지 꼬리표를 붙인다.
+							       AI   = AI가 사진을 보고 추정한 값. 모든 글에 있다
+							       REAL = 사진을 올린 사람이 확정한 값. "내가 보고 확정"으로 올린 글에만 둘째 줄로 나온다
+							     확정했다고 AI의 줄을 지우지 않는다. 두 줄을 위아래로 놓아 비교할 수 있게 한다 (운영자 검토: "둘 다 보이면 좋겠다, 열이 맞으면 비교하는 재미도 있다").
+							     두 줄은 한 격자(.nut) 안에 이어서 넣는다 → 칼로리는 칼로리끼리, 탄수화물은 탄수화물끼리 열이 맞는다 (app.css).
+							     줄의 칸들은 nut-row.jspf가 그린다 (댓글의 comment-body.jspf와 같은 방식). 넘기는 값:
+							       nut = 그 줄의 합계, nutOld = 흐리게 보일지 (확정한 글의 AI 줄), nutTag와 nutTagClass = 꼬리표의 글자와 색 --%>
+							<div class="nut">
+								<c:set var="nut" value="${analysis.aiTotals}" />
+								<c:set var="nutOld" value="${analysis.confirmed}" />
+								<c:set var="nutTag" value="AI" />
+								<c:set var="nutTagClass" value="" />
+								<%@ include file="/WEB-INF/views/posts/nut-row.jspf" %>
+								<c:if test="${analysis.userMode}">
+									<c:choose>
+										<c:when test="${analysis.confirmed}">
+											<c:set var="nut" value="${analysis.confirmedTotals}" />
+											<c:set var="nutOld" value="${false}" />
+											<c:set var="nutTag" value="REAL" />
+											<c:set var="nutTagClass" value=" real" />
+											<%@ include file="/WEB-INF/views/posts/nut-row.jspf" %>
+										</c:when>
+										<c:otherwise>
+											<%-- 아직 확정하지 않은 글: 둘째 줄의 값 자리에는 "확정 전"만 둔다. 확정하면 이 자리에 값이 들어온다 --%>
+											<span class="pending"><span class="tag wait">확정 전</span></span>
+											<span class="who"><span class="tag real">REAL</span></span>
+										</c:otherwise>
+									</c:choose>
+								</c:if>
+							</div>
+							<%-- 음식 표: AI가 본 음식의 줄은 언제나 그대로 둔다. 확정한 글에서는 음식마다 어떻게 했는지에 따라 줄이 달라진다 (row.change, FoodAnalysisView.FoodRow).
+							       SAME    = AI의 답을 그대로 둠: 한 줄에 "AI와 같음"
+							       CHANGED = 다른 음식으로 바꾸거나 양을 고침: AI의 줄은 흐리게 두고, 바로 아래에 REAL 줄
+							       REMOVED = "이 음식 아님"으로 뺌: AI의 줄은 흐리게 두고, 아래에 뺐다는 REAL 줄
+							     확정하지 않은 글(NONE)은 AI의 줄만 나온다. 양과 칼로리는 오른쪽으로 맞춰서 위아래 숫자를 견주기 쉽게 한다.
+							     음식 이름은 사용자 입력처럼 c:out으로 찍는다 (직접 적은 이름은 실제로 사용자 입력이다). --%>
 							<table>
 								<thead>
-									<tr><th>음식</th><th>양</th><th>칼로리</th></tr>
+									<tr><th>음식</th><th class="num">양</th><th class="num">칼로리</th></tr>
 								</thead>
 								<tbody>
-									<c:forEach var="item" items="${analysis.items}">
-										<tr>
-											<td><c:out value="${item.name}" /></td>
-											<td><fmt:formatNumber value="${item.amountG}" maxFractionDigits="0" />g</td>
-											<td><fmt:formatNumber value="${item.kcal}" maxFractionDigits="0" /> kcal</td>
+									<c:forEach var="row" items="${analysis.rows}">
+										<c:set var="replaced" value="${row.change == 'CHANGED' or row.change == 'REMOVED'}" />
+										<tr<c:if test="${replaced}"> class="old"</c:if>>
+											<td><c:out value="${row.ai.name}" /><c:if test="${row.change == 'SAME'}"> <span class="same">✓ AI와 같음</span></c:if></td>
+											<td class="num"><fmt:formatNumber value="${row.ai.amountG}" maxFractionDigits="0" />g</td>
+											<td class="num"><fmt:formatNumber value="${row.ai.kcal}" maxFractionDigits="0" /> kcal</td>
 										</tr>
+										<c:if test="${replaced}">
+											<tr>
+												<c:choose>
+													<c:when test="${row.change == 'REMOVED'}">
+														<td><span class="tag real">REAL</span> 이 음식 아님 (뺌)</td>
+														<td class="num"></td>
+														<td class="num">0 kcal</td>
+													</c:when>
+													<c:otherwise>
+														<td><span class="tag real">REAL</span> <c:out value="${row.confirmed.name}" /></td>
+														<td class="num"><fmt:formatNumber value="${row.confirmed.amountG}" maxFractionDigits="0" />g</td>
+														<td class="num"><fmt:formatNumber value="${row.confirmed.kcal}" maxFractionDigits="0" /> kcal</td>
+													</c:otherwise>
+												</c:choose>
+											</tr>
+										</c:if>
 									</c:forEach>
 								</tbody>
 							</table>
@@ -100,7 +147,87 @@
 							<c:if test="${not empty analysis.confidenceLabel}">
 								<p class="hint">AI의 확신 정도: <c:out value="${analysis.confidenceLabel}" /></p>
 							</c:if>
+							<c:if test="${analysis.userMode}">
+								<p class="hint">${analysis.confirmed ? 'REAL은 사진을 올린 사람이 확정한 값이에요.' : 'REAL은 사진을 올린 사람이 확정하면 나와요.'}</p>
+							</c:if>
 							<p class="hint">AI 추정치이며 실제와 다를 수 있습니다. 의료나 영양 상담을 대신하지 않습니다.</p>
+
+							<%-- 확정하기 (JM-74, 고쳐 쓰는 AI): 후보가 있고 아직 확정하지 않은 글에만 나온다.
+							     확정은 글마다 한 번뿐이라, 확정한 글에는 이 칸이 없다 (서버가 confirmRows를 비워서 넘긴다).
+							     메모 수정처럼 작은 글자를 누르면 그 자리에 펼쳐진다. 음식마다 셋 중 하나를 고르고 양을 고친 뒤 확정한다.
+							       - 후보에서 고른다 (AI의 첫 답을 그대로 두는 것도 여기에 든다)
+							       - 후보에 없으면 이름을 직접 적는다. 확정할 때 AI가 사진과 그 이름을 함께 보고 다시 계산한다.
+							         글마다 한 번만 쓸 수 있어서, 이미 쓴 글에는 이 선택과 이름 칸이 나오지 않는다 (typedAllowed)
+							       - 사진에 없는 음식이면 뺀다
+							     confirmTrusted: 이 글을 방금 올린 브라우저인지 (서버가 세션으로 안다, PostController).
+							       - 맞으면: 칸을 펼쳐서 보여 주고, 비밀번호를 묻지 않는다.
+							       - 아니면(다른 사람, 다른 기기, 시간이 지난 뒤): 칸을 접어 두고, 확정하려면 글 비밀번호를 넣어야 한다.
+							     저장하지 못해 돌아왔을 때(confirmError)도 펼친 채로 보여 준다. 메시지는 돌아오자마자 보이게 칸의 맨 위에 둔다.
+							     confirmPicks, confirmAmounts, confirmNames: 저장하지 못했을 때 고르던 값 (한 번만 넘어온다). 있으면 그 값으로 다시 채운다.
+							     data-kcal: 그 후보의 100g당 칼로리. script가 "지금 고른 대로면 몇 kcal"을 미리 보여 주는 데 쓴다. --%>
+							<c:if test="${not empty analysis.confirmRows}">
+								<details class="analysis-confirm" id="analysis-confirm"<c:if test="${not empty confirmError or confirmTrusted}"> open</c:if>>
+									<summary>후보에서 고르거나 직접 적어서 확정하기</summary>
+									<form class="analysis-confirm-form${confirmTrusted ? ' trusted' : ''}" action="/posts/${post.id}/confirm" method="post">
+										<c:if test="${not empty confirmError}">
+											<p class="error"><c:out value="${confirmError}" /></p>
+										</c:if>
+										<c:forEach var="row" items="${analysis.confirmRows}">
+											<%-- pickNow, nameNow, amountNow: 이 줄에 지금 채워 둘 값. 모두 글자다.
+											     고른 것에는 "typed"처럼 숫자가 아닌 값도 있어서, 아래에서 숫자가 아니라 글자끼리 비교한다 (eq). --%>
+											<c:set var="pickNow" value="${not empty confirmPicks ? confirmPicks[row.index] : '0'}" />
+											<c:set var="nameNow" value="${not empty confirmNames ? confirmNames[row.index] : ''}" />
+											<c:choose>
+												<c:when test="${not empty confirmAmounts}">
+													<c:set var="amountNow" value="${confirmAmounts[row.index]}" />
+												</c:when>
+												<c:otherwise>
+													<fmt:formatNumber var="amountNow" value="${row.amountG}" maxFractionDigits="0" groupingUsed="false" />
+												</c:otherwise>
+											</c:choose>
+											<div class="confirm-row">
+												<select name="pick" aria-label="음식 ${row.index + 1}">
+													<c:forEach var="option" items="${row.options}">
+														<option value="${option.value}" data-kcal="${option.kcalPer100g}"<c:if test="${pickNow eq option.value}"> selected</c:if>><c:out value="${option.name}" /><c:if test="${option.value eq '0'}"> (AI의 첫 답)</c:if></option>
+													</c:forEach>
+													<c:if test="${analysis.typedAllowed}">
+														<option value="typed"<c:if test="${pickNow eq 'typed'}"> selected</c:if>>후보에 없어요 (직접 적기)</option>
+													</c:if>
+													<option value="-1" data-kcal="0"<c:if test="${pickNow eq '-1'}"> selected</c:if>>이 음식 아님 (빼기)</option>
+												</select>
+												<%-- 직접 적는 이름 칸: 위에서 "후보에 없어요 (직접 적기)"를 고른 줄에만 보인다 (script가 줄에 typed 표시를 붙이고, app.css가 그때만 보여 준다).
+												     보이지 않는 줄의 칸도 빈 값으로 함께 보내진다. 그래서 서버가 음식 순서대로 짝을 맞출 수 있다. --%>
+												<c:if test="${analysis.typedAllowed}">
+													<input type="text" name="name" class="confirm-name" value="<c:out value='${nameNow}' />" maxlength="30" autocomplete="off" placeholder="음식 이름 (예: 마라샹궈)" aria-label="음식 ${row.index + 1}의 이름">
+												</c:if>
+												<input type="number" name="amount" value="<c:out value='${amountNow}' />" min="1" max="5000" step="1" inputmode="numeric" aria-label="음식 ${row.index + 1}의 양 (g)" required>
+												<span class="confirm-unit">g</span>
+												<span class="confirm-kcal"></span>
+											</div>
+										</c:forEach>
+										<p class="confirm-total">합계 <strong id="confirm-total"></strong></p>
+										<c:choose>
+											<c:when test="${confirmTrusted}">
+												<button type="submit">확정</button>
+												<p class="hint">이 브라우저에서 방금 올린 글이라 비밀번호 없이 확정할 수 있어요.</p>
+											</c:when>
+											<c:otherwise>
+												<input type="password" name="password" maxlength="20" placeholder="비밀번호" aria-label="비밀번호" required>
+												<button type="submit">확정</button>
+												<p class="hint">글을 올릴 때 넣은 비밀번호를 입력해 주세요.</p>
+											</c:otherwise>
+										</c:choose>
+										<c:choose>
+											<c:when test="${analysis.typedAllowed}">
+												<p class="hint">확정은 한 번만 할 수 있고, 확정한 뒤에는 바꿀 수 없어요. 후보에 없는 음식은 이름을 직접 적으면 AI가 사진과 함께 보고 다시 계산해요 (글마다 한 번).</p>
+											</c:when>
+											<c:otherwise>
+												<p class="hint">확정은 한 번만 할 수 있고, 확정한 뒤에는 바꿀 수 없어요. 직접 적기는 이미 한 번 써서, 이제 후보에서만 고를 수 있어요.</p>
+											</c:otherwise>
+										</c:choose>
+									</form>
+								</details>
+							</c:if>
 						</c:when>
 						<c:when test="${analysis.status == 'NOT_FOOD'}">
 							<p>사진에서 음식을 찾지 못했어요.</p>
@@ -307,12 +434,86 @@
 		likeButton.disabled = false;
 	});
 
+	// 확정하기 (JM-74, 고쳐 쓰는 AI)
+	const confirmBox = document.getElementById('analysis-confirm');
+	let confirmButton = null;
+	// 후보가 없는 글과 이미 확정한 글에는 확정 칸이 없다
+	if (confirmBox) {
+		const confirmForm = confirmBox.querySelector('form');
+		const confirmRows = confirmForm.querySelectorAll('.confirm-row');
+		const confirmTotal = document.getElementById('confirm-total');
+		confirmButton = confirmForm.querySelector('button[type="submit"]');
+
+		// 줄마다 고른 것에 맞춰 칸을 맞추고, 지금 고른 대로면 몇 kcal인지 줄마다, 그리고 합계로 미리 보여 준다 (100g당 칼로리 × 양 ÷ 100).
+		// 보여 주기만 하는 숫자다. 확정할 때는 서버가 저장해 둔 후보로 다시 계산한다.
+		// 직접 적은 음식은 여기서 계산할 수 없다 (확정할 때 AI가 계산한다). 그 줄에는 숫자 대신 안내를 넣는다.
+		function showConfirmTotal() {
+			let total = 0;
+			let typedCount = 0;
+			confirmRows.forEach(function (row) {
+				const select = row.querySelector('select');
+				const amountInput = row.querySelector('input[name="amount"]');
+				// 직접 적기를 이미 쓴 글에는 이름 칸이 없다 (null)
+				const nameInput = row.querySelector('input[name="name"]');
+				const removed = select.value === '-1';
+				const typed = select.value === 'typed';
+				const per100g = Number(select.selectedOptions[0].dataset.kcal) || 0;
+				const amount = Number(amountInput.value) || 0;
+				const kcal = removed || typed ? 0 : Math.round(per100g * amount / 100);
+				total += kcal;
+				if (typed) {
+					typedCount += 1;
+				}
+				// 뺀 음식은 흐리게 보이고, 양을 적지 않아도 된다
+				row.classList.toggle('removed', removed);
+				amountInput.required = !removed;
+				// 직접 적는 줄에만 이름 칸이 보이고 (app.css의 .confirm-row.typed), 그때는 이름을 꼭 적어야 한다
+				row.classList.toggle('typed', typed);
+				if (nameInput) {
+					nameInput.required = typed;
+				}
+				row.querySelector('.confirm-kcal').textContent = typed ? '확정할 때 AI가 계산' : kcal.toLocaleString() + ' kcal';
+			});
+			// 직접 적은 음식은 아직 몇 kcal인지 모른다: 나머지 음식의 합계 뒤에 덧붙여 알리고, 나머지가 없으면 안내만 보여 준다
+			let totalText = total.toLocaleString() + ' kcal';
+			if (typedCount > 0) {
+				totalText = total > 0 ? totalText + ' + 직접 적은 음식' : '확정할 때 AI가 계산';
+			}
+			confirmTotal.textContent = totalText;
+		}
+
+		// input: 양이나 이름을 고칠 때마다, change: 고른 것을 바꿀 때
+		confirmForm.addEventListener('input', showConfirmTotal);
+		confirmForm.addEventListener('change', showConfirmTotal);
+		showConfirmTotal();
+
+		confirmForm.addEventListener('submit', function (event) {
+			// 확정은 글마다 한 번뿐이라, 보내기 전에 한 번 더 묻는다. 취소를 누르면 false → 전송을 멈춘다. (글 삭제와 같은 방식)
+			const hasTyped = confirmForm.querySelector('.confirm-row.typed') !== null;
+			const question = hasTyped
+				? '확정하면 다시 바꿀 수 없어요. 직접 적기도 글마다 한 번만 쓸 수 있어요. 확정할까요?'
+				: '확정하면 다시 바꿀 수 없어요. 확정할까요?';
+			if (!confirm(question)) {
+				event.preventDefault();
+				return;
+			}
+			// 연속으로 눌러 같은 요청이 여러 번 가지 않게, 첫 번째 누름에서 버튼을 막는다.
+			// 직접 적은 음식이 있으면 AI의 답을 기다리느라 몇 초 걸린다.
+			confirmButton.disabled = true;
+			confirmButton.textContent = hasTyped ? 'AI가 계산하는 중…' : '확정하는 중…';
+		});
+	}
+
 	// "뒤로 가기"로 이 화면이 되살아났을 때 버튼이 막힌 채로 남지 않게 원래대로 돌려놓는다.
 	window.addEventListener('pageshow', function () {
 		deleteButton.disabled = false;
 		deleteButton.textContent = '삭제';
 		memoButton.disabled = false;
 		memoButton.textContent = '저장';
+		if (confirmButton) {
+			confirmButton.disabled = false;
+			confirmButton.textContent = '확정';
+		}
 		commentButton.disabled = false;
 		commentButton.textContent = '댓글 남기기';
 		replyForms.forEach(function (form) {

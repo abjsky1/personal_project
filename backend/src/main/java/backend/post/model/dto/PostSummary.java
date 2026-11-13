@@ -57,7 +57,8 @@ public record PostSummary(
 				DATE_FORMAT.format(post.getCreatedAt()),
 				shortWhen(post.getCreatedAt(), LocalDate.now(KOREA)),
 				analysis == null ? null : analysis.getStatus(),
-				analysis == null ? null : analysis.getTotalKcal(),
+				// 사용자가 고쳐서 확정했으면 확정한 값, 아니면 AI의 첫 답 (JM-74)
+				analysis == null ? null : analysis.getShownTotalKcal(),
 				commentCount,
 				post.getLikeCount(),
 				post.getViewCount());

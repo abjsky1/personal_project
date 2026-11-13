@@ -1,0 +1,15 @@
+<%-- 합계 한 줄의 칸들: 칼로리 | 탄 | 단 | 지 | 꼬리표. detail.jsp가 .nut 격자 안에서 줄마다 끼워 넣는다 (JM-74).
+     AI의 줄과 REAL(사진을 올린 사람이 확정한 값)의 줄이 같은 모양이라 두 번 쓴다. 칸 수가 같아야 위아래 열이 맞는다. --%>
+<%-- 끼워 넣기 전에 detail.jsp가 담아 두는 값:
+     nut = 그 줄의 합계 (kcal, carbsG, proteinG, fatG) / nutOld = 흐리게 보일지 (확정한 글의 AI 줄)
+     nutTag = 줄 끝 꼬리표의 글자 / nutTagClass = 꼬리표의 색 (" real"이면 초록, 비우면 회색) --%>
+<%-- "탄, 단, 지"는 휴대폰에서 한 줄에 넣으려고 줄인 말이다. 화면 읽기 프로그램에는 풀어 쓴 말을 읽어 준다 (sr-only) --%>
+<%@ page pageEncoding="UTF-8" %>
+<span class="kcal${nutOld ? ' old' : ''}"><fmt:formatNumber value="${nut.kcal}" maxFractionDigits="0" /><small>kcal</small></span>
+<span class="l${nutOld ? ' old' : ''}"><span aria-hidden="true">탄</span><span class="sr-only">탄수화물</span></span>
+<span class="n${nutOld ? ' old' : ''}"><fmt:formatNumber value="${nut.carbsG}" maxFractionDigits="0" />g,</span>
+<span class="l${nutOld ? ' old' : ''}"><span aria-hidden="true">단</span><span class="sr-only">단백질</span></span>
+<span class="n${nutOld ? ' old' : ''}"><fmt:formatNumber value="${nut.proteinG}" maxFractionDigits="0" />g,</span>
+<span class="l${nutOld ? ' old' : ''}"><span aria-hidden="true">지</span><span class="sr-only">지방</span></span>
+<span class="n${nutOld ? ' old' : ''}"><fmt:formatNumber value="${nut.fatG}" maxFractionDigits="0" />g</span>
+<span class="who"><span class="tag${nutTagClass}"><c:out value="${nutTag}" /></span></span>

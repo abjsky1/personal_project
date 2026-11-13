@@ -47,6 +47,16 @@
 		<form:textarea path="memo" maxlength="300" rows="3" />
 		<form:errors path="memo" cssClass="error" element="p" />
 
+		<%-- 칼로리 확정 방식 (JM-74, 고쳐 쓰는 AI). form:radiobutton: 둘 중 하나만 고르는 칸. 처음에는 "AI가 바로 확정"이 골라져 있다. --%>
+		<%-- fieldset, legend: 선택 칸 여럿을 한 묶음으로 묶고 묶음의 이름을 붙인다 (화면 읽기 프로그램이 묶음 이름을 읽어 준다) --%>
+		<fieldset class="choice">
+			<legend>칼로리 확정 방식</legend>
+			<label class="checkbox"><form:radiobutton path="confirmMode" value="AUTO" /> AI가 바로 확정해요</label>
+			<label class="checkbox"><form:radiobutton path="confirmMode" value="USER" /> AI가 낸 후보를 보고 내가 확정할게요</label>
+		</fieldset>
+		<p class="hint">내가 확정하기를 고르면 AI가 음식마다 후보 세 개와 양을 내요. 글을 올리면 바로 맞는 것을 고르거나, 후보에 없으면 이름을 직접 적고, 양을 고쳐서 확정할 수 있어요. 확정은 한 번만 할 수 있고, 확정하지 않으면 AI의 첫 답이 그대로 보여요.</p>
+		<form:errors path="confirmMode" cssClass="error" element="p" />
+
 		<%-- 위치, 촬영 시각 제공 동의 (선택, 처음에는 체크되지 않은 상태) --%>
 		<%-- form:checkbox: 체크하면 locationConsent=true가 전송된다. 체크를 안 했을 때도 false로 받을 수 있게 Spring이 숨은 칸을 함께 만든다. --%>
 		<%-- 무엇을, 왜, 얼마나 보관하는지와 거부해도 불이익이 없다는 것을 체크박스 옆에 알린다. (기획서 8절) --%>
