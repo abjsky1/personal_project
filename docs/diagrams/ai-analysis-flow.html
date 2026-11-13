@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>찍먹 AI 분석 흐름</title>
+<style>
+:root {
+  --ink: #17212b; --sub: #556272; --faint: #8693a1; --line: #dbe0e6; --bg: #f3f4ef;
+  --green: #2f7d32; --green-bg: #e9f4ea; --green-line: #a9d3ab;
+  --blue: #1f5fd0; --blue-bg: #eaf1fd; --blue-line: #b4cbf3;
+  --violet: #6a3fc4; --violet-bg: #f1ebfb; --violet-line: #cdbcf0;
+  --orange: #c2540a; --orange-bg: #fff3e6; --orange-line: #f2c9a2;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Noto Sans KR", "Malgun Gothic", sans-serif; color: var(--ink); background: var(--bg); word-break: keep-all; }
+.stage { position: relative; width: 1600px; height: 1296px; overflow: hidden; }
+.abs { position: absolute; }
+
+h1 { position: absolute; left: 50px; top: 30px; font-size: 31px; font-weight: 800; letter-spacing: -0.6px; }
+.subtitle { position: absolute; left: 52px; top: 80px; font-size: 14px; color: var(--sub); font-weight: 500; }
+.subtitle b { color: var(--ink); font-weight: 700; margin-right: 10px; }
+.legend { position: absolute; right: 50px; top: 46px; display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--sub); font-weight: 600; }
+.legend em { font-style: normal; margin-right: 6px; }
+
+.w { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.w.browser { background: var(--ink); color: #fff; }
+.w.app { background: var(--green-bg); color: #1f5a22; box-shadow: inset 0 0 0 1px var(--green-line); }
+.w.store { background: var(--blue-bg); color: #173f8f; box-shadow: inset 0 0 0 1px var(--blue-line); }
+.w.ai { background: var(--violet-bg); color: #55309f; box-shadow: inset 0 0 0 1px var(--violet-line); }
+
+.panel { position: absolute; background: #fff; border: 1.5px solid var(--line); border-radius: 22px; }
+.panel.branch { background: #fffaf4; border-color: var(--orange-line); }
+.plabel { position: absolute; display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 800; letter-spacing: -0.3px; white-space: nowrap; }
+.plabel em { font-style: normal; display: inline-flex; width: 28px; height: 28px; border-radius: 50%; align-items: center; justify-content: center; font-size: 15px; color: #fff; background: var(--ink); flex: none; }
+.plabel.o em { background: var(--orange); }
+.pnote { position: absolute; font-size: 13px; color: var(--sub); font-weight: 500; white-space: nowrap; }
+.pnote b { color: var(--green); font-weight: 700; }
+
+.step { position: absolute; background: #fff; border: 1.5px solid var(--line); border-radius: 16px; padding: 14px 15px; overflow: hidden; }
+.step .top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.step .num { display: inline-flex; width: 26px; height: 26px; border-radius: 50%; align-items: center; justify-content: center; font-size: 13.5px; font-weight: 800; color: #fff; background: var(--green); flex: none; }
+.step.b .num { background: var(--blue); }
+.step.o { border-color: var(--orange-line); }
+.step.o .num { background: var(--orange); }
+.step h3 { font-size: 16.5px; font-weight: 800; margin-top: 12px; letter-spacing: -0.3px; }
+.step p { font-size: 12.8px; line-height: 1.5; color: var(--sub); margin-top: 6px; font-weight: 500; }
+.step p + p { margin-top: 3px; }
+.step p b { color: var(--ink); font-weight: 700; }
+.step code { font-family: "Noto Sans KR", sans-serif; font-size: 12px; font-weight: 700; background: #eef0f3; color: #2c3a47; padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
+.detail { position: absolute; left: 15px; right: 15px; bottom: 14px; background: #f7f8fa; border: 1px solid #e6e9ee; border-radius: 10px; padding: 9px 10px; font-size: 11.8px; line-height: 1.45; color: var(--sub); font-weight: 500; }
+.detail b { color: var(--ink); font-weight: 800; margin-right: 5px; }
+.detail div + div { margin-top: 3px; }
+.detail .ex { position: absolute; top: 7px; right: 9px; font-family: "Noto Sans KR", sans-serif; font-size: 10.5px; font-weight: 800; color: var(--violet); background: #fff; border: 1px solid var(--violet-line); border-radius: 6px; padding: 0 6px; line-height: 16px; white-space: nowrap; }
+.detail.code { font-family: Consolas, "Noto Sans KR", monospace; font-size: 10.4px; line-height: 1.5; white-space: pre; color: #2c3a47; background: #f6f3fc; border-color: #e3d9f6; }
+
+.lbl { position: absolute; font-size: 12px; font-weight: 800; white-space: nowrap; line-height: 17px; }
+.lbl.g { color: var(--green); } .lbl.b { color: var(--blue); } .lbl.d { color: #6b7785; } .lbl.o { color: var(--orange); }
+
+.states { position: absolute; left: 40px; top: 1182px; width: 1520px; height: 84px; background: #fff; border: 1.5px solid var(--line); border-radius: 18px; padding: 0 22px; display: flex; align-items: center; gap: 10px; }
+.states strong { font-size: 15.5px; font-weight: 800; margin-right: 8px; white-space: nowrap; }
+.chip { font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 10px; background: #eef0f3; color: #2c3a47; white-space: nowrap; }
+.chip small { font-weight: 500; color: var(--sub); margin-left: 6px; font-size: 12px; }
+.chip.ok { background: var(--green-bg); color: #1f5a22; }
+.arrow { color: var(--faint); font-weight: 800; }
+.states .note { margin-left: auto; font-size: 12.3px; color: var(--sub); font-weight: 500; text-align: right; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <h1>찍먹 AI 분석 흐름</h1>
+  <div class="subtitle"><b>사진 한 장이 칼로리가 되기까지</b>Google Gemini (gemini-3.5-flash-lite) &nbsp;|&nbsp; 2026-11-13 기준</div>
+  <div class="legend">
+    <em>일하는 곳</em>
+    <span class="w browser">브라우저</span><span class="w app">app 서버</span><span class="w store">저장소</span><span class="w ai">Gemini</span>
+  </div>
+
+  <!-- panel 1 -->
+  <div class="panel" style="left:40px; top:124px; width:1520px; height:262px;"></div>
+  <div class="plabel" style="left:64px; top:142px;"><em>1</em>올리는 순간</div>
+  <div class="pnote" style="right:64px; top:148px;">사용자가 기다리는 것은 <b>여기까지</b>다. AI의 답은 기다리지 않는다</div>
+
+  <div class="step" style="left:64px; top:184px; width:341px; height:182px;" data-fit="s1">
+    <div class="top"><span class="num">1</span><span class="w app">app 서버</span></div>
+    <h3>업로드 제한</h3>
+    <p>같은 IP에서 1분에 3번, 하루 30번까지 올릴 수 있다.</p>
+    <p>넘으면 여기서 거절한다.</p>
+  </div>
+  <div class="step" style="left:440px; top:184px; width:341px; height:182px;" data-fit="s2">
+    <div class="top"><span class="num">2</span><span class="w app">app 서버</span></div>
+    <h3>사진 처리</h3>
+    <p>진짜 사진인지 검사하고 방향을 바로잡는다.</p>
+    <p>위치 같은 숨은 정보(EXIF)를 지운다.</p>
+    <p>긴 변 1280px로 줄이고 썸네일 600px을 만든다.</p>
+  </div>
+  <div class="step" style="left:816px; top:184px; width:341px; height:182px;" data-fit="s3">
+    <div class="top"><span class="num">3</span><span class="w store">S3, RDS</span></div>
+    <h3>저장</h3>
+    <p>사진 두 장은 S3에 넣는다.</p>
+    <p>글과 <b>분석 대기(PENDING)</b> 기록은 RDS에 한 번에 저장한다.</p>
+  </div>
+  <div class="step b" style="left:1192px; top:184px; width:341px; height:182px;" data-fit="s4">
+    <div class="top"><span class="num">4</span><span class="w browser">브라우저</span></div>
+    <h3>글 화면으로 이동</h3>
+    <p>저장이 끝나면 바로 글 상세가 열린다.</p>
+    <p>결과 자리에는 "칼로리를 분석하고 있어요"가 보인다.</p>
+  </div>
+
+  <!-- panel 2 -->
+  <div class="panel" style="left:40px; top:430px; width:1030px; height:394px;"></div>
+  <div class="plabel" style="left:64px; top:448px;"><em>2</em>뒤에서 분석한다</div>
+  <div class="pnote" style="left:258px; top:454px;">일꾼 2명이 차례로 처리한다 (대기 줄 50칸)</div>
+
+  <div class="step" style="left:64px; top:500px; width:227px; height:300px;" data-fit="s5">
+    <div class="top"><span class="num">5</span><span class="w app">app 서버</span></div>
+    <h3>하루 상한 확인</h3>
+    <p>오늘 AI 호출이 200번을 넘었으면 부르지 않는다.</p>
+    <p>그 글은 상한 초과로 남는다.</p>
+    <div class="detail"><b>횟수는 DB에서 센다</b>배포로 서버가 다시 켜져도 오늘 횟수가 0으로 돌아가지 않는다.</div>
+  </div>
+  <div class="step" style="left:316px; top:500px; width:227px; height:300px;" data-fit="s6">
+    <div class="top"><span class="num">6</span><span class="w app">app 서버</span></div>
+    <h3>요청을 보낸다</h3>
+    <p>S3에서 사진을 꺼내 아래 셋을 함께 보낸다.</p>
+    <p>메모와 닉네임은 보내지 않는다.</p>
+    <div class="detail"><div><b>사진</b>1280px JPEG</div><div><b>지시문</b>음식마다 이름, 양, 칼로리, 탄단지를 추정하라</div><div><b>답의 형식</b>이 모양의 JSON으로만 답하라</div></div>
+  </div>
+  <div class="step" style="left:568px; top:500px; width:227px; height:300px; border-color:var(--violet-line);" data-fit="s7">
+    <div class="top"><span class="num" style="background:var(--violet)">7</span><span class="w ai">Gemini</span></div>
+    <h3>AI가 답한다</h3>
+    <p>정해진 모양의 JSON으로만 답한다.</p>
+    <p>30초 안에 답이 없으면 실패.</p>
+    <div class="detail code"><span class="ex">예시</span>{ "isFood": true,
+  "items": [ {
+   "name": "김치찌개",
+   "amountG": 350, "kcal": 280,
+   "carbsG": 14, "proteinG": 22,
+   "fatG": 15 } ],
+  "confidence": "MEDIUM",
+  "comment": "한 줄 설명" }</div>
+  </div>
+  <div class="step" style="left:819px; top:500px; width:227px; height:300px;" data-fit="s8">
+    <div class="top"><span class="num">8</span><span class="w store">RDS</span></div>
+    <h3>검사하고 저장</h3>
+    <p>음수이거나 지나치게 큰 값이면 실패로 처리한다.</p>
+    <p>결과와 함께 모델, 토큰 수, 걸린 시간을 저장한다.</p>
+    <p>상태가 <b>DONE</b>으로 바뀐다.</p>
+    <div class="detail"><b>실패로 남는 경우</b>답이 비었을 때, 시간 초과, 이상한 값, Gemini 쪽 오류</div>
+  </div>
+
+  <!-- panel 3 -->
+  <div class="panel" style="left:1094px; top:430px; width:466px; height:394px;"></div>
+  <div class="plabel" style="left:1118px; top:448px;"><em>3</em>그동안 화면은</div>
+
+  <div class="step b" style="left:1118px; top:500px; width:418px; height:136px;" data-fit="s9">
+    <div class="top"><span class="num">9</span><span class="w browser">브라우저</span></div>
+    <h3>끝났는지 묻는다</h3>
+    <p>글 화면이 2초마다 <code>/api/posts/{번호}/analysis</code>에 묻는다. 60초가 지나면 멈춘다.</p>
+  </div>
+  <div class="step b" style="left:1118px; top:664px; width:418px; height:136px;" data-fit="s10">
+    <div class="top"><span class="num">10</span><span class="w browser">브라우저</span></div>
+    <h3>결과가 보인다</h3>
+    <p>끝났으면 화면을 새로 연다. AI 줄(칼로리, 탄, 단, 지)과 음식 표가 나온다.</p>
+  </div>
+
+  <!-- branch -->
+  <div class="panel branch" style="left:40px; top:868px; width:1520px; height:286px;"></div>
+  <div class="plabel o" style="left:64px; top:886px;"><em>+</em>"내가 확정할게요"로 올린 글은 여기가 다르다</div>
+  <div class="pnote" style="right:64px; top:892px;">AI의 첫 답은 지우지 않고, 확정한 값을 따로 쌓는다</div>
+
+  <div class="step o" style="left:64px; top:938px; width:341px; height:194px;" data-fit="a">
+    <div class="top"><span class="num">가</span><span class="w ai">Gemini</span></div>
+    <h3>후보를 받는다</h3>
+    <p>6, 7번에서 지시문이 달라진다.</p>
+    <p>음식마다 <b>후보 3개</b>와 100g당 영양을 받는다.</p>
+    <p>첫 후보가 AI의 첫 답으로 저장된다.</p>
+  </div>
+  <div class="step o" style="left:440px; top:938px; width:341px; height:194px;" data-fit="b">
+    <div class="top"><span class="num">나</span><span class="w browser">브라우저</span></div>
+    <h3>고르고 양을 고친다</h3>
+    <p>글 화면에서 맞는 후보를 고르고 양(g)을 고친다.</p>
+    <p>사진에 없는 음식은 뺀다.</p>
+    <p>후보에 없으면 이름을 직접 적는다.</p>
+  </div>
+  <div class="step o" style="left:816px; top:938px; width:341px; height:194px;" data-fit="c">
+    <div class="top"><span class="num">다</span><span class="w app">app 서버</span></div>
+    <h3>서버가 계산한다</h3>
+    <p>고른 후보는 AI를 다시 부르지 않고 100g당 값에 양을 곱한다.</p>
+    <p>직접 적은 이름이 있을 때만 <b>AI를 한 번 더</b> 부른다 (답은 참, 거짓과 숫자만).</p>
+  </div>
+  <div class="step o" style="left:1192px; top:938px; width:341px; height:194px;" data-fit="d">
+    <div class="top"><span class="num">라</span><span class="w store">RDS</span></div>
+    <h3>확정은 한 번만</h3>
+    <p>확정한 값을 저장하면 다시 바꿀 수 없다.</p>
+    <p>화면에는 AI 줄 아래에 <b>REAL 줄</b>이 함께 보인다.</p>
+    <p>글 하나에 AI 호출은 최대 두 번.</p>
+  </div>
+
+  <!-- states -->
+  <div class="states">
+    <strong>분석 상태</strong>
+    <span class="chip">PENDING<small>대기</small></span>
+    <span class="arrow">→</span>
+    <span class="chip ok">DONE<small>완료</small></span>
+    <span class="chip">NOT_FOOD<small>음식 아님</small></span>
+    <span class="chip">FAILED<small>실패</small></span>
+    <span class="chip">LIMIT_EXCEEDED<small>상한 초과</small></span>
+    <span class="note">실패한 글을 자동으로 다시 분석하는 기능은 아직 없다.<br>로그에는 상태만 남기고, 사진과 AI의 답은 남기지 않는다.</span>
+  </div>
+
+  <!-- connectors -->
+  <svg class="abs" style="left:0; top:0;" width="1600" height="1296" viewBox="0 0 1600 1296" fill="none">
+    <defs>
+      <marker id="ag" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto"><path d="M2 2.500l10 4.500-10 4.500z" fill="#2f7d32"/></marker>
+      <marker id="ab" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto"><path d="M2 2.500l10 4.500-10 4.500z" fill="#1f5fd0"/></marker>
+      <marker id="ad" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto"><path d="M2 2.500l10 4.500-10 4.500z" fill="#8693a1"/></marker>
+      <marker id="ao" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto"><path d="M2 2.500l10 4.500-10 4.500z" fill="#c2540a"/></marker>
+    </defs>
+    <!-- panel 1 -->
+    <g stroke="#2f7d32" stroke-width="3" stroke-linecap="round" marker-end="url(#ag)">
+      <path d="M411 275H433"/><path d="M787 275H809"/><path d="M1163 275H1185"/>
+    </g>
+    <!-- split: background work and the browser go on separately -->
+    <path d="M986 366V424" stroke="#2f7d32" stroke-width="3" marker-end="url(#ag)"/>
+    <path d="M1362 366V424" stroke="#1f5fd0" stroke-width="3" marker-end="url(#ab)"/>
+    <!-- panel 2 -->
+    <g stroke="#2f7d32" stroke-width="3" stroke-linecap="round" marker-end="url(#ag)">
+      <path d="M296 650H310"/><path d="M548 650H562"/><path d="M800 650H813"/>
+    </g>
+    <!-- result becomes visible to the polling page -->
+    <path d="M1046 568H1112" stroke="#8693a1" stroke-width="2.500" stroke-dasharray="6 5" marker-end="url(#ad)"/>
+    <path d="M1327 636V658" stroke="#1f5fd0" stroke-width="3" marker-end="url(#ab)"/>
+    <!-- branch -->
+    <path d="M556 800V862" stroke="#c2540a" stroke-width="2.500" stroke-dasharray="6 5" marker-end="url(#ao)"/>
+    <g stroke="#c2540a" stroke-width="3" stroke-linecap="round" marker-end="url(#ao)">
+      <path d="M411 1035H433"/><path d="M787 1035H809"/><path d="M1163 1035H1185"/>
+    </g>
+  </svg>
+
+  <div class="lbl g" style="left:998px; top:397px;">분석을 맡기고 기다리지 않는다</div>
+  <div class="lbl b" style="left:1374px; top:397px;">사용자는 먼저 글 화면으로</div>
+  <div class="lbl d" style="left:1056px; top:545px; background:#fff; padding:0 3px;">끝나면</div>
+  <div class="lbl o" style="left:568px; top:837px;">지시문이 달라진다</div>
+</div>
+</body>
+</html>
