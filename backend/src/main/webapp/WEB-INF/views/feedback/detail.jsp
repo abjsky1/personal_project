@@ -24,13 +24,16 @@
 		<%-- 내용: 사용자 입력이라 c:out, 줄바꿈은 CSS로 --%>
 		<p class="feedback-content"><c:out value="${feedback.content}" /></p>
 
-		<%-- 운영자 답변: 있을 때만 (S3-3의 운영자 API로 단다) --%>
-		<c:if test="${not empty feedback.adminReply}">
-			<section class="admin-reply">
-				<p class="meta"><strong>운영자 답변</strong><span><c:out value="${feedback.repliedAt}" /></span></p>
-				<p class="feedback-content"><c:out value="${feedback.adminReply}" /></p>
+		<%-- 운영자 답변: 달린 순서대로 모두 보여 준다 (JM-77). 답변을 다시 달아도 앞의 답변이 사라지지 않고 아래에 이어진다.
+		     답변은 운영자 API로 단다. 없으면 아무것도 그리지 않는다.
+		     id="reply-번호": 답변 번호를 페이지에 남겨 둔다 (댓글의 id="comment-번호"와 같은 방식).
+		     잘못 단 답변을 지울 때 운영자가 이 번호를 쓴다 (기획서 16절) --%>
+		<c:forEach var="reply" items="${feedback.replies}">
+			<section class="admin-reply" id="reply-${reply.id}">
+				<p class="meta"><strong>운영자 답변</strong><span><c:out value="${reply.createdAt}" /></span></p>
+				<p class="feedback-content"><c:out value="${reply.content}" /></p>
 			</section>
-		</c:if>
+		</c:forEach>
 
 		<%-- 작성자 삭제 (게시글 상세와 같은 방식) --%>
 		<form class="delete-form" action="/feedback/${feedback.id}/delete" method="post">

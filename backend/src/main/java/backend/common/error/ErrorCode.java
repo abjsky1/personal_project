@@ -62,6 +62,8 @@ public enum ErrorCode {
 	// ---- 피드백 ----
 	// 404: 없는 피드백이거나 삭제된 피드백
 	FEEDBACK_NOT_FOUND(HttpStatus.NOT_FOUND, "피드백을 찾을 수 없습니다."),
+	// 404: 없는 답변이거나 이미 지운 답변 (운영자 API의 답변 삭제, JM-77)
+	FEEDBACK_REPLY_NOT_FOUND(HttpStatus.NOT_FOUND, "답변을 찾을 수 없습니다."),
 
 	// ---- 공지 (JM-65) ----
 	// 404: notices.json에 없는 공지 번호

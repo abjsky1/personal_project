@@ -22,9 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 import backend.common.error.ErrorCode;
 import backend.feedback.model.dto.FeedbackDetail;
 import backend.feedback.model.dto.FeedbackPage;
+import backend.feedback.model.dto.FeedbackReplyView;
 import backend.feedback.model.dto.FeedbackSummary;
 import backend.feedback.model.entity.Feedback;
 import backend.feedback.model.entity.FeedbackProgress;
+import backend.feedback.model.entity.FeedbackReply;
+import backend.feedback.model.repository.FeedbackReplyRepository;
 import backend.feedback.model.repository.FeedbackRepository;
 import backend.post.model.entity.PostStatus;
 
@@ -39,6 +42,9 @@ class FeedbackControllerTest {
 
 	@Autowired
 	private FeedbackRepository feedbackRepository;
+
+	@Autowired
+	private FeedbackReplyRepository feedbackReplyRepository;
 
 	@Autowired
 	private PasswordEncoder passwordEncoder;
@@ -61,7 +67,7 @@ class FeedbackControllerTest {
 		assertThat(saved.getStatus()).isEqualTo(PostStatus.ACTIVE);
 		// 처음 상태는 "접수", 답변은 아직 없다
 		assertThat(saved.getProgress()).isEqualTo(FeedbackProgress.RECEIVED);
-		assertThat(saved.getAdminReply()).isNull();
+		assertThat(feedbackReplyRepository.findByFeedbackIdAndStatusOrderByIdAsc(saved.getId(), PostStatus.ACTIVE)).isEmpty();
 		assertThat(passwordEncoder.matches("1234", saved.getPasswordHash())).isTrue();
 	}
 
@@ -146,25 +152,40 @@ class FeedbackControllerTest {
 	}
 
 	@Test
-	void 상세_화면은_내용과_처리_상태와_운영자_답변을_보여준다() throws Exception {
+	void 상세_화면은_내용과_처리_상태와_운영자_답변을_달린_순서대로_보여준다() throws Exception {
 		Feedback feedback = save("답변 받은 글");
 		feedback.changeProgress(FeedbackProgress.DONE);
-		feedback.reply("반영했어요. 고마워요!");
 		feedbackRepository.save(feedback);
+		// 답변 셋 중 가운데 것은 운영자가 지운 답변이라 화면에 나오지 않는다
+		feedbackReplyRepository.save(new FeedbackReply(feedback.getId(), "업데이트 목록에 추가했습니다. 피드백 감사합니다 :)"));
+		saveDeletedReply(feedback);
+		feedbackReplyRepository.save(new FeedbackReply(feedback.getId(), "반영했습니다."));
 
-		MvcResult result = mockMvc.perform(get("/feedback/" + feedback.getId()))
-				.andExpect(status().isOk())
-				.andExpect(view().name("feedback/detail"))
-				.andReturn();
-		FeedbackDetail detail = (FeedbackDetail) result.getModelAndView().getModel().get("feedback");
+		FeedbackDetail detail = detailOf(feedback);
 
 		assertThat(detail.title()).isEqualTo("답변 받은 글");
 		assertThat(detail.progress()).isEqualTo(FeedbackProgress.DONE);
-		assertThat(detail.adminReply()).isEqualTo("반영했어요. 고마워요!");
-		assertThat(detail.repliedAt()).isNotNull();
+		// 먼저 단 답변이 위, 나중에 단 답변이 아래 (JM-77: 다시 달아도 덮어쓰지 않고 이어서 달린다)
+		assertThat(detail.replies()).extracting(FeedbackReplyView::content)
+				.containsExactly("업데이트 목록에 추가했습니다. 피드백 감사합니다 :)", "반영했습니다.");
+		assertThat(detail.replies()).allSatisfy(reply -> assertThat(reply.createdAt()).isNotBlank());
 		// 목록에도 "답변 있음"이 표시된다
 		FeedbackPage page = pageOf(get("/feedback"));
 		assertThat(page.feedbacks().get(0).hasReply()).isTrue();
+	}
+
+	@Test
+	void 답변이_없거나_모두_지워진_글은_목록에_답변_있음이_없다() throws Exception {
+		Feedback onlyDeleted = save("답변이 지워진 글");
+		saveDeletedReply(onlyDeleted);
+		Feedback never = save("답변이 없는 글");
+
+		FeedbackPage page = pageOf(get("/feedback"));
+		assertThat(page.feedbacks().subList(0, 2)).extracting(FeedbackSummary::id)
+				.containsExactly(never.getId(), onlyDeleted.getId());
+		assertThat(page.feedbacks().subList(0, 2)).extracting(FeedbackSummary::hasReply).containsExactly(false, false);
+		assertThat(detailOf(onlyDeleted).replies()).isEmpty();
+		assertThat(detailOf(never).replies()).isEmpty();
 	}
 
 	@Test
@@ -206,6 +227,22 @@ class FeedbackControllerTest {
 	private FeedbackPage pageOf(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request) throws Exception {
 		MvcResult result = mockMvc.perform(request).andExpect(status().isOk()).andReturn();
 		return (FeedbackPage) result.getModelAndView().getModel().get("page");
+	}
+
+	// 상세 요청을 보내고 Model의 FeedbackDetail을 꺼낸다
+	private FeedbackDetail detailOf(Feedback feedback) throws Exception {
+		MvcResult result = mockMvc.perform(get("/feedback/" + feedback.getId()))
+				.andExpect(status().isOk())
+				.andExpect(view().name("feedback/detail"))
+				.andReturn();
+		return (FeedbackDetail) result.getModelAndView().getModel().get("feedback");
+	}
+
+	// 운영자가 지운 답변 하나를 만든다 (잘못 달아서 지운 경우)
+	private void saveDeletedReply(Feedback feedback) {
+		FeedbackReply wrong = new FeedbackReply(feedback.getId(), "잘못 단 답변");
+		wrong.deleteByAdmin();
+		feedbackReplyRepository.save(wrong);
 	}
 
 	// 비밀번호 1234인 테스트용 피드백을 DB에 바로 저장한다
