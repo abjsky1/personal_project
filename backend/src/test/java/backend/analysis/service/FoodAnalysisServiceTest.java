@@ -20,7 +20,10 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import backend.analysis.model.dto.FoodAnalysisResult;
@@ -47,6 +50,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 // 분석 결과에 따라 무엇이 저장되는지 확인하는 테스트
 // mock(): 정해 둔 대로만 답하는 가짜 객체. 실제 AI, DB, 저장소 없이 판단 로직만 확인한다.
+// OutputCaptureExtension: 테스트 중에 찍힌 로그를 받아 볼 수 있게 한다 (운영자 메일이 걸리는 로그 줄, JM-80)
+@ExtendWith(OutputCaptureExtension.class)
 class FoodAnalysisServiceTest {
 
 	private static final Long POST_ID = 1L;
@@ -88,6 +93,20 @@ class FoodAnalysisServiceTest {
 		assertThat(analysis.getAttemptCount()).isEqualTo(1);
 		assertThat(analysis.getCompletedAt()).isNotNull();
 		verify(repository).save(analysis);
+	}
+
+	// 사진 검토 (JM-80): 이 로그 줄이 CloudWatch 지표 필터에 걸려 운영자에게 메일이 간다. 문구가 바뀌면 메일이 끊긴다
+	@Test
+	void 음식이_아니면_운영자_메일이_걸리는_로그를_남기고_음식이면_남기지_않는다(CapturedOutput output) {
+		aiAnswers(new FoodAnalysisResult(true, List.of(new FoodItem("공기밥", 210, 310, 68, 5, 1)), "HIGH", "1공기"));
+		service.analyze(POST_ID, IMAGE_KEY);
+		assertThat(output).doesNotContain("Post held for review");
+
+		analysis = new FoodAnalysis(new Post("테스터", "hash", null, IMAGE_KEY, "thumb.jpg", null));
+		when(repository.findById(POST_ID)).thenReturn(Optional.of(analysis));
+		aiAnswers(new FoodAnalysisResult(false, List.of(), "HIGH", "음식이 아니에요"));
+		service.analyze(POST_ID, IMAGE_KEY);
+		assertThat(output).contains("Post held for review: postId=");
 	}
 
 	@Test

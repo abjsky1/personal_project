@@ -1,6 +1,7 @@
 package backend.post.model.repository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -10,6 +11,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import backend.analysis.model.entity.AnalysisStatus;
 import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
 
@@ -34,6 +36,12 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	// Optional: 결과가 없을 수도 있다는 표시. 없으면 비어 있는 Optional이 돌아온다 (null 대신)
 	// 삭제된 글을 실수로 보여 주지 않도록, 상세, 삭제는 항상 이 메서드로 ACTIVE인 글만 찾는다.
 	Optional<Post> findByIdAndStatus(Long id, PostStatus status);
+
+	// 사진을 가린 글 (JM-80): 지우지 않은 글 중 AI가 음식이 아니라고 봤고 운영자가 아직 올리지 않은 글, 최신순.
+	// 기준은 Post.isPhotoHeld()와 같다. 분석 기록은 글과 번호가 같아서(FoodAnalysis의 postId) 번호로 잇는다
+	@Query("select p from Post p, FoodAnalysis a where a.postId = p.id and p.status = :status"
+			+ " and a.status = :analysisStatus and p.photoApprovedAt is null order by p.id desc")
+	List<Post> findPhotoHeld(@Param("status") PostStatus status, @Param("analysisStatus") AnalysisStatus analysisStatus);
 
 	// 조회수 1 올리기 (JM-72) → UPDATE posts SET view_count = view_count + 1 WHERE id = ? AND status = ?
 	// 글을 읽어서 +1 한 뒤 저장하면, 두 사람이 동시에 열었을 때 둘 다 같은 숫자를 읽고 같은 값으로 저장해서 하나를 잃는다.

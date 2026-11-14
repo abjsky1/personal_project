@@ -24,7 +24,11 @@
 	<%-- PC에서는 왼쪽 사진 | 오른쪽 내용, 휴대폰에서는 사진 아래에 내용 (app.css의 .detail) --%>
 	<div class="detail">
 		<%-- ${post}: Controller가 Model에 넣은 글 하나 --%>
-		<img src="${post.imageUrl}" alt="음식 사진">
+		<%-- 사진 검토 (JM-80): AI가 음식이 아니라고 본 글은 운영자가 올리기 전까지 사진 대신 안내를 보여 준다 (목록과 같다) --%>
+		<c:choose>
+			<c:when test="${post.photoHeld}"><div class="photo-held detail-held">관리자가 사진을 검토 중입니다</div></c:when>
+			<c:otherwise><img src="${post.imageUrl}" alt="음식 사진"></c:otherwise>
+		</c:choose>
 
 		<div>
 			<%-- 조회수 (JM-72): 사람이 이 화면을 열 때마다 1 오른다. 댓글을 쓰고 돌아온 화면, 봇은 세지 않는다 (PostController) --%>
@@ -231,6 +235,7 @@
 						</c:when>
 						<c:when test="${analysis.status == 'NOT_FOOD'}">
 							<p>사진에서 음식을 찾지 못했어요.</p>
+							<c:if test="${post.photoHeld}"><p class="hint held-note">관리자가 확인한 뒤에 사진을 보여 드리거나 글을 지워요.</p></c:if>
 						</c:when>
 						<c:when test="${analysis.status == 'FAILED'}">
 							<p>칼로리 분석에 실패했어요.</p>

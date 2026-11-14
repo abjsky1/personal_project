@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
+import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
 import backend.admin.auth.AdminAuthService;
 import backend.admin.auth.AdminDevice;
 import backend.admin.auth.AdminDeviceRepository;
+import backend.analysis.model.dto.FoodAnalysisResult;
+import backend.analysis.model.dto.FoodAnalyzerResponse;
+import backend.analysis.model.entity.FoodAnalysis;
+import backend.analysis.model.repository.FoodAnalysisRepository;
 import backend.post.model.dto.FeedPage;
 import backend.post.model.dto.PostSummary;
 import backend.post.model.entity.Post;
@@ -54,6 +60,9 @@ class AdminPageTest {
 
 	@Autowired
 	private PasswordEncoder passwordEncoder;
+
+	@Autowired
+	private FoodAnalysisRepository foodAnalysisRepository;
 
 	// 개발 DB에 등록해 둔 기기가 있어도 테스트마다 비우고 시작한다 (테스트가 끝나면 되돌아간다)
 	@BeforeEach
@@ -167,6 +176,39 @@ class AdminPageTest {
 				.andExpect(redirectedUrl("/admin/posts?page=1"))
 				.andExpect(flash().attribute("message", post.getId() + "번 글을 지웠습니다."));
 		assertThat(postRepository.findById(post.getId()).orElseThrow().getStatus()).isEqualTo(PostStatus.DELETED_BY_ADMIN);
+	}
+
+	// 사진 검토 (JM-80): AI가 음식이 아니라고 본 글은 첫 쪽 위 "검토할 사진"에 모이고, 올리기도 CSRF 값이 있어야 한다
+	@Test
+	void 검토할_사진을_첫_쪽_위에_모아_보여주고_올리면_가린_사진이_풀린다() throws Exception {
+		MockHttpSession session = loggedIn("10.2.0.9");
+		Post held = postRepository.save(new Post("검토시험", passwordEncoder.encode("1234"), null, "held.jpg", "held-thumb.jpg", null));
+		FoodAnalysis analysis = new FoodAnalysis(held);
+		analysis.markNotFood(new FoodAnalyzerResponse(
+				new FoodAnalysisResult(false, List.of(), "HIGH", "음식이 아니에요"), "test-model", 1300, 50), 1500);
+		foodAnalysisRepository.save(analysis);
+
+		MvcResult list = mockMvc.perform(get("/admin/posts").session(session)).andExpect(status().isOk()).andReturn();
+		@SuppressWarnings("unchecked")
+		List<PostSummary> review = (List<PostSummary>) list.getModelAndView().getModel().get("held");
+		assertThat(review).extracting(PostSummary::id).contains(held.getId());
+
+		// 폼에 숨겨 둔 값이 없으면 올리지 않는다
+		mockMvc.perform(post("/admin/posts/" + held.getId() + "/approve").session(session))
+				.andExpect(status().isUnauthorized());
+		assertThat(postRepository.findById(held.getId()).orElseThrow().getPhotoApprovedAt()).isNull();
+
+		mockMvc.perform(post("/admin/posts/" + held.getId() + "/approve").session(session)
+				.param("_csrf", (String) session.getAttribute("admin.csrf")).param("page", "1"))
+				.andExpect(redirectedUrl("/admin/posts?page=1"))
+				.andExpect(flash().attribute("message", held.getId() + "번 글의 사진을 올렸습니다. 이제 피드에 사진이 보입니다."));
+		assertThat(postRepository.findById(held.getId()).orElseThrow().getPhotoApprovedAt()).isNotNull();
+
+		// 올린 글은 검토할 사진에서 빠진다
+		MvcResult after = mockMvc.perform(get("/admin/posts").session(session)).andExpect(status().isOk()).andReturn();
+		@SuppressWarnings("unchecked")
+		List<PostSummary> reviewAfter = (List<PostSummary>) after.getModelAndView().getModel().get("held");
+		assertThat(reviewAfter).extracting(PostSummary::id).doesNotContain(held.getId());
 	}
 
 	@Test

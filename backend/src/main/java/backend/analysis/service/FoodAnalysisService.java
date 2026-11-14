@@ -182,6 +182,11 @@ public class FoodAnalysisService {
 		log.info("Food analysis finished: postId={}, status={}, mode={}, model={}, latencyMs={}, inputTokens={}, outputTokens={}",
 				analysis.getPostId(), analysis.getStatus(), analysis.getConfirmMode(), response.model(), latencyMs,
 				response.inputTokens(), response.outputTokens());
+		// 사진 검토 (JM-80): AI가 음식이 아니라고 본 글은 사진을 가리고 운영자를 기다린다 (Post.isPhotoHeld).
+		// 이 줄이 CloudWatch 지표 필터에 걸리면 경보가 운영자에게 메일을 보낸다 (기획서 16절). 문구를 바꾸면 지표 필터도 바꾼다
+		if (analysis.getStatus() == AnalysisStatus.NOT_FOOD) {
+			log.info("Post held for review: postId={}", analysis.getPostId());
+		}
 	}
 
 	private void saveFailure(FoodAnalysis analysis, String reason, long startedAt) {

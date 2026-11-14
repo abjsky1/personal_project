@@ -29,6 +29,8 @@ public enum ErrorCode {
 	POST_NOT_FOUND(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."),
 	// 403: 삭제하거나 메모를 고치거나 분석을 확정할 때 입력한 비밀번호가 다름
 	INVALID_PASSWORD(HttpStatus.FORBIDDEN, "비밀번호가 맞지 않습니다."),
+	// 409: 사진을 가린 글이 아닌데 올리려 함 (음식으로 본 글, 이미 올린 글. 관리자 화면과 운영자 API의 사진 올리기, JM-80)
+	POST_NOT_HELD(HttpStatus.CONFLICT, "검토 중인 사진이 아닙니다."),
 	// 429: 글을 너무 자주 올림 (application.properties의 app.rate-limit.upload-*, UploadLimiter, 기획서 7절)
 	// (제한 숫자는 설정으로 바뀔 수 있어서 메시지에 숫자를 넣지 않는다)
 	// 같은 브라우저에서 1분 동안 너무 자주

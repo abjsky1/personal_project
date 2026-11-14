@@ -44,7 +44,12 @@
 			<a class="card" href="/posts/${post.id}">
 				<%-- 목록에는 큰 사진 대신 600 × 600 썸네일을 쓴다 (보통 수십 KB라 목록이 빨리 뜬다) --%>
 				<%-- loading="lazy": 화면에 가까워졌을 때 사진을 불러온다 (휴대폰 데이터 절약) --%>
-				<img src="${post.thumbnailUrl}" alt="음식 사진" loading="lazy">
+				<%-- 사진 검토 (JM-80): AI가 음식이 아니라고 본 글은 운영자가 올리기 전까지 사진 대신 안내를 보여 준다.
+				     사진 주소를 쓰지 않아서 페이지 소스에도 남지 않는다. 자리는 썸네일과 같은 정사각형이다 (app.css의 .photo-held) --%>
+				<c:choose>
+					<c:when test="${post.photoHeld}"><span class="photo-held card-held">관리자가 사진을 검토 중입니다</span></c:when>
+					<c:otherwise><img src="${post.thumbnailUrl}" alt="음식 사진" loading="lazy"></c:otherwise>
+				</c:choose>
 				<%-- 글자 두 줄 (JM-72). 네 값이 카드마다 같은 자리에 온다.
 				     첫 줄: 왼쪽에 닉네임(길면 …으로 줄인다), 오른쪽 끝에 칼로리
 				     둘째 줄: 왼쪽에 숫자(좋아요, 댓글, 조회수), 오른쪽 끝에 날짜

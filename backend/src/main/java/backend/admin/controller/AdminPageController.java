@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import backend.admin.auth.AdminAuthService;
+import backend.post.model.dto.FeedPage;
 import backend.post.service.PostService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -19,7 +20,8 @@ import lombok.RequiredArgsConstructor;
 // 주소는 어디에도 링크하지 않는다. 들어오는 사람 확인은 AdminAuthService, 로그인 뒤의 문지기는 AdminSessionInterceptor가 한다.
 // - /admin/login: 등록한 노트북 브라우저에서, 관리자 비밀번호로
 // - /admin/setup: 처음 한 번, 이 브라우저를 관리자 기기로 등록
-// - /admin/posts: 글 목록. 번호, 사진, 닉네임, 시각, AI 결과를 보고 지운다
+// - /admin/posts: 글 목록. 번호, 사진, 닉네임, 시각, AI 결과를 보고 지운다.
+//   첫 쪽 위에는 AI가 음식이 아니라고 봐서 사진을 가린 글(검토할 사진, JM-80)을 모아 두고, 올리거나 지운다
 @Controller
 @RequestMapping("/admin")
 @RequiredArgsConstructor
@@ -102,9 +104,14 @@ public class AdminPageController {
 	}
 
 	// 글 목록: 피드와 같은 순서(최신순, 24개씩)로, 지우지 않은 글을 보여 준다
+	// 첫 쪽에는 사진을 가린 글(검토할 사진, JM-80)을 위에 따로 모아 보여 준다
 	@GetMapping("/posts")
 	public String posts(@RequestParam(defaultValue = "1") int page, HttpServletRequest request, Model model) {
-		model.addAttribute("feed", postService.getFeed(page));
+		FeedPage feed = postService.getFeed(page);
+		model.addAttribute("feed", feed);
+		if (feed.nav().page() == 1) {
+			model.addAttribute("held", postService.getPhotoHeldPosts());
+		}
 		model.addAttribute("csrf", adminAuthService.csrfToken(request.getSession(false)));
 		return "admin/posts";
 	}
@@ -115,6 +122,15 @@ public class AdminPageController {
 			RedirectAttributes redirectAttributes) {
 		postService.deleteByAdmin(id);
 		redirectAttributes.addFlashAttribute("message", id + "번 글을 지웠습니다.");
+		return "redirect:/admin/posts?page=" + page;
+	}
+
+	// 사진 검토의 "올리기" (JM-80): 가렸던 사진을 피드와 글 화면에 보이게 한다. 운영자 API의 사진 올리기와 같다
+	@PostMapping("/posts/{id}/approve")
+	public String approvePhoto(@PathVariable Long id, @RequestParam(defaultValue = "1") int page,
+			RedirectAttributes redirectAttributes) {
+		postService.approvePhotoByAdmin(id);
+		redirectAttributes.addFlashAttribute("message", id + "번 글의 사진을 올렸습니다. 이제 피드에 사진이 보입니다.");
 		return "redirect:/admin/posts?page=" + page;
 	}
 }

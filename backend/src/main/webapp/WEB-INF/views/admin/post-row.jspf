@@ -1,0 +1,49 @@
+<%@ page pageEncoding="UTF-8" %>
+<%-- 관리자 글 목록의 한 줄 (JM-82). 검토할 사진(JM-80)과 전체 글 두 곳에서 같은 모양으로 쓴다 (admin/posts.jsp).
+     include하는 쪽에서 post(이 줄의 글)와 rowPrefix(줄 id의 앞말: 같은 글이 두 곳에 나와도 id가 겹치지 않게)를 정해 둔다.
+     사진을 가린 글(post.photoHeld)은 AI 결과를 "검토 중"으로 붉게 쓰고, 삭제 옆에 "올리기"를 둔다 --%>
+<li class="admin-row<c:if test="${post.photoHeld}"> held</c:if>" id="${rowPrefix}post-${post.id}">
+	<a class="admin-thumb" href="${post.imageUrl}" target="_blank" rel="noopener">
+		<img src="${post.thumbnailUrl}" alt="${post.id}번 글의 사진" loading="lazy">
+	</a>
+	<div class="admin-info">
+		<p class="admin-head">
+			<a class="admin-no" href="/posts/${post.id}" target="_blank" rel="noopener">${post.id}번</a>
+			<strong><c:out value="${post.nickname}" /></strong>
+		</p>
+		<p class="admin-meta">
+			<span><c:out value="${post.createdAt}" /></span>
+			<span>조회 ${post.viewCount}</span>
+			<span>좋아요 ${post.likeCount}</span>
+			<span>댓글 ${post.commentCount}</span>
+		</p>
+		<p class="admin-meta">
+			<c:choose>
+				<c:when test="${post.analysisStatus == 'DONE'}"><span class="admin-ai">AI <fmt:formatNumber value="${post.totalKcal}" maxFractionDigits="0" /> kcal</span></c:when>
+				<c:when test="${post.photoHeld}"><span class="admin-ai warn">AI 음식 아님, 검토 중</span></c:when>
+				<c:when test="${post.analysisStatus == 'NOT_FOOD'}"><span class="admin-ai">AI 음식 아님, 사진 올림</span></c:when>
+				<c:when test="${post.analysisStatus == 'FAILED'}"><span class="admin-ai warn">AI 분석 실패</span></c:when>
+				<c:when test="${post.analysisStatus == 'LIMIT_EXCEEDED'}"><span class="admin-ai warn">AI 하루 상한 초과</span></c:when>
+				<c:when test="${post.analysisStatus == 'PENDING'}"><span class="admin-ai">AI 분석 중</span></c:when>
+				<c:otherwise><span class="admin-ai">AI 기록 없음</span></c:otherwise>
+			</c:choose>
+			<c:if test="${not empty post.memo}"><span class="admin-memo"><c:out value="${post.memo}" /></span></c:if>
+		</p>
+	</div>
+	<div class="admin-actions">
+		<c:if test="${post.photoHeld}">
+			<form method="post" action="/admin/posts/${post.id}/approve" class="admin-approve"
+				onsubmit="return confirm('${post.id}번 글의 사진을 피드에 올릴까요?');">
+				<input type="hidden" name="_csrf" value="${csrf}">
+				<input type="hidden" name="page" value="${feed.nav.page}">
+				<button type="submit">올리기</button>
+			</form>
+		</c:if>
+		<form method="post" action="/admin/posts/${post.id}/delete" class="admin-delete"
+			onsubmit="return confirm('${post.id}번 글을 지울까요?');">
+			<input type="hidden" name="_csrf" value="${csrf}">
+			<input type="hidden" name="page" value="${feed.nav.page}">
+			<button type="submit" class="danger">삭제</button>
+		</form>
+	</div>
+</li>

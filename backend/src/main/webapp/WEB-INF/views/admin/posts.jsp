@@ -1,4 +1,6 @@
-<%-- 관리자 글 목록 (JM-82): 피드에 보이는 글(지우지 않은 글)을 최신순으로. 번호, 사진, 닉네임, 시각, 숫자, AI 결과를 보고 지운다 --%>
+<%-- 관리자 글 목록 (JM-82): 피드에 보이는 글(지우지 않은 글)을 최신순으로. 번호, 사진, 닉네임, 시각, 숫자, AI 결과를 보고 지운다.
+     첫 쪽 위에는 AI가 음식이 아니라고 봐서 사진을 가린 글(검토할 사진, JM-80)을 모아 두고 올리거나 지운다.
+     한 줄의 모양은 post-row.jspf --%>
 <%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 <%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
@@ -28,47 +30,30 @@
 	<c:if test="${not empty message}"><p class="admin-flash"><c:out value="${message}" /></p></c:if>
 	<p class="hint">피드에 보이는 글을 최신순으로 보여 줍니다. 번호를 누르면 글 화면이, 사진을 누르면 큰 사진이 새 탭으로 열립니다.</p>
 
+	<%-- 검토할 사진 (JM-80): AI가 음식이 아니라고 봐서 피드와 글 화면에서 사진을 가린 글. 첫 쪽에, 하나라도 있을 때만 --%>
+	<c:if test="${not empty held}">
+		<section class="admin-review">
+			<h2>검토할 사진 ${held.size()}개</h2>
+			<p class="hint">AI가 음식이 아니라고 본 글입니다. 피드와 글 화면에는 사진 대신 "관리자가 사진을 검토 중입니다"가 보입니다. 올리면 사진이 보이고, 삭제하면 글이 사라집니다.</p>
+			<ul class="admin-list">
+				<c:set var="rowPrefix" value="held-" />
+				<c:forEach var="post" items="${held}">
+					<%@ include file="/WEB-INF/views/admin/post-row.jspf" %>
+				</c:forEach>
+			</ul>
+		</section>
+		<h2 class="admin-all">전체 글</h2>
+	</c:if>
+
 	<c:choose>
 		<c:when test="${empty feed.posts}">
 			<p class="hint">글이 없습니다.</p>
 		</c:when>
 		<c:otherwise>
 			<ul class="admin-list">
+				<c:set var="rowPrefix" value="" />
 				<c:forEach var="post" items="${feed.posts}">
-					<li class="admin-row" id="post-${post.id}">
-						<a class="admin-thumb" href="${post.imageUrl}" target="_blank" rel="noopener">
-							<img src="${post.thumbnailUrl}" alt="${post.id}번 글의 사진" loading="lazy">
-						</a>
-						<div class="admin-info">
-							<p class="admin-head">
-								<a class="admin-no" href="/posts/${post.id}" target="_blank" rel="noopener">${post.id}번</a>
-								<strong><c:out value="${post.nickname}" /></strong>
-							</p>
-							<p class="admin-meta">
-								<span><c:out value="${post.createdAt}" /></span>
-								<span>조회 ${post.viewCount}</span>
-								<span>좋아요 ${post.likeCount}</span>
-								<span>댓글 ${post.commentCount}</span>
-							</p>
-							<p class="admin-meta">
-								<c:choose>
-									<c:when test="${post.analysisStatus == 'DONE'}"><span class="admin-ai">AI <fmt:formatNumber value="${post.totalKcal}" maxFractionDigits="0" /> kcal</span></c:when>
-									<c:when test="${post.analysisStatus == 'NOT_FOOD'}"><span class="admin-ai warn">AI 음식 아님</span></c:when>
-									<c:when test="${post.analysisStatus == 'FAILED'}"><span class="admin-ai warn">AI 분석 실패</span></c:when>
-									<c:when test="${post.analysisStatus == 'LIMIT_EXCEEDED'}"><span class="admin-ai warn">AI 하루 상한 초과</span></c:when>
-									<c:when test="${post.analysisStatus == 'PENDING'}"><span class="admin-ai">AI 분석 중</span></c:when>
-									<c:otherwise><span class="admin-ai">AI 기록 없음</span></c:otherwise>
-								</c:choose>
-								<c:if test="${not empty post.memo}"><span class="admin-memo"><c:out value="${post.memo}" /></span></c:if>
-							</p>
-						</div>
-						<form method="post" action="/admin/posts/${post.id}/delete" class="admin-delete"
-							onsubmit="return confirm('${post.id}번 글을 지울까요?');">
-							<input type="hidden" name="_csrf" value="${csrf}">
-							<input type="hidden" name="page" value="${feed.nav.page}">
-							<button type="submit" class="danger">삭제</button>
-						</form>
-					</li>
+					<%@ include file="/WEB-INF/views/admin/post-row.jspf" %>
 				</c:forEach>
 			</ul>
 		</c:otherwise>
