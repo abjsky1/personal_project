@@ -1,4 +1,5 @@
-<%-- 관리자 로그인 (JM-82): 관리자 비밀번호와 휴대폰 인증 앱의 6자리 숫자. 인증 앱을 아직 등록하지 않았으면 비밀번호만 묻는다 --%>
+<%-- 관리자 로그인 (JM-82): 등록한 노트북 브라우저에서 관리자 비밀번호로 들어간다.
+     등록한 기기가 있는데 이 브라우저가 그 기기가 아니면 비밀번호 칸 없이 안내만 보여 준다 --%>
 <%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 <!DOCTYPE html>
@@ -15,21 +16,23 @@
 	<h1>찍먹 관리자</h1>
 	<c:if test="${not empty message}"><p class="admin-flash"><c:out value="${message}" /></p></c:if>
 
-	<form method="post" action="/admin/login" class="admin-auth-form">
-		<label for="password">관리자 비밀번호</label>
-		<input type="password" id="password" name="password" autocomplete="current-password" required autofocus>
-		<c:if test="${otpRegistered}">
-			<label for="code">휴대폰 인증 앱의 6자리 숫자</label>
-			<input type="text" id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
-				pattern="[0-9]{6}" maxlength="6" required>
-		</c:if>
-		<c:if test="${not empty error}"><p class="error"><c:out value="${error}" /></p></c:if>
-		<button type="submit">들어가기</button>
-	</form>
-
-	<c:if test="${not otpRegistered}">
-		<p class="hint">처음 들어갈 때는 비밀번호가 맞으면 휴대폰 인증 앱을 등록하는 화면이 나옵니다.</p>
-	</c:if>
+	<c:choose>
+		<c:when test="${unknownDevice}">
+			<p class="error">관리자 화면은 등록한 기기에서만 열립니다.</p>
+			<p class="hint">기기를 바꾸려면 서버에서 등록을 지운 뒤 새 기기에서 다시 등록합니다 (기획서 16절).</p>
+		</c:when>
+		<c:otherwise>
+			<form method="post" action="/admin/login" class="admin-auth-form">
+				<label for="password">관리자 비밀번호</label>
+				<input type="password" id="password" name="password" autocomplete="current-password" required autofocus>
+				<c:if test="${not empty error}"><p class="error"><c:out value="${error}" /></p></c:if>
+				<button type="submit">들어가기</button>
+			</form>
+			<c:if test="${not deviceRegistered}">
+				<p class="hint">처음 들어가면 이 브라우저를 관리자 기기로 등록합니다. 앞으로 관리자 화면을 열 노트북에서 들어가 주세요.</p>
+			</c:if>
+		</c:otherwise>
+	</c:choose>
 </main>
 </body>
 </html>

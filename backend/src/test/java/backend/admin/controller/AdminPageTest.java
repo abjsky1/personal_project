@@ -1,7 +1,6 @@
 package backend.admin.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
@@ -9,8 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
-
-import java.time.Instant;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,16 +22,17 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
-import backend.admin.auth.AdminOtp;
-import backend.admin.auth.AdminOtpRepository;
-import backend.admin.auth.Totp;
+import backend.admin.auth.AdminAuthService;
+import backend.admin.auth.AdminDevice;
+import backend.admin.auth.AdminDeviceRepository;
 import backend.post.model.dto.FeedPage;
 import backend.post.model.dto.PostSummary;
 import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
 import backend.post.model.repository.PostRepository;
+import jakarta.servlet.http.Cookie;
 
-// 관리자 화면(/admin)의 로그인(비밀번호와 휴대폰 인증 6자리), 인증 앱 등록, 글 목록과 삭제를 확인하는 테스트 (JM-82)
+// 관리자 화면(/admin)의 기기 등록, 로그인(등록한 브라우저와 비밀번호), 글 목록과 삭제를 확인하는 테스트 (JM-82)
 // 틀린 횟수는 IP마다 세므로, 테스트끼리 섞이지 않게 테스트마다 다른 IP를 쓴다
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -43,12 +41,13 @@ import backend.post.model.repository.PostRepository;
 class AdminPageTest {
 
 	private static final String PASSWORD = "test-admin-password";
+	private static final String LAPTOP = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0 Safari/537.36";
 
 	@Autowired
 	private MockMvc mockMvc;
 
 	@Autowired
-	private AdminOtpRepository otpRepository;
+	private AdminDeviceRepository deviceRepository;
 
 	@Autowired
 	private PostRepository postRepository;
@@ -56,10 +55,10 @@ class AdminPageTest {
 	@Autowired
 	private PasswordEncoder passwordEncoder;
 
-	// 개발 DB에 등록해 둔 인증 앱이 있어도 테스트마다 비우고 시작한다 (테스트가 끝나면 되돌아간다)
+	// 개발 DB에 등록해 둔 기기가 있어도 테스트마다 비우고 시작한다 (테스트가 끝나면 되돌아간다)
 	@BeforeEach
-	void clearOtp() {
-		otpRepository.deleteAllInBatch();
+	void clearDevice() {
+		deviceRepository.deleteAllInBatch();
 	}
 
 	@Test
@@ -70,66 +69,88 @@ class AdminPageTest {
 	}
 
 	@Test
-	void 처음에는_비밀번호가_맞으면_휴대폰_인증_앱을_등록하고_들어간다() throws Exception {
+	void 처음에는_비밀번호가_맞으면_이_브라우저를_관리자_기기로_등록하고_들어간다() throws Exception {
 		MockHttpSession session = new MockHttpSession();
 
-		mockMvc.perform(post("/admin/login").session(session).param("password", PASSWORD).with(ip("10.1.0.1")))
+		mockMvc.perform(post("/admin/login").session(session).param("password", PASSWORD).with(from("10.2.0.1")))
 				.andExpect(redirectedUrl("/admin/setup"));
-		mockMvc.perform(get("/admin/setup").session(session))
+		mockMvc.perform(get("/admin/setup").session(session).header("User-Agent", LAPTOP))
 				.andExpect(status().isOk())
 				.andExpect(view().name("admin/setup"))
-				.andExpect(model().attribute("qrSvg", containsString("<svg")));
+				.andExpect(model().attribute("deviceLabel", "Windows, Chrome"));
 
-		// 휴대폰 앱이 하는 계산을 테스트가 대신 한다
-		String secret = (String) session.getAttribute("admin.setupSecret");
-		mockMvc.perform(post("/admin/setup").session(session).param("code", codeNow(secret)).with(ip("10.1.0.1")))
-				.andExpect(redirectedUrl("/admin/posts"));
+		MvcResult registered = mockMvc.perform(post("/admin/setup").session(session).header("User-Agent", LAPTOP).with(from("10.2.0.1")))
+				.andExpect(redirectedUrl("/admin/posts"))
+				.andReturn();
 
-		assertThat(otpRepository.findById(AdminOtp.ID)).get().extracting(AdminOtp::getSecret).isEqualTo(secret);
+		// 브라우저에는 기기 쿠키(자바스크립트로 못 읽음, 관리자 주소에만), DB에는 그 값의 해시만
+		Cookie cookie = registered.getResponse().getCookie(AdminAuthService.DEVICE_COOKIE);
+		assertThat(cookie).isNotNull();
+		assertThat(cookie.isHttpOnly()).isTrue();
+		assertThat(cookie.getPath()).isEqualTo("/admin");
+		assertThat(cookie.getMaxAge()).isGreaterThan(0);
+		AdminDevice device = deviceRepository.findById(AdminDevice.ID).orElseThrow();
+		assertThat(device.getLabel()).isEqualTo("Windows, Chrome");
+		assertThat(device.getTokenHash()).hasSize(64).isNotEqualTo(cookie.getValue());
+
 		mockMvc.perform(get("/admin/posts").session(session))
 				.andExpect(status().isOk())
 				.andExpect(view().name("admin/posts"));
 	}
 
 	@Test
-	void 등록한_뒤에는_비밀번호와_6자리가_모두_맞아야_들어가고_한_번_쓴_숫자는_다시_못_쓴다() throws Exception {
-		String secret = registerOtp();
-		String code = codeNow(secret);
+	void 등록한_뒤에는_등록한_브라우저에서만_비밀번호로_들어간다() throws Exception {
+		Cookie laptop = registerLaptop("10.2.0.2");
 
-		// 숫자가 틀림
-		mockMvc.perform(post("/admin/login").param("password", PASSWORD).param("code", otherCode(code)).with(ip("10.1.0.2")))
-				.andExpect(view().name("admin/login"))
-				.andExpect(model().attribute("error", "비밀번호나 인증 숫자가 맞지 않습니다."));
-		// 비밀번호가 틀림 (숫자는 맞음)
-		mockMvc.perform(post("/admin/login").param("password", "wrong-password").param("code", code).with(ip("10.1.0.2")))
-				.andExpect(view().name("admin/login"));
-
-		// 둘 다 맞으면 들어간다
-		mockMvc.perform(post("/admin/login").session(new MockHttpSession()).param("password", PASSWORD).param("code", code)
-				.with(ip("10.1.0.2")))
+		// 등록한 브라우저 + 맞는 비밀번호
+		mockMvc.perform(post("/admin/login").cookie(laptop).param("password", PASSWORD).with(from("10.2.0.2")))
 				.andExpect(redirectedUrl("/admin/posts"));
+		// 등록한 브라우저 + 틀린 비밀번호
+		mockMvc.perform(post("/admin/login").cookie(laptop).param("password", "wrong-password").with(from("10.2.0.2")))
+				.andExpect(view().name("admin/login"))
+				.andExpect(model().attribute("error", "비밀번호가 맞지 않습니다."));
 
-		// 같은 숫자를 한 번 더 넣으면 받지 않는다 (어깨너머로 본 숫자를 바로 다시 쓰는 경우)
-		mockMvc.perform(post("/admin/login").param("password", PASSWORD).param("code", code).with(ip("10.1.0.3")))
-				.andExpect(view().name("admin/login"));
+		// 다른 브라우저(쿠키 없음, 또는 다른 값)는 맞는 비밀번호를 넣어도 들어가지 못한다
+		mockMvc.perform(post("/admin/login").param("password", PASSWORD).with(from("10.2.0.3")))
+				.andExpect(status().isForbidden())
+				.andExpect(model().attribute("unknownDevice", true));
+		mockMvc.perform(post("/admin/login").cookie(new Cookie(AdminAuthService.DEVICE_COOKIE, "guessed-value"))
+				.param("password", PASSWORD).with(from("10.2.0.3")))
+				.andExpect(status().isForbidden());
+		// 등록 화면도 다시 열리지 않는다 (이미 등록한 기기가 있다)
+		MockHttpSession other = new MockHttpSession();
+		mockMvc.perform(post("/admin/login").session(other).param("password", PASSWORD).with(from("10.2.0.3")))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(get("/admin/setup").session(other)).andExpect(redirectedUrl("/admin/login"));
 	}
 
 	@Test
-	void 같은_IP에서_5번_틀리면_맞게_넣어도_15분_동안_막힌다() throws Exception {
-		String secret = registerOtp();
+	void 등록된_기기가_있으면_다른_브라우저에는_비밀번호_칸을_보여주지_않는다() throws Exception {
+		Cookie laptop = registerLaptop("10.2.0.4");
+
+		mockMvc.perform(get("/admin/login"))
+				.andExpect(status().isForbidden())
+				.andExpect(model().attribute("unknownDevice", true));
+		mockMvc.perform(get("/admin/login").cookie(laptop))
+				.andExpect(status().isOk())
+				.andExpect(model().attribute("unknownDevice", false));
+	}
+
+	@Test
+	void 같은_IP에서_비밀번호를_5번_틀리면_맞게_넣어도_15분_동안_막힌다() throws Exception {
+		Cookie laptop = registerLaptop("10.2.0.5");
 		for (int i = 0; i < 5; i++) {
-			mockMvc.perform(post("/admin/login").param("password", "wrong-" + i).param("code", "000000").with(ip("10.1.0.4")))
+			mockMvc.perform(post("/admin/login").cookie(laptop).param("password", "wrong-" + i).with(from("10.2.0.6")))
 					.andExpect(view().name("admin/login"));
 		}
 
-		mockMvc.perform(post("/admin/login").param("password", PASSWORD).param("code", codeNow(secret)).with(ip("10.1.0.4")))
-				.andExpect(status().isTooManyRequests())
-				.andExpect(model().attribute("error", containsString("막혔습니다")));
+		mockMvc.perform(post("/admin/login").cookie(laptop).param("password", PASSWORD).with(from("10.2.0.6")))
+				.andExpect(status().isTooManyRequests());
 	}
 
 	@Test
 	void 관리자는_글_목록에서_번호를_보고_글을_지운다_CSRF_값이_없으면_막힌다() throws Exception {
-		MockHttpSession session = loggedIn("10.1.0.5");
+		MockHttpSession session = loggedIn("10.2.0.7");
 		Post post = postRepository.save(new Post("관리자시험", passwordEncoder.encode("1234"), "메모", "admin-test.jpg", "admin-test-thumb.jpg", null));
 
 		MvcResult list = mockMvc.perform(get("/admin/posts").session(session)).andExpect(status().isOk()).andReturn();
@@ -150,7 +171,7 @@ class AdminPageTest {
 
 	@Test
 	void 로그아웃하면_다시_로그인해야_한다() throws Exception {
-		MockHttpSession session = loggedIn("10.1.0.6");
+		MockHttpSession session = loggedIn("10.2.0.8");
 
 		mockMvc.perform(post("/admin/logout").session(session).param("_csrf", (String) session.getAttribute("admin.csrf")))
 				.andExpect(redirectedUrl("/admin/login"));
@@ -158,33 +179,27 @@ class AdminPageTest {
 				.andExpect(redirectedUrl("/admin/login"));
 	}
 
-	// 인증 앱이 등록된 상태를 만든다 (마지막으로 쓴 칸은 아주 옛날로)
-	private String registerOtp() {
-		String secret = Totp.newSecret();
-		otpRepository.save(new AdminOtp(secret, 0));
-		return secret;
+	// 처음 등록을 거쳐 노트북 브라우저의 기기 쿠키를 받는다
+	private Cookie registerLaptop(String address) throws Exception {
+		MockHttpSession session = new MockHttpSession();
+		mockMvc.perform(post("/admin/login").session(session).param("password", PASSWORD).with(from(address)))
+				.andExpect(redirectedUrl("/admin/setup"));
+		MvcResult result = mockMvc.perform(post("/admin/setup").session(session).header("User-Agent", LAPTOP).with(from(address)))
+				.andExpect(redirectedUrl("/admin/posts"))
+				.andReturn();
+		return result.getResponse().getCookie(AdminAuthService.DEVICE_COOKIE);
 	}
 
+	// 등록한 노트북 브라우저로 로그인한 세션
 	private MockHttpSession loggedIn(String address) throws Exception {
-		String secret = registerOtp();
+		Cookie laptop = registerLaptop(address);
 		MockHttpSession session = new MockHttpSession();
-		mockMvc.perform(post("/admin/login").session(session).param("password", PASSWORD).param("code", codeNow(secret))
-				.with(ip(address)))
+		mockMvc.perform(post("/admin/login").session(session).cookie(laptop).param("password", PASSWORD).with(from(address)))
 				.andExpect(redirectedUrl("/admin/posts"));
 		return session;
 	}
 
-	// 휴대폰 인증 앱이 지금 보여 줄 숫자
-	private static String codeNow(String secret) {
-		return Totp.codeFor(secret, Instant.now());
-	}
-
-	// 맞는 숫자의 첫 자리만 바꾼 틀린 숫자
-	private static String otherCode(String code) {
-		return (char) ('0' + (code.charAt(0) - '0' + 5) % 10) + code.substring(1);
-	}
-
-	private static RequestPostProcessor ip(String address) {
+	private static RequestPostProcessor from(String address) {
 		return request -> {
 			request.setRemoteAddr(address);
 			return request;

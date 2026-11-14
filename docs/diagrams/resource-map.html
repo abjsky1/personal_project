@@ -67,7 +67,7 @@ h1 { font-size: 31px; font-weight: 800; letter-spacing: -0.6px; }
   <div class="head">
     <div>
       <h1>찍먹 자원 지도</h1>
-      <div class="subtitle"><b>무엇이 어디에 있나</b>AWS 서울 리전과 바깥 서비스 &nbsp;|&nbsp; 2026-11-13 기준</div>
+      <div class="subtitle"><b>무엇이 어디에 있나</b>AWS 서울 리전과 바깥 서비스 &nbsp;|&nbsp; 2026-11-14 기준</div>
     </div>
     <div class="legend">
       <span><i style="background:#b45f06"></i>서버</span>
@@ -94,7 +94,7 @@ h1 { font-size: 31px; font-weight: 800; letter-spacing: -0.6px; }
 
           <div class="grp">파일 (~/personal_project, 저장소를 clone 한 것)</div>
           <div class="rows" style="--kw:172px">
-            <div class="row"><span class="k">deploy/.env</span><span class="v"><b>비밀값.</b> DB 주소와 비밀번호, 버킷 이름, Gemini 키, 운영자 토큰, 지금 이미지 태그. 저장소에는 없다</span></div>
+            <div class="row"><span class="k">deploy/.env</span><span class="v"><b>비밀값.</b> DB 주소와 비밀번호, 버킷 이름, Gemini 키, 운영자 토큰, 관리자 화면 비밀번호, 지금 이미지 태그. 저장소에는 없다</span></div>
             <div class="row"><span class="k">deploy/nginx/ssl/</span><span class="v">Sectigo 인증서와 <b>개인 키</b>. 서버 밖으로 나가지 않는다</span></div>
             <div class="row"><span class="k">deploy/deploy.sh</span><span class="v">새 이미지로 app만 바꾸는 배포 스크립트</span></div>
             <div class="row"><span class="k">deploy/nginx/default.conf</span><span class="v">nginx 설정 (주소 모으기, 업로드 20MB 제한)</span></div>
@@ -120,7 +120,7 @@ h1 { font-size: 31px; font-weight: 800; letter-spacing: -0.6px; }
         <div class="col">
           <div class="card" style="--c:#1f5fd0" data-fit="rds">
             <div class="ch"><svg class="ic" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg><h3>RDS</h3></div>
-            <div class="meta">macros-db &nbsp;|&nbsp; MySQL 8.4 &nbsp;|&nbsp; DB 이름 macros &nbsp;|&nbsp; 테이블 7개</div>
+            <div class="meta">macros-db &nbsp;|&nbsp; MySQL 8.4 &nbsp;|&nbsp; DB 이름 macros &nbsp;|&nbsp; 테이블 8개</div>
             <div class="rows" style="--kw:128px">
               <div class="row"><span class="k">posts</span><span class="v">글. 닉네임, 비밀번호 해시, 메모, 사진 파일 이름, 좋아요 수, 조회수</span></div>
               <div class="row"><span class="k">comments</span><span class="v">댓글과 답글</span></div>
@@ -129,6 +129,7 @@ h1 { font-size: 31px; font-weight: 800; letter-spacing: -0.6px; }
               <div class="row"><span class="k">feedbacks</span><span class="v">피드백 글과 처리 상태</span></div>
               <div class="row"><span class="k">feedback_replies</span><span class="v">운영자 답변 (달린 순서대로)</span></div>
               <div class="row"><span class="k">notice_views</span><span class="v">공지 조회수. 공지 글 자체는 GitHub의 notices.json</span></div>
+              <div class="row"><span class="k">admin_device</span><span class="v">관리자 화면을 여는 노트북 브라우저 하나 (기기 쿠키 값의 해시만)</span></div>
             </div>
             <div class="foot"><p>글, 댓글, 피드백은 지워도 행이 남고 상태만 바뀐다. 자동 백업 매일(1일 보관), 삭제 방지, 저장 암호화. 밖에서는 접속할 수 없다 (3306은 EC2에서만).</p></div>
           </div>
@@ -225,7 +226,7 @@ h1 { font-size: 31px; font-weight: 800; letter-spacing: -0.6px; }
 
   <div class="secrets">
     <h2><svg class="ic" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>비밀값은 어디에</h2>
-    <div class="sc"><strong>서버 deploy/.env</strong><span>DB 비밀번호, Gemini 키, 운영자 토큰</span></div>
+    <div class="sc"><strong>서버 deploy/.env</strong><span>DB 비밀번호, Gemini 키, 운영자 토큰, 관리자 화면 비밀번호</span></div>
     <div class="sc"><strong>서버 deploy/nginx/ssl</strong><span>인증서 개인 키</span></div>
     <div class="sc"><strong>비밀번호 관리자</strong><span>RDS 마스터 비밀번호</span></div>
     <div class="sc"><strong>운영자 PC</strong><span>서버 접속 키 (SSH)</span></div>

@@ -1295,7 +1295,7 @@ a.notice-row:hover {
 }
 
 /* ---- 관리자 화면 (/admin, JM-82) ---- */
-/* 로그인과 인증 앱 등록: 가운데 좁은 칸 */
+/* 로그인과 기기 등록: 가운데 좁은 칸 */
 .admin-auth {
 	max-width: 420px;
 	margin: 0 auto;
@@ -1324,32 +1324,12 @@ a.notice-row:hover {
 	line-height: 1.6;
 }
 
-/* QR 코드: SVG를 정사각형으로 키운다 */
-.admin-qr {
-	width: 220px;
-	margin: 0 auto 12px;
-}
-
-.admin-qr svg {
-	display: block;
-	width: 100%;
-	height: auto;
-}
-
-.admin-secret {
-	margin-bottom: 16px;
-	color: #555;
-	font-size: 0.9rem;
-}
-
-.admin-secret code {
-	display: block;
-	margin-top: 6px;
-	padding: 8px;
-	border-radius: 6px;
+/* 기기 등록 화면의 "이 브라우저: Windows, Chrome" */
+.admin-device {
+	margin: 0 0 12px;
+	padding: 10px 12px;
+	border-radius: 8px;
 	background: #f5f5f5;
-	word-break: break-all;
-	letter-spacing: 0.05em;
 }
 
 /* 글 목록: 머리에 제목, 메뉴, 로그아웃 */
