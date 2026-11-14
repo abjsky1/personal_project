@@ -1,5 +1,6 @@
 package backend.post.model.repository;
 
+import java.time.Instant;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -24,6 +25,10 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	// Page로 받으면 전체 글 수(COUNT 쿼리 한 번 더)도 같이 와서 전체 쪽 수를 알 수 있다.
 	// 처음엔 "더 보기" 커서 방식(id < 마지막 번호)이었는데, 화면에 "이전"이 없어 앞 쪽으로 돌아가기 어렵다는 의견으로 바꿨다.
 	Page<Post> findByStatus(PostStatus status, Pageable pageable);
+
+	// 어느 시각 이후에 올라온 글 수 (상태와 상관없이, 지운 글도 센다) → SELECT COUNT(*) FROM posts WHERE created_at >= ?
+	// 업로드 하루 전체 상한에 쓴다 (UploadLimiter, JM-79). DB에서 세므로 서버를 다시 켜도 0으로 돌아가지 않는다
+	long countByCreatedAtGreaterThanEqual(Instant since);
 
 	// 번호와 상태가 모두 맞는 글 하나 → SELECT ... FROM posts WHERE id = ? AND status = ?
 	// Optional: 결과가 없을 수도 있다는 표시. 없으면 비어 있는 Optional이 돌아온다 (null 대신)

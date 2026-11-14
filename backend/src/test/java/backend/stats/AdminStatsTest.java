@@ -104,7 +104,7 @@ class AdminStatsTest {
 				.andExpect(jsonPath("$.daily.length()").value(7))
 				.andExpect(jsonPath("$.daily[0].day").value(today.minusDays(6).toString()))
 				.andExpect(jsonPath("$.daily[6].day").value(today.toString()))
-				.andExpect(jsonPath("$.analysis.dailyLimit").value(200));
+				.andExpect(jsonPath("$.analysis.dailyLimit").value(500));
 	}
 
 	@Test
