@@ -127,6 +127,7 @@ sequenceDiagram
   - 하루 상한을 넘어 분석하지 못한 건 (`LIMIT_EXCEEDED`, 다음 날)
   - 삭제된 글은 건너뛴다
 - **공급자 교체 가능하게**: `FoodAnalyzer` 인터페이스 뒤에 구현체를 둔다. 무료 → 유료 전환, 공급자 교체가 구현체 추가 + 설정 변경으로 끝난다.
+- **사진 검토 (2026-11-15, JM-80)**: AI가 `NOT_FOOD`로 답한 글은 지우지 않고 사진만 가린다. 피드와 글 화면에는 사진 대신 "관리자가 사진을 검토 중입니다"가 보이고, 서버는 로그 `Post held for review: postId=…`를 한 줄 남긴다. 이 줄이 CloudWatch 지표 필터와 경보를 거쳐 운영자에게 메일로 간다 (16절). 운영자는 관리자 화면 첫 쪽 위의 "검토할 사진"에서 올리거나 삭제한다. 가릴지는 `posts.photo_approved_at`(올린 시각)과 분석 상태로 정해서 "검토 중" 상태 칸을 따로 두지 않는다. AI가 음식이 아니라고 답한 글만 가리고, 분석 중, 실패, 하루 상한 초과는 그대로 보인다. 사진 주소는 화면에 쓰지 않을 뿐이고 파일 이름이 무작위(UUID)라서 따로 막지 않는다
 
 ### 6.2 이미지 전처리와 위치 정보
 
@@ -433,6 +434,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 | photo_taken_at | DATETIME(6) | nullable, EXIF 촬영 시각 |
 | status | VARCHAR(30) | `ACTIVE` / `DELETED_BY_AUTHOR` / `DELETED_BY_ADMIN`, 인덱스 (status, id) |
 | like_count / view_count | INT NOT NULL DEFAULT 0 | 좋아요 수와 조회수. 숫자만 두고 누가 눌렀는지, 누가 봤는지는 저장하지 않는다. 올릴 때는 UPDATE 한 번으로 DB가 더한다 (2026-11-11, JM-59, JM-72) |
+| photo_approved_at | DATETIME(6) | nullable. 운영자가 사진을 확인하고 올린 시각 (2026-11-15, JM-80). 분석 상태가 `NOT_FOOD`이고 이 값이 비어 있으면 피드와 글 화면에서 사진을 가린다 (6.1절) |
 | ip_hash | VARCHAR(64) | 남용 대응용, 30일 후 NULL |
 | created_at / deleted_at | DATETIME(6) | deleted_at = 상태 변경 시각 |
 
@@ -585,13 +587,14 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 | Method | Path | 설명 |
 |---|---|---|
 | POST | `/api/admin/posts/{id}/delete` | 글을 `DELETED_BY_ADMIN`으로. 위치 정보는 작성자 삭제 때와 같이 완전 삭제 → `{"id":12,"status":"DELETED_BY_ADMIN"}` |
+| POST | `/api/admin/posts/{id}/approve` | 사진 검토의 올리기 (JM-80): AI가 음식이 아니라고 봐서 가린 사진을 피드와 글 화면에 보이게 한다 → `{"id":109,"photoHeld":false}`. 가린 글이 아니면(음식으로 본 글, 이미 올린 글) 409 `POST_NOT_HELD` |
 | POST | `/api/admin/comments/{id}/delete` | 댓글 운영자 삭제 |
 | POST | `/api/admin/feedback/{id}/delete` | 피드백 운영자 삭제 |
 | PATCH | `/api/admin/feedback/{id}` | 본문 `{"progress":"DONE","reply":"반영했습니다."}` (둘 중 하나만도 됨). progress = RECEIVED / IN_PROGRESS / DONE / ON_HOLD. 바뀐 피드백 내용을 돌려준다. reply는 보낼 때마다 새 답변으로 **이어서 달린다** (전에 단 답변은 그대로 남는다, 2026-11-13 JM-77). 응답의 `replies`에 지금까지의 답변이 달린 순서대로, 답변 번호(`id`)와 함께 실린다 |
 | POST | `/api/admin/feedback/replies/{id}/delete` | 잘못 단 답변 지우기 (JM-77). 주소의 id는 피드백 번호가 아니라 **답변 번호**다. `DELETED_BY_ADMIN`으로 바뀌고 화면에서 그 답변만 빠진다. 없는 번호거나 이미 지운 답변이면 404 `FEEDBACK_REPLY_NOT_FOUND` |
 | GET | `/api/admin/stats?days=7` | 운영 통계 (JM-68). days는 오늘을 포함한 기간(안 주면 7, 1~90). 날짜별 글, 댓글, 피드백 수(한국 날짜, 삭제 포함), AI 분석 상태별 건수와 성공률, 평균과 p95 응답 시간, 토큰 합계, 오늘 AI 호출 수와 상한, 위치 수집률, 피드백 처리 상태별 수. 개인을 알아볼 수 있는 값은 없다 |
 
-운영자 행동은 모두 로그에 남는다 (`Admin deleted post: postId=…`, `Admin updated feedback: …`). 토큰이 틀린 시도도 경고 로그로 남는다.
+운영자 행동은 모두 로그에 남는다 (`Admin deleted post: postId=…`, `Admin approved held photo: postId=…`, `Admin updated feedback: …`). 토큰이 틀린 시도도 경고 로그로 남는다.
 
 **관리자 화면 (JM-82)** — 브라우저로 보고 누르는 운영 화면. 어디에도 링크하지 않고, 검색 엔진에 나오지 않게 `noindex`. 서버 `.env`의 `APP_ADMIN_PASSWORD`가 비어 있으면 모든 주소가 404다. 쓰는 법은 16절
 
@@ -599,8 +602,9 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 |---|---|---|
 | GET, POST | `/admin/login` | 등록한 노트북 브라우저에서 관리자 비밀번호. 아직 등록한 기기가 없으면 비밀번호가 맞을 때 등록 화면으로. 등록한 기기가 있는데 이 브라우저가 그 기기가 아니면 비밀번호 칸 없이 "관리자 화면은 등록한 기기에서만 열립니다."(403)이고, 보낸 비밀번호도 확인하지 않는다. 같은 IP에서 15분 안에 5번 틀리면 그 15분 동안 막힘(429) |
 | GET, POST | `/admin/setup` | 처음 한 번: 이 브라우저의 이름(예: Windows, Chrome)을 보여 주고, 누르면 이 브라우저를 관리자 기기로 등록하고 들어간다. 기기 쿠키 `jm_admin_device`는 1년, `/admin` 주소에만 보내고 자바스크립트로 읽을 수 없다(HttpOnly, SameSite=Lax, https에서는 Secure). 비밀번호가 맞은 뒤 10분 동안, 아직 아무 기기도 등록하지 않았을 때만 열린다 |
-| GET | `/admin/posts?page=2` | 글 목록: 피드와 같은 순서(최신순 24개씩)로 글 번호, 사진, 닉네임, 시각, 조회, 좋아요, 댓글 수, AI 결과, 메모. 번호를 누르면 글 화면, 사진을 누르면 큰 사진이 새 탭으로 |
+| GET | `/admin/posts?page=2` | 글 목록: 피드와 같은 순서(최신순 24개씩)로 글 번호, 사진, 닉네임, 시각, 조회, 좋아요, 댓글 수, AI 결과, 메모. 번호를 누르면 글 화면, 사진을 누르면 큰 사진이 새 탭으로. 첫 쪽 위에는 사진을 가린 글을 "검토할 사진 N개"로 따로 모아 올리기와 삭제 버튼을 둔다 (JM-80) |
 | POST | `/admin/posts/{id}/delete` | 운영자 삭제 (운영자 API의 글 삭제와 같다). 폼에 숨긴 CSRF 값이 있어야 한다 |
+| POST | `/admin/posts/{id}/approve` | 사진 검토의 올리기 (JM-80, 운영자 API의 사진 올리기와 같다). 가린 글이 아니면 409 에러 화면. 폼에 숨긴 CSRF 값이 있어야 한다 |
 | POST | `/admin/logout` | 로그아웃 |
 
 로그인하면 2시간 동안 관리자로 기억한다(`app.admin.session-minutes`). 로그인할 때 세션 번호를 새로 받는다. 로그: `Admin login succeeded`, `Admin login failed`, `Admin login blocked`, `Admin login rejected: unknown device`(등록하지 않은 브라우저), `Admin device registered`, `Admin logged out` (IP는 해시로만, 기기 쿠키 값은 남기지 않는다).
@@ -727,6 +731,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
     ```
     TOKEN=$(grep ^APP_ADMIN_TOKEN= .env | cut -d= -f2)
     curl -s -X POST https://jjikmuk.com/api/admin/posts/<글 번호>/delete -H "X-Admin-Token: $TOKEN"
+    curl -s -X POST https://jjikmuk.com/api/admin/posts/<글 번호>/approve -H "X-Admin-Token: $TOKEN"
     curl -s -X POST https://jjikmuk.com/api/admin/comments/<댓글 번호>/delete -H "X-Admin-Token: $TOKEN"
     curl -s -X PATCH https://jjikmuk.com/api/admin/feedback/1 -H "X-Admin-Token: $TOKEN" -H "Content-Type: application/json" -d '{"progress":"DONE","reply":"반영했습니다. 피드백 감사합니다 :)"}'
     curl -s -X POST https://jjikmuk.com/api/admin/feedback/replies/<답변 번호>/delete -H "X-Admin-Token: $TOKEN"
@@ -740,10 +745,12 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 - **관리자 화면 (JM-82)**: `https://jjikmuk.com/admin`. 처음 등록한 노트북의 브라우저에서만, 관리자 비밀번호로 들어가서 글 번호와 사진을 보고 지운다. 다른 브라우저나 휴대폰에서는 비밀번호를 알아도 비밀번호 칸이 열리지 않는다. 운영자 API의 열쇠와는 따로라서, 그 열쇠는 지금처럼 서버 밖으로 나가지 않는다
   - 처음 한 번 (서버): ① 비밀번호 관리자에서 긴 무작위 비밀번호를 만들어 저장한다 ② 서버의 `deploy/.env`에 `APP_ADMIN_PASSWORD=그 비밀번호` 한 줄을 더한다 (`nano .env`) ③ `docker compose up -d app` (환경 변수가 바뀌어 app만 새로 뜬다). 비밀번호가 없으면 관리자 화면은 404다
   - 처음 한 번 (노트북): 서버 설정을 마치면 바로, 앞으로 쓸 노트북의 브라우저로 `/admin` → 비밀번호 → 등록 화면에 나온 브라우저 이름(예: Windows, Chrome)을 확인하고 "이 브라우저를 관리자 기기로 등록" → 글 목록으로 들어간다. 다음부터는 이 브라우저에서 비밀번호만 넣는다. 등록은 한 기기뿐이라 처음 등록한 브라우저가 관리자 기기가 된다
-  - 노트북이나 브라우저를 바꿨을 때, 그 브라우저의 쿠키를 지웠을 때: 서버에서 DB의 `admin_device` 줄을 지우면(`delete from admin_device;`, 접속은 10절의 mysql 컨테이너 방식) 다음 로그인 때 다시 등록 화면이 나온다. 같은 노트북이라도 다른 브라우저(예: Chrome과 Edge)는 다른 기기로 본다
+  - 노트북이나 브라우저를 바꿨을 때, 그 브라우저의 쿠키를 지웠을 때: 서버에서 DB의 `admin_device` 줄을 지우면(서버에서 `cd ~/personal_project/deploy` 다음 `docker run --rm --env-file .env mysql:8.4 sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -h "$DB_HOST" -u macros macros -e "delete from admin_device;"'`. DB 비밀번호는 컨테이너 안에서 `.env`로만 읽어 화면에 나오지 않는다) 다음 로그인 때 다시 등록 화면이 나온다. 같은 노트북이라도 다른 브라우저(예: Chrome과 Edge)는 다른 기기로 본다
   - 노트북을 잃어버렸을 때: `admin_device` 줄을 지우고 비밀번호도 바꾼다 (브라우저에 비밀번호를 저장해 두었다면 그 노트북으로 들어올 수 있다)
   - 비밀번호가 샜다고 의심되면: `.env`의 `APP_ADMIN_PASSWORD`를 새 값으로 바꾸고 `docker compose up -d app`. 등록한 노트북이 아니면 비밀번호만으로는 못 들어오지만 바로 바꾼다
   - 로그인 알림 메일 (선택): CloudWatch 로그 그룹 `/macros/server`에 지표 필터 `{ $.message = "Admin login succeeded*" }`를 만들고 경보를 걸어 SNS 주제 `macros-alerts`로 보내면, 관리자로 들어올 때마다 메일이 온다 (에러 경보와 같은 방법, 경보 10개까지 무료)
+  - 사진 검토 (JM-80): AI가 음식이 아니라고 본 글은 피드와 글 화면에서 사진이 가려지고 "관리자가 사진을 검토 중입니다"가 보인다. 관리자 화면 첫 쪽 위의 "검토할 사진 N개"에서 사진을 눌러 크게 보고, 음식이거나 올려도 괜찮은 사진이면 "올리기"(피드에 사진이 보인다), 아니면 "삭제". 관리자 화면을 쓸 수 없을 때는 위 상자의 approve 줄로 올린다 (가린 글은 피드에서 "관리자가 사진을 검토 중입니다" 칸으로 보이고, 누르면 주소에 글 번호가 있다)
+  - 사진 검토 알림 메일 (처음 한 번, AWS 콘솔): CloudWatch → 로그 그룹 `/macros/server` → 지표 필터 `photo-held`(패턴 `{ $.message = "Post held for review*" }`, 지표 `macros/PhotoHeld`, 값 1, 기본값 0) → 그 지표로 경보 `macros-photo-held`(합계, 5분, 1 이상) → SNS 주제 `macros-alerts`(에러 경보와 같은 주제). 경보는 상태가 바뀔 때 한 번 메일을 보내므로, 5분 안에 여러 장이 걸려도 메일은 한 통이다. 메일이 오면 관리자 화면을 연다. 로그 문구는 `FoodAnalysisService`에 있고, 바꾸면 이 패턴도 바꾼다
   - 내 PC에서 직접 부를 수도 있다 (Git Bash에서 같은 curl, 열쇠는 직접 입력). PowerShell은 한글 본문이 깨질 수 있어 Git Bash를 쓴다
 - **장애 대응 (런북, S4-6)**: 알림 두 종류가 메일로 온다. 받으면 아래 순서로 본다
   - **"Down" (UptimeRobot)**: ① 브라우저로 `https://jjikmuk.com` 열어 보기 ② SSH → `cd ~/personal_project/deploy && docker compose ps` ③ app이 죽어 있으면 `docker compose logs app --tail 100`으로 원인 보고 `docker compose up -d`로 재시작 ④ SSH 자체가 안 되면 EC2 콘솔에서 인스턴스 상태 확인 → 재부팅 (재부팅하면 1분 뒤 컨테이너가 스스로 올라온다) ⑤ 끝나면 `troubleshooting/`에 기록
@@ -840,6 +847,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 | 고쳐 쓰는 AI | 4.2절에서 제외했던 "분석 결과 사용자 보정"을 **올릴 때 고르는 확정 방식**으로 추가한다 (AI가 바로 확정 또는 내가 보고 확정). AI의 답은 지우지 않고 확정한 값을 따로 저장해서 둘을 비교할 수 있게 한다. 확정은 글마다 한 번 (계속 바꿀 수 있으면 나중에 데이터로 쓰기 어렵다). 후보에 없으면 이름을 직접 적고 그때만 AI를 한 번 더 부른다 → 글 하나에 AI의 답은 최대 두 번. 음식이 아닌 이름은 받지 않고, 음식이지만 사진과 다른 것은 받되 표시해 둔다. 방금 올린 브라우저는 비밀번호 없이 확정한다 (세션에 글 번호만). 화면은 AI의 값과 확정한 값을 열을 맞춘 두 줄로 함께 보여 주고 꼬리표는 "AI"와 "REAL". 운영자 결정, 지인 피드백 6번의 AI 정확성 (6.5절, 14절) | 2026-11-13 |
 | 목록의 번호 | 공지와 피드백 목록의 맨 왼쪽에 글의 번호(id)를 그대로 보여 준다. 화면용 일련번호를 따로 매기지 않는다: 주소와 운영자 작업에서 쓰는 번호와 같아야 헷갈리지 않는다. 삭제된 글은 줄을 남겨 번호와 "삭제된 피드백입니다." 또는 "삭제된 공지입니다."만 보여 준다 (번호와 자리가 당겨지지 않게). 삭제된 글의 내용은 내보내지 않고 상세는 404 그대로. 운영자 요청 (5.1절, 14절) | 2026-11-13 |
 | 운영자 답변 | 피드백 하나에 답변을 여러 번 달 수 있고, 달린 순서대로 모두 보여 준다 (전에는 한 칸이라 다시 달면 덮어써져 기록이 남지 않았다). 답변은 새 테이블 `feedback_replies`에 한 줄씩 쌓는다. 잘못 단 답변은 고치지 않고 지운 뒤 새로 단다 (삭제 = 상태 변경). 예전 답변은 운영 DB에 SQL을 손으로 돌리지 않고 **서버가 켜질 때 도는 코드**로 옮겼다: 배포와 같은 길로 가서 테스트와 검토를 거치고, 아직 옮기지 않은 글만 골라서 서버가 여러 번 켜져도 한 번만 옮겨지고, 실패해도 서버는 켜진다. 덮어써져서 DB에 없던 답변 3개는 그때 게시판을 읽어 둔 작업 기록에서 되찾아 함께 넣었다. 답변 글은 문어체로 쓰고 한 글의 첫 답변은 "피드백 감사합니다 :)"로 끝낸다 (운영자 규칙, 16절): 해요체였던 답변 둘은 옮기면서 고쳐 넣었다. 옮기는 코드(`FeedbackReplyBackfill`)와 예전 칸(`admin_reply`, `replied_at`)은 운영 DB에서 옮겨진 것을 확인한 뒤에 지운다. 운영자 요청 (12절, 13절, 14절, 16절) | 2026-11-13 |
+| 사진 검토 | AI가 음식이 아니라고 본(`NOT_FOOD`) 글은 지우지 않고 사진만 가린다. 피드와 글 화면에 "관리자가 사진을 검토 중입니다", 운영자에게 메일(로그 한 줄 → CloudWatch 지표 필터 → 경보 → SNS. 앱에 메일 기능을 넣지 않는다), 관리자 화면 첫 쪽 위에서 올리거나 삭제 (운영자 결정, JM-80. 발표 중 음식이 아닌 사진이 올라와 지운 일과 지인 피드백 12번 "음식이 아니면 글 생성을 막자"). 글을 막지 않고 가리는 이유: AI가 음식을 잘못 볼 수도 있어서 운영자가 마지막에 본다. 상태 칸 대신 `photo_approved_at`과 분석 상태로 정한다. 분석 중, 실패, 하루 상한 초과는 가리지 않는다 | 2026-11-15 |
 
 **미정**
 
@@ -854,6 +862,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 
 ## 변경 이력
 
+- 2026-11-15 — 사진 검토: AI가 음식이 아니라고 본 글은 피드와 글 화면에서 사진을 가리고 "관리자가 사진을 검토 중입니다"를 보여 준다. 운영자는 메일(CloudWatch 경보)을 받고 관리자 화면 첫 쪽 위의 "검토할 사진"에서 올리거나 삭제한다. 운영자 API에도 사진 올리기. 16절의 관리자 기기 지우기 명령을 바로 쓸 수 있게 적었다 (JM-80, 발표 중 발견, 지인 피드백 12번, 6.1절, 12절, 13절, 16절, 18절)
 - 2026-11-14 — 관리자 화면(`/admin`): 처음 등록한 노트북 브라우저에서만 관리자 비밀번호로 들어가고, 글 목록에서 번호와 사진을 보고 지운다. 첫 안의 휴대폰 인증 앱(6자리)은 운영자 결정으로 뺐다 (JM-82, 운영자 요청, 9절, 12절, 13절, 14절, 16절, 18절)
 - 2026-11-13 — 업로드 한도를 브라우저마다 1분 5번, 하루 30번으로 세고, IP는 하루 200번(1분 제한 없음), 서비스 전체는 하루 500개로 바꿈. 같은 와이파이의 여러 사람이 한도 하나를 나눠 쓰다 막히던 문제. AI 하루 분석 상한도 200건에서 500건으로 맞춤 (JM-79, 발표 중 발견, 6.4절, 7절, 18절)
 - 2026-11-13 — 구조 그림 네 장(배포 아키텍처, 자원 지도, 사이트 IA, AI 분석 흐름)을 `docs/diagrams`에 원본 HTML과 함께 두고 6절, 10절, 14절에서 보여 준다 (JM-78, 운영자 요청)
