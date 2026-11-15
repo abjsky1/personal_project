@@ -51,13 +51,10 @@ public class Feedback {
 	@Column(nullable = false, length = 20)
 	private FeedbackProgress progress;
 
-	// JM-77 전의 운영자 답변 칸 (답변을 하나만 담을 수 있어서, 다시 달면 앞의 답변이 덮어써졌다).
-	// 이제는 여기에 쓰지 않는다: 답변은 FeedbackReply(feedback_replies 테이블)에 한 줄씩 쌓인다.
-	// 예전 답변을 새 테이블로 옮길 때만 읽는다 (FeedbackReplyBackfill). 옮겨진 것을 확인한 뒤에는 이 두 칸을 지워도 된다
-	@Column(length = 1000)
-	private String adminReply;
-
-	private Instant repliedAt;
+	// 운영자 답변은 이 엔티티가 아니라 FeedbackReply(feedback_replies 테이블)에 한 줄씩 쌓인다 (JM-77).
+	// JM-77 전의 답변 칸(admin_reply, replied_at)은 옮긴 것을 확인하고 코드에서 뺐다 (2026-11-16, JM-84).
+	// DB에는 두 칸이 그대로 남아 있다. JM-77 전에 답변을 단 글은 예전 값을 그대로 갖고 있고(옮길 때 복사만 하고 지우지 않았다),
+	// 그 뒤에 쓴 글은 비어 있다. 빈 값을 허용하는 칸이라 새 글을 저장할 때 문제가 없고, ddl-auto=update는 칸을 지우지 않는다
 
 	@Column(nullable = false)
 	private Instant createdAt;
@@ -120,14 +117,6 @@ public class Feedback {
 
 	public FeedbackProgress getProgress() {
 		return progress;
-	}
-
-	public String getAdminReply() {
-		return adminReply;
-	}
-
-	public Instant getRepliedAt() {
-		return repliedAt;
 	}
 
 	public Instant getCreatedAt() {

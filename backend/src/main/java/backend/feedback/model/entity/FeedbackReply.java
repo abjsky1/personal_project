@@ -51,17 +51,12 @@ public class FeedbackReply {
 	protected FeedbackReply() {
 	}
 
-	// 지금 다는 답변
+	// 지금 다는 답변. 쓴 시각을 정해서 만드는 생성자는 예전 답변 옮기기(JM-77)에만 쓰여서 함께 지웠다 (JM-84)
 	public FeedbackReply(Long feedbackId, String content) {
-		this(feedbackId, content, Instant.now());
-	}
-
-	// 쓴 시각을 정해서 만든다: 예전 답변을 옮길 때만 쓴다 (FeedbackReplyBackfill)
-	public FeedbackReply(Long feedbackId, String content, Instant createdAt) {
 		this.feedbackId = feedbackId;
 		this.content = content;
 		this.status = PostStatus.ACTIVE;
-		this.createdAt = createdAt;
+		this.createdAt = Instant.now();
 	}
 
 	public void deleteByAdmin() {
