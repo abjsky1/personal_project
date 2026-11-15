@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import backend.analysis.model.entity.AnalysisStatus;
 import backend.post.model.entity.Post;
@@ -42,6 +43,17 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	@Query("select p from Post p, FoodAnalysis a where a.postId = p.id and p.status = :status"
 			+ " and a.status = :analysisStatus and p.photoApprovedAt is null order by p.id desc")
 	List<Post> findPhotoHeld(@Param("status") PostStatus status, @Param("analysisStatus") AnalysisStatus analysisStatus);
+
+	// 사진 검토를 시작하기 전에 올라온 글을 올린 것으로 표시한다 (JM-80, PhotoReviewBackfill이 쓰는 한 번용 쿼리).
+	// before 전에 올라왔고 AI가 음식이 아니라고 봤는데 아직 올리지 않은 글의 photo_approved_at을 now로 채우고, 바뀐 글 수를 돌려준다.
+	// 한 번 채운 글은 다시 고르지 않는다 (photoApprovedAt is null) → 서버가 여러 번 켜져도 처음 한 번만 바뀐다
+	// @Transactional: 서비스 밖(서버가 켜질 때)에서 부르는 UPDATE라 여기서 트랜잭션을 연다
+	@Transactional
+	@Modifying(clearAutomatically = true)
+	@Query("update Post p set p.photoApprovedAt = :now where p.photoApprovedAt is null and p.createdAt < :before"
+			+ " and p.id in (select a.postId from FoodAnalysis a where a.status = :analysisStatus)")
+	int approveHeldBefore(@Param("before") Instant before, @Param("now") Instant now,
+			@Param("analysisStatus") AnalysisStatus analysisStatus);
 
 	// 조회수 1 올리기 (JM-72) → UPDATE posts SET view_count = view_count + 1 WHERE id = ? AND status = ?
 	// 글을 읽어서 +1 한 뒤 저장하면, 두 사람이 동시에 열었을 때 둘 다 같은 숫자를 읽고 같은 값으로 저장해서 하나를 잃는다.
