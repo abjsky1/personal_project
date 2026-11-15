@@ -23,6 +23,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 // Google Gemini API로 음식 사진을 분석한다. 지시문과 응답 형식은 모델 비교 때 쓴 것과 같다. (docs/ai-model-comparison.md)
+// 2026-11-15 (JM-80, 운영자 결정): 음식 그림, 모형, 불쾌감을 주는 사진도 isFood=false로 답하게 했다. isFood=false인 글은 사진을 가리고
+// 운영자가 검토한다 (Post.isPhotoHeld). "음식이 아님"의 뜻이 "피드에 바로 보여도 되는 음식 사진이 아님"으로 넓어졌다
 // 로그에는 상태만 남기고, 사진이나 AI 응답 내용은 남기지 않는다.
 //
 // 지시문이 셋이다 (JM-74, 고쳐 쓰는 AI)
@@ -36,7 +38,9 @@ public class GeminiFoodAnalyzer implements FoodAnalyzer {
 
 	private static final String PROMPT = """
 			당신은 영양 분석 도우미입니다. 사진 속 음식을 보고 영양 정보를 추정하세요.
-			- 음식 사진이 아니면 isFood=false, items는 빈 배열로 답합니다.
+			- 실제 음식이나 음료를 찍은 사진일 때만 isFood=true입니다. 음식이 없는 사진, 음식을 그린 그림(일러스트, 만화, 컴퓨터로 만든 그림), 모형이나 장난감 음식은 isFood=false입니다.
+			- 피나 상처, 배설물, 시체, 폭력, 성적인 장면, 혐오 표현처럼 보는 사람에게 혐오감이나 불쾌감을 줄 수 있는 사진은 음식이 함께 있어도 isFood=false입니다.
+			- isFood=false이면 items는 빈 배열로 답합니다.
 			- 음식이면 보이는 음식(반찬 포함)마다 하나씩: 한국어 이름(name), 사진 속 양의 추정 무게(amountG, g), 칼로리(kcal), 탄수화물(carbsG), 단백질(proteinG), 지방(fatG)을 추정합니다.
 			- 양은 그릇 크기와 일반적인 1인분을 기준으로 추정합니다.
 			- confidence: 추정의 확신 정도 (LOW / MEDIUM / HIGH)
@@ -46,7 +50,9 @@ public class GeminiFoodAnalyzer implements FoodAnalyzer {
 	// 후보용 지시문. 영양을 "100g당"으로 받는 이유: 사용자가 양을 고치거나 다른 후보를 골라도 서버가 곱해서 다시 계산할 수 있다.
 	private static final String CANDIDATES_PROMPT = """
 			당신은 영양 분석 도우미입니다. 사진 속 음식을 보고 영양 정보를 추정하세요. 사용자가 맞는 것을 고를 수 있게 음식마다 후보를 냅니다.
-			- 음식 사진이 아니면 isFood=false, items는 빈 배열로 답합니다.
+			- 실제 음식이나 음료를 찍은 사진일 때만 isFood=true입니다. 음식이 없는 사진, 음식을 그린 그림(일러스트, 만화, 컴퓨터로 만든 그림), 모형이나 장난감 음식은 isFood=false입니다.
+			- 피나 상처, 배설물, 시체, 폭력, 성적인 장면, 혐오 표현처럼 보는 사람에게 혐오감이나 불쾌감을 줄 수 있는 사진은 음식이 함께 있어도 isFood=false입니다.
+			- isFood=false이면 items는 빈 배열로 답합니다.
 			- 음식이면 보이는 음식(반찬 포함)마다 하나씩: 사진 속 양의 추정 무게(amountG, g)와 후보(candidates) 3개를 냅니다.
 			- 후보는 그 음식일 가능성이 높은 순서로 놓습니다. 첫 번째가 가장 그럴듯한 답이고, 나머지 둘은 사진에서 비슷하게 보일 수 있는 다른 음식입니다. 세 후보의 이름은 서로 달라야 합니다.
 			- 후보마다: 한국어 이름(name), 100g당 칼로리(kcalPer100g), 100g당 탄수화물(carbsPer100g), 100g당 단백질(proteinPer100g), 100g당 지방(fatPer100g)을 추정합니다. 사진 속 양이 아니라 100g 기준입니다.

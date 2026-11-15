@@ -127,6 +127,27 @@ button {
 	background: #eee;
 }
 
+/* 사진 검토 (JM-80): AI가 음식이 아니라고 본 글은 운영자가 올리기 전까지 사진 자리에 안내 글자를 둔다 */
+/* 자리 크기는 사진과 같다: 목록은 썸네일처럼 정사각형(.card-held), 글 화면은 .detail-held */
+.photo-held {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	width: 100%;
+	padding: 12px;
+	border-radius: 8px;
+	background: #eee;
+	color: #666;
+	text-align: center;
+	word-break: keep-all;
+}
+
+.card-held {
+	aspect-ratio: 1 / 1;
+	font-size: 0.9rem;
+}
+
 /* ---- 카드의 글자 두 줄 (JM-72): 닉네임, 칼로리, 숫자, 날짜가 카드마다 같은 자리에 온다 ---- */
 /* 첫 줄: 왼쪽에 닉네임, 오른쪽 끝에 칼로리 / 둘째 줄: 왼쪽에 숫자(좋아요, 댓글, 조회수), 오른쪽 끝에 날짜 */
 /* 메모는 줄 수가 글마다 달라서 목록에서 뺐다 (상세 화면에서 보인다) → 모든 카드의 높이가 같다 */
@@ -326,6 +347,18 @@ button {
 	object-fit: contain;
 	border-radius: 8px;
 	background: #f0f0f0;
+}
+
+/* 글 화면에서 사진을 가렸을 때 (JM-80): 사진처럼 넓은 자리에 안내 글자 */
+.detail-held {
+	aspect-ratio: 4 / 3;
+	background: #f0f0f0;
+	font-size: 1.05rem;
+}
+
+/* 분석 칸의 검토 안내 (JM-80): 휴대폰에서 "지워요"가 둘로 갈라지지 않게 낱말 단위로 줄을 바꾼다 */
+.held-note {
+	word-break: keep-all;
 }
 
 /* AI 분석 결과 */
@@ -1136,6 +1169,12 @@ a.notice-row:hover {
 		gap: 14px 8px;
 	}
 
+	/* 사진 대신 보이는 안내 (JM-80): 카드 폭이 좁아 글자를 줄인다 */
+	.card-held {
+		padding: 6px;
+		font-size: 0.7rem;
+	}
+
 	/* 카드 폭이 110px쯤이라 글자를 줄인다 */
 	.card-row {
 		gap: 4px;
@@ -1459,6 +1498,44 @@ a.notice-row:hover {
 	padding: 8px 14px;
 }
 
+/* 사진 검토 (JM-80): 첫 쪽 위의 검토할 사진 묶음, 올리기와 삭제 버튼 */
+.admin-review {
+	margin-top: 16px;
+	padding: 12px 16px 4px;
+	border: 1px solid #f1c4c4;
+	border-radius: 8px;
+	background: #fff7f7;
+}
+
+.admin-review h2,
+.admin-all {
+	margin: 0;
+	font-size: 1.05rem;
+}
+
+.admin-all {
+	margin-top: 24px;
+}
+
+.admin-review .admin-list {
+	margin-top: 8px;
+}
+
+.admin-review .admin-row:last-child {
+	border-bottom: 0;
+}
+
+.admin-actions {
+	display: flex;
+	gap: 8px;
+}
+
+.admin-approve button {
+	width: auto;
+	margin: 0;
+	padding: 8px 14px;
+}
+
 @media (max-width: 600px) {
 	main.admin {
 		padding: 12px 16px 40px;
@@ -1482,5 +1559,11 @@ a.notice-row:hover {
 	.admin-thumb img {
 		width: 60px;
 		height: 60px;
+	}
+
+	/* 버튼 둘(올리기, 삭제)은 위아래로 */
+	.admin-actions {
+		flex-direction: column;
+		gap: 6px;
 	}
 }

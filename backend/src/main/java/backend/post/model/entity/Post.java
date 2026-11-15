@@ -6,6 +6,7 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import backend.analysis.model.entity.AnalysisStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -84,6 +85,11 @@ public class Post {
 	@Column(nullable = false)
 	private int viewCount;
 
+	// 운영자가 사진을 확인하고 올린 시각 (JM-80, 사진 검토). 검토할 일이 없었거나 아직 올리지 않았으면 비어 있다(null).
+	// 사진을 가릴지는 이 값과 AI 분석 결과로 정한다 (아래 isPhotoHeld). "검토 중" 칸을 따로 두지 않아서 두 값이 어긋날 일이 없다.
+	// 빈 값을 허용하는 컬럼이라 ddl-auto=update가 예전 글에는 null로 더한다 → 배포 전에 AI가 음식이 아니라고 본 글도 바로 검토 중이 된다
+	private Instant photoApprovedAt;
+
 	// JPA는 DB에서 읽은 값을 채울 때 빈 객체부터 만들기 때문에, 매개변수 없는 생성자가 꼭 있어야 한다.
 	// protected: 우리 코드에서는 실수로 빈 게시글을 만들지 못하게 막는다.
 	protected Post() {
@@ -119,6 +125,18 @@ public class Post {
 	// 고칠 수 있는 값은 메모뿐이다 (운영자 결정). 사진, 닉네임, 작성 시각은 바꾸는 메서드를 두지 않는다.
 	public void changeMemo(String memo) {
 		this.memo = memo;
+	}
+
+	// 사진 검토 (JM-80): AI가 음식이 아니라고 본 글은 운영자가 확인하고 올리기 전까지 사진을 가린다.
+	// 피드와 글 화면에는 사진 대신 "관리자가 사진을 검토 중입니다"가 보이고, 운영자는 관리자 화면에서 올리거나 지운다.
+	// analysisStatus: 이 글의 AI 분석 상태. 분석 기록이 없는 옛날 글(null)과 분석 중, 실패한 글은 가리지 않는다
+	public boolean isPhotoHeld(AnalysisStatus analysisStatus) {
+		return analysisStatus == AnalysisStatus.NOT_FOOD && photoApprovedAt == null;
+	}
+
+	// 운영자가 사진을 확인하고 피드에 보이게 한다 (관리자 화면의 "올리기", 운영자 API). 한 번 올린 사진은 다시 가리지 않는다
+	public void approvePhoto() {
+		this.photoApprovedAt = Instant.now();
 	}
 
 	// 값을 꺼내는 메서드(getter)만 두고 값을 바꾸는 메서드(setter)는 두지 않는다.
@@ -169,5 +187,9 @@ public class Post {
 
 	public int getViewCount() {
 		return viewCount;
+	}
+
+	public Instant getPhotoApprovedAt() {
+		return photoApprovedAt;
 	}
 }

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import backend.analysis.model.entity.AnalysisStatus;
 import backend.analysis.model.entity.ConfirmMode;
 import backend.analysis.model.entity.FoodAnalysis;
 import backend.analysis.model.repository.FoodAnalysisRepository;
@@ -159,8 +160,18 @@ public class PostService {
 		if (!page.hasContent() && page.getTotalPages() > 0) {
 			page = loadPage(page.getTotalPages());
 		}
-		List<Post> pagePosts = page.getContent();
+		// 화면의 쪽 번호는 1부터, Spring Data의 getNumber()는 0부터 세므로 1을 더한다
+		return new FeedPage(summariesOf(page.getContent()), PageNav.of(page.getNumber() + 1, page.getTotalPages()));
+	}
 
+	// 관리자 화면 첫 쪽 위의 "검토할 사진" (JM-80): 사진을 가린 글 전부, 최신순. 쌓일 일이 드물어 쪽을 나누지 않는다
+	@Transactional(readOnly = true)
+	public List<PostSummary> getPhotoHeldPosts() {
+		return summariesOf(postRepository.findPhotoHeld(PostStatus.ACTIVE, AnalysisStatus.NOT_FOOD));
+	}
+
+	// 글 목록을 화면용 PostSummary 목록으로 바꾼다 (피드, 관리자 화면의 검토할 사진)
+	private List<PostSummary> summariesOf(List<Post> pagePosts) {
 		// 이번 화면의 글들의 분석 기록을 한 번에 읽어 온다. 글마다 따로 읽으면 글 20개에 쿼리가 20번 더 나간다 (N+1 문제).
 		// toMap: 글 번호로 바로 찾을 수 있게 "글 번호 → 분석 기록" 지도로 만든다.
 		List<Long> postIds = pagePosts.stream().map(Post::getId).toList();
@@ -170,11 +181,9 @@ public class PostService {
 		Map<Long, Long> commentCounts = commentService.countByPostIds(postIds);
 
 		// stream().map(...).toList(): 목록의 Post 하나하나를 PostSummary로 바꿔 새 목록을 만든다.
-		List<PostSummary> summaries = pagePosts.stream()
+		return pagePosts.stream()
 				.map(post -> PostSummary.from(post, analyses.get(post.getId()), commentCounts.getOrDefault(post.getId(), 0L)))
 				.toList();
-		// 화면의 쪽 번호는 1부터, Spring Data의 getNumber()는 0부터 세므로 1을 더한다
-		return new FeedPage(summaries, PageNav.of(page.getNumber() + 1, page.getTotalPages()));
 	}
 
 	// 최신 글(번호 큰 순)부터 PAGE_SIZE개. Page로 받으면 전체 글 수도 세어 와서 전체 쪽 수를 알 수 있다 (쿼리 2번: 목록 + 개수)
@@ -192,7 +201,8 @@ public class PostService {
 		if (countView) {
 			postRepository.incrementViewCount(id, PostStatus.ACTIVE);
 		}
-		return PostSummary.from(findActivePost(id), null, 0);
+		// 분석 기록도 넘겨서 사진을 가릴 글인지(JM-80) 정한다. 화면의 분석 결과 칸은 Controller가 따로 받는다
+		return PostSummary.from(findActivePost(id), foodAnalysisRepository.findById(id).orElse(null), 0);
 	}
 
 	// 좋아요 1 올리고, 올린 뒤의 수를 돌려준다 (JM-59).
@@ -259,6 +269,19 @@ public class PostService {
 		post.deleteByAdmin();
 		postLocationRepository.deleteById(id);
 		log.info("Admin deleted post: postId={}", id);
+	}
+
+	// 사진 검토의 "올리기" (JM-80, 관리자 화면과 운영자 API): 가렸던 사진을 피드와 글 화면에 보이게 한다.
+	// 가린 글이 아니면(음식으로 본 글, 이미 올린 글) POST_NOT_HELD. 운영자 행동이라 로그에 남긴다
+	@Transactional
+	public void approvePhotoByAdmin(Long id) {
+		Post post = findActivePost(id);
+		AnalysisStatus analysisStatus = foodAnalysisRepository.findById(id).map(FoodAnalysis::getStatus).orElse(null);
+		if (!post.isPhotoHeld(analysisStatus)) {
+			throw new BusinessException(ErrorCode.POST_NOT_HELD);
+		}
+		post.approvePhoto();
+		log.info("Admin approved held photo: postId={}", id);
 	}
 
 	// ACTIVE인 글만 찾고, 없으면 POST_NOT_FOUND 예외를 던진다.

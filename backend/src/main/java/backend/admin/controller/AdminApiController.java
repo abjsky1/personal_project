@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import backend.admin.dto.AdminDeleteResponse;
 import backend.admin.dto.AdminFeedbackUpdateRequest;
+import backend.admin.dto.AdminPhotoApproveResponse;
 import backend.comment.service.CommentService;
 import backend.feedback.model.dto.FeedbackDetail;
 import backend.feedback.service.FeedbackService;
@@ -39,6 +40,14 @@ public class AdminApiController {
 	public AdminDeleteResponse deletePost(@PathVariable Long id) {
 		postService.deleteByAdmin(id);
 		return new AdminDeleteResponse(id, PostStatus.DELETED_BY_ADMIN);
+	}
+
+	// 사진 검토의 "올리기" (JM-80): AI가 음식이 아니라고 봐서 가린 사진을 피드와 글 화면에 보이게 한다.
+	// 관리자 화면의 "올리기"와 같다. 가린 글이 아니면(음식으로 본 글, 이미 올린 글) 409 POST_NOT_HELD
+	@PostMapping("/posts/{id}/approve")
+	public AdminPhotoApproveResponse approvePhoto(@PathVariable Long id) {
+		postService.approvePhotoByAdmin(id);
+		return new AdminPhotoApproveResponse(id, false);
 	}
 
 	@PostMapping("/comments/{id}/delete")

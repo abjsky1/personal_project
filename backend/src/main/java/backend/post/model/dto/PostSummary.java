@@ -19,6 +19,8 @@ import backend.post.model.entity.Post;
 // analysisStatus, totalKcal: 목록 카드에 보여 줄 분석 상태와 칼로리. 분석 기록이 없으면 null
 // commentCount: 목록 카드의 댓글 수 (상세 화면은 댓글 목록 쪽에서 따로 세므로 0으로 둔다)
 // likeCount, viewCount: 좋아요 수와 조회수 (JM-59, JM-72)
+// photoHeld: 사진을 가리고 "관리자가 사진을 검토 중입니다"를 보여 줄 글인지 (JM-80, Post.isPhotoHeld).
+//   true면 피드와 글 화면은 사진 주소를 쓰지 않는다. 관리자 화면만 사진을 보여 준다
 public record PostSummary(
 		Long id,
 		String nickname,
@@ -32,7 +34,8 @@ public record PostSummary(
 		BigDecimal totalKcal,
 		long commentCount,
 		int likeCount,
-		int viewCount) {
+		int viewCount,
+		boolean photoHeld) {
 
 	private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
 
@@ -61,7 +64,8 @@ public record PostSummary(
 				analysis == null ? null : analysis.getShownTotalKcal(),
 				commentCount,
 				post.getLikeCount(),
-				post.getViewCount());
+				post.getViewCount(),
+				post.isPhotoHeld(analysis == null ? null : analysis.getStatus()));
 	}
 
 	// 휴대폰 카드처럼 좁은 자리에 넣는 짧은 날짜 (JM-72): "2026.11.11"이 들어가지 않는 자리에 쓴다.
