@@ -1,8 +1,18 @@
 <%@ page pageEncoding="UTF-8" %>
-<%-- 사진 위치 카드 (JM-68). 위치 제공에 동의했고 사진에 GPS가 있는 글만 위치가 저장된다. 좌표는 읽지 않고 개수만 --%>
+<%-- 사진 위치 카드 (JM-68, JM-85). 위치 제공에 동의했고 사진에 GPS가 있는 글만 위치가 저장된다.
+     좌표는 내보내지 않고, 서버가 행정동을 찾아 지역 이름과 글 수만 보여 준다 (RegionLookup, AdminStatsResponse.RegionStats) --%>
+<c:set var="rg" value="${stats.regions}" />
 <section class="stats-card">
 	<h2>사진 위치</h2>
 	<table class="stats-table">
 		<tr><th>남아 있는 글 중 위치가 저장된 글</th><td><admin:rate rate="${stats.location.collectionRate}" part="${stats.location.withLocation}" whole="${stats.location.activePosts}" /></td></tr>
+		<tr><th>행정동을 찾지 못한 위치 (한국 밖, 바다 위)</th><td>${rg.unmatched}</td></tr>
 	</table>
+	<div class="stats-regions">
+		<admin:regions title="시/도" level="${rg.sido}" />
+		<admin:regions title="시/군/구" level="${rg.sigungu}" />
+		<admin:regions title="행정동" level="${rg.dong}" />
+	</div>
+	<p class="stats-note">사진을 찍은 곳이고, 사는 곳은 아닙니다. 글이 많은 순으로 10곳까지 (같으면 이름 순).</p>
+	<p class="stats-note">행정동 경계: 통계청 SGIS(공공누리 제1유형)를 <a href="https://github.com/vuski/admdongkor">vuski/admdongkor</a>가 가공한 2026-10-01판 (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>). 이 서비스가 30m 간격으로 줄여서 씁니다.</p>
 </section>

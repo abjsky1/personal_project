@@ -3,16 +3,22 @@ package backend.stats.model.dto;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import backend.analysis.model.dto.ConfirmedItem;
 import backend.analysis.model.dto.FoodAnalysisResult.FoodItem;
+import backend.location.model.vo.Region;
 
 // 운영자 통계 API의 응답 (GET /api/admin/stats). 개인을 알아볼 수 있는 값 없이 집계 숫자만 담는다.
 // 비율은 모두 퍼센트(소수점 한 자리)이고, 계산할 기록이 없으면 null이다.
-// 새 항목은 맨 뒤에 붙인다 (예전 키는 그대로 두어 curl | jq 명령이 계속 맞게): confirm (JM-75)
+// 새 항목은 맨 뒤에 붙인다 (예전 키는 그대로 두어 curl | jq 명령이 계속 맞게): confirm (JM-75), regions (JM-85)
 public record AdminStatsResponse(int days, LocalDate from, LocalDate to, List<DailyActivity> daily, Totals totals,
-		AnalysisStats analysis, LocationStats location, FeedbackCounts feedback, ConfirmStats confirm) {
+		AnalysisStats analysis, LocationStats location, FeedbackCounts feedback, ConfirmStats confirm,
+		RegionStats regions) {
 
 	// 기간 전체의 합계
 	public record Totals(long posts, long comments, long feedbacks) {
@@ -151,5 +157,37 @@ public record AdminStatsResponse(int days, LocalDate from, LocalDate to, List<Da
 			return null;
 		}
 		return Math.round(part * 1000.0 / whole) / 10.0;
+	}
+
+	// 사진 위치로 본 지역별 글 수 (JM-85, 기획서 6.2절). location과 같은 글(남아 있고 위치가 저장된 글)을 센다
+	// located: 위치가 있는 글 / unmatched: 어느 행정동에도 들지 않은 위치 (한국 밖, 바다 위 등)
+	// sido, sigungu, dong: 시/도, 시/군/구, 행정동마다 글이 있는 곳의 수와 글이 많은 순 10곳 (같으면 이름 순)
+	// 사진을 찍은 곳이지 사는 곳이 아니다. 이름과 개수만 낸다 (좌표와 글 번호는 내지 않는다)
+	public record RegionStats(long located, long unmatched, RegionLevel sido, RegionLevel sigungu, RegionLevel dong) {
+
+		public static RegionStats of(List<Optional<Region>> found) {
+			List<Region> regions = found.stream().flatMap(Optional::stream).toList();
+			return new RegionStats(found.size(), found.size() - regions.size(), RegionLevel.of(regions, Region::sido),
+					RegionLevel.of(regions, Region::sigungu), RegionLevel.of(regions, Region::dong));
+		}
+	}
+
+	// 한 단계(시/도, 시/군/구, 행정동)의 지역별 글 수. areas: 글이 하나라도 있는 곳의 수 / top: 글이 많은 순 10곳
+	public record RegionLevel(long areas, List<RegionCount> top) {
+
+		static final int TOP = 10;
+
+		static RegionLevel of(List<Region> regions, Function<Region, String> name) {
+			List<RegionCount> counts = regions.stream()
+					.collect(Collectors.groupingBy(name, Collectors.counting()))
+					.entrySet().stream()
+					.map(entry -> new RegionCount(entry.getKey(), entry.getValue()))
+					.sorted(Comparator.comparingLong(RegionCount::count).reversed().thenComparing(RegionCount::name))
+					.toList();
+			return new RegionLevel(counts.size(), counts.stream().limit(TOP).toList());
+		}
+	}
+
+	public record RegionCount(String name, long count) {
 	}
 }

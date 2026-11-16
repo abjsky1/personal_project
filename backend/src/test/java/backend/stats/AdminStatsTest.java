@@ -238,6 +238,24 @@ class AdminStatsTest {
 		assertThat(statsMapper.findLocationCounts(FUTURE)).isEqualTo(new LocationCounts(2, 1));
 	}
 
+	// 지역별 글 수 (JM-85): 위치 수집률과 같은 글(남아 있고 위치가 저장된 글)의 좌표만 읽는다
+	@Test
+	void 지역을_찾을_좌표는_남아_있는_글의_것만_읽는다() {
+		Post active = savePost();
+		postLocationRepository.saveAndFlush(new PostLocation(active, GeoPoint.of(37.566535, 126.977969), Instant.now()));
+		moveCreatedAt("posts", "id", active.getId(), FUTURE);
+
+		Post hidden = savePost();
+		postLocationRepository.saveAndFlush(new PostLocation(hidden, GeoPoint.of(35.115225, 129.042243), Instant.now()));
+		moveCreatedAt("posts", "id", hidden.getId(), FUTURE);
+		setPostStatus(hidden, "DELETED_BY_ADMIN");
+
+		moveCreatedAt("posts", "id", savePost().getId(), FUTURE);
+
+		assertThat(statsMapper.findLocatedPoints(FUTURE)).containsExactly(GeoPoint.of(37.566535, 126.977969));
+		assertThat(statsMapper.findLocatedPoints(FUTURE.plusYears(1))).isEmpty();
+	}
+
 	@Test
 	void 피드백을_처리_상태별로_세고_삭제된_것은_뺀다() {
 		FeedbackCounts before = statsMapper.findFeedbackCounts();
@@ -349,11 +367,14 @@ class AdminStatsTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.confirm.since").exists())
 				.andExpect(jsonPath("$.feedback").exists())
+				.andExpect(jsonPath("$.regions.dong.top").isArray())
 				.andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
 
 		// 직접 적은 음식이 하나 늘어난 응답이다 (만든 기록이 통계에 들어갔다). 그래도 음식 이름은 나가지 않는다
 		assertThat(jsonMapper.readTree(body).path("confirm").path("foods").path("typed").asLong()).isEqualTo(typedBefore + 1);
 		assertThat(body).doesNotContain("검증용비밀음식").doesNotContain("직접적은비밀음식");
+		// 지역별 글 수(JM-85)는 이름과 개수만 낸다: 좌표의 키가 없다
+		assertThat(body).doesNotContain("latitude").doesNotContain("longitude");
 	}
 
 	private DailyActivity lastDay(AdminStatsResponse stats) {

@@ -224,6 +224,7 @@ class AdminPageTest {
 		AdminStatsResponse stats = (AdminStatsResponse) page.getModelAndView().getModel().get("stats");
 		assertThat(stats.days()).isEqualTo(7);
 		assertThat(stats.confirm()).isNotNull();
+		assertThat(stats.regions()).isNotNull();
 		assertThat(page.getModelAndView().getModel().get("csrf")).isEqualTo(session.getAttribute("admin.csrf"));
 
 		MvcResult month = mockMvc.perform(get("/admin/stats").session(session).param("days", "30"))

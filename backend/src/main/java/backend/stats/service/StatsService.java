@@ -19,10 +19,12 @@ import backend.analysis.model.dto.FoodAnalysisResult.FoodItem;
 import backend.analysis.service.FoodAnalysisService;
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
+import backend.location.service.RegionLookup;
 import backend.stats.model.dto.AdminStatsResponse;
 import backend.stats.model.dto.AdminStatsResponse.AnalysisStats;
 import backend.stats.model.dto.AdminStatsResponse.ConfirmStats;
 import backend.stats.model.dto.AdminStatsResponse.LocationStats;
+import backend.stats.model.dto.AdminStatsResponse.RegionStats;
 import backend.stats.model.dto.AdminStatsResponse.Totals;
 import backend.stats.model.dto.ConfirmedPost;
 import backend.stats.model.dto.ConfirmedRow;
@@ -55,6 +57,7 @@ public class StatsService {
 	private final StatsMapper statsMapper;
 	private final FoodAnalysisService foodAnalysisService;
 	private final JsonMapper jsonMapper;
+	private final RegionLookup regionLookup;
 
 	// 오늘을 포함한 최근 days일의 통계. 여러 쿼리가 같은 시점의 데이터를 보도록 트랜잭션 하나로 묶는다.
 	@Transactional(readOnly = true)
@@ -73,7 +76,7 @@ public class StatsService {
 
 		return new AdminStatsResponse(days, firstDay, today, daily, Totals.of(daily), analysis,
 				LocationStats.of(statsMapper.findLocationCounts(from)), statsMapper.findFeedbackCounts(),
-				confirmStats(confirmStart(from)));
+				confirmStats(confirmStart(from)), regionStats(from));
 	}
 
 	// 확정 통계를 셀 시작 시각 (UTC): 기간의 시작과 고쳐 쓰는 AI 배포 시각 중 늦은 쪽
@@ -97,6 +100,11 @@ public class StatsService {
 		}
 		LocalDateTime sinceInKorea = fromUtc.atOffset(ZoneOffset.UTC).atZoneSameInstant(KOREA).toLocalDateTime();
 		return ConfirmStats.of(sinceInKorea, statsMapper.findConfirmCounts(fromUtc), posts, skipped);
+	}
+
+	// 사진 위치로 본 지역별 글 수 (JM-85). 좌표는 여기서 행정동을 찾는 데만 쓰고, 이름과 개수만 내보낸다 (로그에도 남기지 않는다)
+	private RegionStats regionStats(LocalDateTime fromUtc) {
+		return RegionStats.of(statsMapper.findLocatedPoints(fromUtc).stream().map(regionLookup::find).toList());
 	}
 
 	private <T> List<T> readList(String json, TypeReference<List<T>> type) {
