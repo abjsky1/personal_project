@@ -1,0 +1,12 @@
+<%@ page pageEncoding="UTF-8" %>
+<%-- 피드백 처리 카드 (JM-68): 지금 남아 있는 피드백 전체의 처리 상태 (기간과 상관없음) --%>
+<section class="stats-card">
+	<h2>피드백 처리</h2>
+	<table class="stats-table">
+		<tr><th>접수</th><td>${stats.feedback.received}</td></tr>
+		<tr><th>진행 중</th><td>${stats.feedback.inProgress}</td></tr>
+		<tr><th>반영 완료</th><td>${stats.feedback.done}</td></tr>
+		<tr><th>보류</th><td>${stats.feedback.onHold}</td></tr>
+	</table>
+	<p class="stats-note">기간과 상관없이 지금 남아 있는 피드백 전체입니다.</p>
+</section>

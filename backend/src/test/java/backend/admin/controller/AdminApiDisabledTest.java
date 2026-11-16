@@ -8,13 +8,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import backend.admin.AdminTokenInterceptor;
 
 // 운영자 토큰이 설정되어 있지 않을 때(기본값 = 개발 PC, CI)는 어떤 토큰을 보내도 운영자 기능이 닫혀 있어야 한다.
+// 개발 PC의 .env에 로컬 토큰을 넣어 두어도 이 테스트는 비어 있는 상태로 돈다 (@TestPropertySource로 비운다, AdminPageDisabledTest와 같다)
 @SpringBootTest
 @AutoConfigureMockMvc
+@TestPropertySource(properties = "app.admin.token=")
 class AdminApiDisabledTest {
 
 	@Autowired

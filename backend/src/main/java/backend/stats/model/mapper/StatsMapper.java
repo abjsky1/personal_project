@@ -8,6 +8,8 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import backend.stats.model.dto.AnalysisCounts;
+import backend.stats.model.dto.ConfirmCounts;
+import backend.stats.model.dto.ConfirmedRow;
 import backend.stats.model.dto.DailyActivity;
 import backend.stats.model.dto.FeedbackCounts;
 import backend.stats.model.dto.LocationCounts;
@@ -32,4 +34,10 @@ public interface StatsMapper {
 
 	// 지금 남아 있는 피드백의 처리 상태별 수 (기간과 상관없이 전체)
 	FeedbackCounts findFeedbackCounts();
+
+	// 고쳐 쓰는 AI의 확정 통계에 쓰는 건수 (JM-75)
+	ConfirmCounts findConfirmCounts(@Param("from") LocalDateTime from);
+
+	// 확정한 글의 AI 첫 답과 확정 값 (JM-75). 음식마다 무엇을 했는지는 StatsService가 JSON을 풀어 센다
+	List<ConfirmedRow> findConfirmedRows(@Param("from") LocalDateTime from);
 }

@@ -26,5 +26,6 @@ class AdminPageDisabledTest {
 		mockMvc.perform(get("/admin/login")).andExpect(status().isNotFound());
 		mockMvc.perform(post("/admin/login").param("password", "")).andExpect(status().isNotFound());
 		mockMvc.perform(get("/admin/posts")).andExpect(status().isNotFound());
+		mockMvc.perform(get("/admin/stats")).andExpect(status().isNotFound());
 	}
 }

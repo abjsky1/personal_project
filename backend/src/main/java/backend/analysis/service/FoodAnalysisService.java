@@ -552,15 +552,12 @@ public class FoodAnalysisService {
 	}
 
 	// 음식 하나에 대해 AI의 답과 확정한 값을 견주어, 화면의 줄을 만든다.
-	// "AI와 같음"의 기준: AI의 첫 답을 그대로 고르고 양도 그대로 둔 경우.
-	// 양은 g 단위의 정수로 견준다: 확정 칸이 AI의 양을 정수로 보여 주므로, AI가 152.4g이라고 했어도 손대지 않고 확정하면 152g으로 온다.
+	// "AI와 같음"의 기준은 ConfirmedItem.sameAs 한 곳에 둔다: 운영자 통계(JM-75)도 같은 기준으로 세서, 화면과 통계가 어긋나지 않는다
 	private FoodRow compare(FoodItem ai, ConfirmedItem confirmed) {
 		if (!confirmed.kept()) {
 			return new FoodRow(ai, null, FoodRow.REMOVED);
 		}
-		boolean keptFirst = ConfirmedItem.CANDIDATE.equals(confirmed.choice()) && Integer.valueOf(0).equals(confirmed.pick());
-		boolean sameAmount = Math.round(ai.amountG()) == Math.round(confirmed.amountG());
-		return new FoodRow(ai, confirmed.toFoodItem(), keptFirst && sameAmount ? FoodRow.SAME : FoodRow.CHANGED);
+		return new FoodRow(ai, confirmed.toFoodItem(), confirmed.sameAs(ai) ? FoodRow.SAME : FoodRow.CHANGED);
 	}
 
 	// JSON 글자로 저장해 둔 음식별 상세를 다시 목록으로 바꾼다. (DONE이 아니면 비어 있다)

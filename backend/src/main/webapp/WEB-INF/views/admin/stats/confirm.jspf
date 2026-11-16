@@ -1,0 +1,46 @@
+<%@ page pageEncoding="UTF-8" %>
+<%-- 고쳐 쓰는 AI 카드 (JM-75, AdminStatsResponse.ConfirmStats). S6 동안 맨 위에 둔다. 음식 이름은 내지 않고 개수만 --%>
+<c:set var="cf" value="${stats.confirm}" />
+<c:set var="kept" value="${cf.foods.same + cf.foods.amountChanged + cf.foods.otherCandidate + cf.foods.typed}" />
+<section class="stats-card">
+	<h2>고쳐 쓰는 AI</h2>
+	<div class="stats-tiles">
+		<div class="stats-tile">
+			<p class="stats-label">확정률</p>
+			<p class="stats-big"><admin:rate rate="${cf.confirmRate}" part="${cf.confirmed}" whole="${cf.confirmable}" /></p>
+			<p class="stats-note">"내가 보고 확정"으로 올려 확정할 수 있던 글 중 실제로 확정한 글</p>
+		</div>
+		<div class="stats-tile">
+			<p class="stats-label">AI 첫 답 그대로</p>
+			<p class="stats-big"><admin:rate rate="${cf.unchangedRate}" part="${cf.unchangedPosts}" whole="${cf.confirmed - cf.skipped}" /></p>
+			<p class="stats-note">확정한 글 중 모든 음식을 AI의 첫 답 그대로(양도 그대로) 확정한 글</p>
+		</div>
+	</div>
+	<table class="stats-table">
+		<tr><th>올릴 때 "AI가 바로 확정"</th><td>${cf.autoMode}</td></tr>
+		<tr><th>올릴 때 "내가 보고 확정"</th><td><admin:rate rate="${cf.userModeRate}" part="${cf.userMode}" whole="${cf.autoMode + cf.userMode}" /></td></tr>
+		<tr><th>확정할 수 있던 글 (분석이 끝나 후보가 있는 글)</th><td>${cf.confirmable}</td></tr>
+		<tr><th>확정한 글 / 아직 확정 안 한 글</th><td>${cf.confirmed} / ${cf.unconfirmed}</td></tr>
+		<tr><th>칼로리가 나온 글 중 확정 값(REAL)이 있는 글</th><td><admin:rate rate="${cf.confirmedShare}" part="${cf.confirmed}" whole="${cf.done}" /></td></tr>
+	</table>
+	<h3>음식마다 한 것</h3>
+	<table class="stats-table">
+		<tr><th>AI와 같음</th><td>${cf.foods.same}</td></tr>
+		<tr><th>양만 고침</th><td>${cf.foods.amountChanged}</td></tr>
+		<tr><th>다른 후보를 고름</th><td>${cf.foods.otherCandidate}</td></tr>
+		<tr><th>이름을 직접 적음</th><td>${cf.foods.typed}</td></tr>
+		<tr><th>"이 음식 아님"으로 뺌</th><td>${cf.foods.removed}</td></tr>
+		<c:if test="${cf.foods.unknown > 0}"><tr><th>가를 수 없는 기록</th><td>${cf.foods.unknown}</td></tr></c:if>
+		<tr><th>AI의 첫 이름이 맞음 (양만 고친 것 포함)</th><td><admin:rate rate="${cf.firstNameRate}" part="${cf.foods.same + cf.foods.amountChanged}" whole="${kept}" /></td></tr>
+		<tr><th>후보 세 개 안에서 고름</th><td><admin:rate rate="${cf.withinCandidatesRate}" part="${cf.foods.same + cf.foods.amountChanged + cf.foods.otherCandidate}" whole="${kept}" /></td></tr>
+	</table>
+	<h3>칼로리 차이 (확정 - AI 첫 답)</h3>
+	<table class="stats-table">
+		<tr><th>평균 (음수면 AI가 많게 잡음)</th><td><c:choose><c:when test="${empty cf.kcalDiffAvg}">-</c:when><c:otherwise>${cf.kcalDiffAvg} kcal</c:otherwise></c:choose></td></tr>
+		<tr><th>차이 크기의 평균</th><td><c:choose><c:when test="${empty cf.kcalDiffAbsAvg}">-</c:when><c:otherwise>${cf.kcalDiffAbsAvg} kcal</c:otherwise></c:choose></td></tr>
+		<tr><th>차이 크기의 가운데 값</th><td><c:choose><c:when test="${empty cf.kcalDiffAbsMedian}">-</c:when><c:otherwise>${cf.kcalDiffAbsMedian} kcal</c:otherwise></c:choose></td></tr>
+		<tr><th>직접 적기로 AI를 한 번 더 부른 글</th><td>${cf.typedCalls} <span class="stats-frac">(토큰 ${cf.typedInputTokens} + ${cf.typedOutputTokens})</span></td></tr>
+		<tr><th>직접 적은 음식을 AI가 사진과 다르다고 본 확정</th><td>${cf.typedMismatch}</td></tr>
+	</table>
+	<p class="stats-note">${cf.since.monthValue}월 ${cf.since.dayOfMonth}일 <fmt:formatNumber value="${cf.since.hour}" minIntegerDigits="2" />:<fmt:formatNumber value="${cf.since.minute}" minIntegerDigits="2" />(한국 시각) 뒤에 올린 글만 셉니다. 고쳐 쓰는 AI는 11월 13일 10:05에 나왔습니다. 운영자가 지운 글은 뺐습니다.<c:if test="${cf.skipped > 0}"> 읽지 못한 기록 ${cf.skipped}개는 뺐습니다.</c:if></p>
+</section>

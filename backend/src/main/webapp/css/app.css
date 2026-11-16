@@ -1536,6 +1536,127 @@ a.notice-row:hover {
 	padding: 8px 14px;
 }
 
+/* ---- 관리자 통계 (JM-75): 기간 고르기, 카드, 큰 숫자 두 칸, 표 ---- */
+.stats-period {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 6px 14px;
+	margin: 16px 0 4px;
+}
+
+.stats-period a {
+	color: #555;
+	text-decoration: none;
+}
+
+.stats-period a.active {
+	color: #2f7d32;
+	font-weight: 700;
+}
+
+.stats-range {
+	margin-left: auto;
+	color: #777;
+	font-size: 0.85rem;
+}
+
+.stats-card {
+	margin-top: 16px;
+	padding: 14px 16px;
+	border: 1px solid #e5e5e5;
+	border-radius: 10px;
+	background: #fff;
+}
+
+.stats-card h2 {
+	margin: 0 0 10px;
+	font-size: 1.05rem;
+}
+
+.stats-card h3 {
+	margin: 14px 0 4px;
+	color: #444;
+	font-size: 0.9rem;
+}
+
+.stats-tiles {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.stats-tile {
+	padding: 10px 12px;
+	border-radius: 8px;
+	background: #f4f8f4;
+}
+
+.stats-label {
+	margin: 0;
+	color: #555;
+	font-size: 0.85rem;
+}
+
+.stats-big {
+	margin: 2px 0 4px;
+	font-size: 1.5rem;
+	font-weight: 700;
+}
+
+.stats-frac {
+	color: #777;
+	font-size: 0.8rem;
+	font-weight: 400;
+}
+
+.stats-total {
+	margin: 0 0 8px;
+}
+
+.stats-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.9rem;
+}
+
+.stats-table th,
+.stats-table td {
+	padding: 6px 4px;
+	border-bottom: 1px solid #eee;
+	font-weight: 400;
+	text-align: left;
+	word-break: keep-all;
+}
+
+.stats-table td {
+	text-align: right;
+	white-space: nowrap;
+}
+
+/* 날짜별 표: 머리 줄은 굵게, 숫자 칸은 오른쪽 */
+.stats-daily th {
+	color: #555;
+	font-weight: 700;
+}
+
+.stats-daily th + th,
+.stats-daily td + td {
+	text-align: right;
+}
+
+.stats-daily td:first-child {
+	text-align: left;
+}
+
+.stats-note {
+	margin: 8px 0 0;
+	color: #777;
+	font-size: 0.8rem;
+	word-break: keep-all;
+}
+
 @media (max-width: 600px) {
 	main.admin {
 		padding: 12px 16px 40px;
@@ -1559,6 +1680,16 @@ a.notice-row:hover {
 	.admin-thumb img {
 		width: 60px;
 		height: 60px;
+	}
+
+	/* 통계: 큰 숫자 두 칸은 위아래로, 기간 범위는 다음 줄로 */
+	.stats-tiles {
+		grid-template-columns: 1fr;
+	}
+
+	.stats-range {
+		flex-basis: 100%;
+		margin-left: 0;
 	}
 
 	/* 버튼 둘(올리기, 삭제)은 위아래로 */

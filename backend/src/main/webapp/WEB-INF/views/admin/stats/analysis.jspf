@@ -1,0 +1,15 @@
+<%@ page pageEncoding="UTF-8" %>
+<%-- AI 분석 카드 (JM-68, AdminStatsResponse.AnalysisStats) --%>
+<c:set var="an" value="${stats.analysis}" />
+<section class="stats-card">
+	<h2>AI 분석</h2>
+	<table class="stats-table">
+		<tr><th>성공률 (음식 아님도 AI가 답한 것)</th><td><admin:rate rate="${an.successRate}" part="${an.done + an.notFood}" whole="${an.done + an.notFood + an.failed}" /></td></tr>
+		<tr><th>칼로리가 나옴 / 음식 아님 / 실패</th><td>${an.done} / ${an.notFood} / ${an.failed}</td></tr>
+		<tr><th>하루 상한 초과 / 분석 중</th><td>${an.limitExceeded} / ${an.pending}</td></tr>
+		<tr><th>응답 시간 평균 / 95%</th><td><c:choose><c:when test="${empty an.avgLatencyMs}">-</c:when><c:otherwise>${an.avgLatencyMs}ms</c:otherwise></c:choose> / <c:choose><c:when test="${empty an.p95LatencyMs}">-</c:when><c:otherwise>${an.p95LatencyMs}ms</c:otherwise></c:choose></td></tr>
+		<tr><th>토큰 (첫 분석 입력 + 출력)</th><td>${an.inputTokens} + ${an.outputTokens}</td></tr>
+		<tr><th>오늘 AI 호출 / 하루 상한</th><td><admin:rate rate="${an.todayUsageRate}" part="${an.usedToday}" whole="${an.dailyLimit}" /></td></tr>
+	</table>
+	<p class="stats-note">직접 적기로 한 번 더 부른 호출의 토큰은 고쳐 쓰는 AI 카드에 있습니다. 오늘 AI 호출은 기간과 상관없이 오늘(한국 날짜) 기준입니다.</p>
+</section>
