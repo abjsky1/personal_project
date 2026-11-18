@@ -3,6 +3,8 @@ package backend.visit.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
@@ -37,9 +39,19 @@ class IpRegionResolverTest {
 
 		assertThat(resolver.sidoOf(null)).isEqualTo(Sido.UNKNOWN);
 		assertThat(resolver.sidoOf("example.com")).isEqualTo(Sido.UNKNOWN);
-		// 시험용 파일은 IPv4만 있어서 IPv6는 라이브러리가 예외를 던진다 → 알 수 없음
+		// 시험용 파일은 IPv4만 있어서 IPv6는 찾지 못한다 (라이브러리가 빈 값을 돌려준다) → 알 수 없음
 		assertThat(resolver.sidoOf("0:0:0:0:0:0:0:1")).isEqualTo(Sido.UNKNOWN);
 		resolver.close();
+	}
+
+	// 받다가 끊기는 등 깨진 파일: 열지 못해도 예외 없이 알 수 없음으로 센다
+	// 파일은 build 폴더에 둔다: 라이브러리가 열다 만 파일을 Windows가 바로 지우지 못해서 @TempDir의 정리가 실패한다
+	@Test
+	void 파일이_깨져_있으면_알_수_없음이다() throws IOException {
+		Path folder = Files.createDirectories(Path.of("build", "test-geoip"));
+		Path broken = Files.writeString(folder.resolve("broken.mmdb"), "not a maxmind db");
+
+		assertThat(new IpRegionResolver(broken.toString()).sidoOf("1.2.3.4")).isEqualTo(Sido.UNKNOWN);
 	}
 
 	// 내 PC와 테스트, 서버에 파일을 두기 전: 서버가 켜지고 모두 알 수 없음으로 센다

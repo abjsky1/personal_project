@@ -14,6 +14,9 @@ class VisitorsTest {
 				+ " SamsungBrowser/28.0")).isTrue();
 		assertThat(Visitors.isPerson("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148 Instagram 400.0.0")).isTrue();
 		assertThat(Visitors.isPerson("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/142.0 Safari/537.36")).isTrue();
+		// 다음 앱 안의 브라우저 (검색 로봇 daum/과 헷갈리지 않는다)
+		assertThat(Visitors.isPerson("Mozilla/5.0 (Linux; Android 15; SM-S928N) AppleWebKit/537.36 Chrome/142.0 Mobile Safari/537.36"
+				+ " DaumApps/8.0.0")).isTrue();
 	}
 
 	@Test
@@ -26,6 +29,11 @@ class VisitorsTest {
 		assertThat(Visitors.isPerson("Mozilla/5.0 zgrab/0.x")).isFalse();
 		assertThat(Visitors.isPerson("Expanse, a Palo Alto Networks company, searches across the global IPv4 space")).isFalse();
 		assertThat(Visitors.isPerson("Mozilla/5.0 (compatible; SemrushBot/7~bl)")).isFalse();
+		// bot이라는 낱말이 없는 검색 로봇: 네이버, 다음, 구글의 다른 수집기 (JM-86 검토)
+		assertThat(Visitors.isPerson("Mozilla/5.0 (compatible; Yeti/1.1; +https://naver.me/spd)")).isFalse();
+		assertThat(Visitors.isPerson("Mozilla/5.0 (compatible; Daum/4.1; +http://cs.daum.net/faq/15/4118.html)")).isFalse();
+		assertThat(Visitors.isPerson("Mozilla/5.0 (compatible; GoogleOther)")).isFalse();
+		assertThat(Visitors.isPerson("Mozilla/5.0 (compatible; Google-InspectionTool/1.0)")).isFalse();
 		assertThat(Visitors.isPerson("")).isFalse();
 		assertThat(Visitors.isPerson(null)).isFalse();
 	}

@@ -26,21 +26,40 @@ public class VisitCountInterceptor implements HandlerInterceptor {
 		if (!Visitors.isPerson(request.getHeader("User-Agent"))) {
 			return;
 		}
-		if (isNewVisit(request, response)) {
+		if (markNewVisit(request, response)) {
 			visitCounter.count(VisitMetric.VISIT, request.getRemoteAddr());
 		} else if (isUpload(request, response)) {
 			visitCounter.count(VisitMetric.UPLOAD, request.getRemoteAddr());
 		}
 	}
 
-	// 방문: 화면(HTML)을 200으로 받았고, 이 요청에서 세션이 새로 생겼다 = 이 브라우저가 들어온 첫 화면.
+	// 세션에 남기는 "이 세션의 방문은 셌다" 표시
+	static final String COUNTED = "visit.counted";
+
+	// 방문: 화면(HTML)을 200으로 받았는데 이 브라우저의 세션에 아직 표시가 없다 = 이 세션의 첫 화면. 세고 표시를 남긴다.
 	// 세션은 화면(JSP)을 그릴 때 생기고 30분 동안 쓰지 않으면 사라지므로, 30분 넘게 쉬었다가 오면 다시 한 번 센다.
+	// 첫 화면이 에러 화면(지워진 글의 404 등)이어도 그다음 200 화면에서 센다 (세션이 새로 생겼는지로 세면 이 방문을 놓친다. JM-86 검토).
 	// 세션은 원래 쓰던 것(JSESSIONID)이고, 세려고 쿠키를 새로 만들지 않는다
-	static boolean isNewVisit(HttpServletRequest request, HttpServletResponse response) {
-		HttpSession session = request.getSession(false);
+	static boolean markNewVisit(HttpServletRequest request, HttpServletResponse response) {
 		String contentType = response.getContentType();
-		return "GET".equals(request.getMethod()) && response.getStatus() == HttpServletResponse.SC_OK
-				&& contentType != null && contentType.startsWith("text/html") && session != null && session.isNew();
+		if (!"GET".equals(request.getMethod()) || response.getStatus() != HttpServletResponse.SC_OK
+				|| contentType == null || !contentType.startsWith("text/html")) {
+			return false;
+		}
+		HttpSession session = request.getSession(false);
+		if (session == null) {
+			return false;
+		}
+		try {
+			if (session.getAttribute(COUNTED) != null) {
+				return false;
+			}
+			session.setAttribute(COUNTED, Boolean.TRUE);
+			return true;
+		} catch (IllegalStateException e) {
+			// 이 요청 안에서 세션이 끝난 경우 (세지 않는다)
+			return false;
+		}
 	}
 
 	// 글 올리기: POST /posts가 새 글 화면으로 넘어갔다 (302). 막히거나(429) 잘못된 사진(400)은 세지 않는다

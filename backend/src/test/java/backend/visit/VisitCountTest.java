@@ -92,6 +92,10 @@ class VisitCountTest {
 		assertThat(jdbcTemplate.queryForList("SELECT column_name FROM information_schema.columns "
 				+ "WHERE table_schema = DATABASE() AND table_name = 'daily_region_counts'", String.class))
 				.containsExactlyInAnyOrder("stat_day", "metric", "region", "hit_count");
+		// 종류 칸은 MySQL의 enum 칸이 아니라 글자 칸이어야 나중에 종류를 더해도 저장된다 (JM-86 검토)
+		assertThat(jdbcTemplate.queryForObject("SELECT data_type FROM information_schema.columns "
+				+ "WHERE table_schema = DATABASE() AND table_name = 'daily_region_counts' AND column_name = 'metric'", String.class))
+				.isEqualToIgnoringCase("varchar");
 	}
 
 	// 방문 세기는 사용자 화면에만 걸고, 운영자 화면과 API(화면이 뒤에서 부르는 것 포함)에는 걸지 않는다

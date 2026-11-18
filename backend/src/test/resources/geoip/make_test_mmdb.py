@@ -1,12 +1,12 @@
-"""Writes a tiny MaxMind DB (MMDB v2, IPv4, 24-bit records) shaped like DB-IP City Lite, for JM-86 tests.
-Networks: 1.0.0.0/8 KR Seoul, 2.0.0.0/8 KR Gyeonggi-do, 3.0.0.0/8 KR without subdivision, 4.0.0.0/8 US California.
-Usage: python -I make_test_mmdb.py OUT_PATH"""
+"""JM-86 테스트용으로 DB-IP 무료판(IP to City Lite)과 같은 모양의 아주 작은 MaxMind DB(2판, IPv4, 한 칸 24비트)를 만든다.
+대역: 1.0.0.0/8 한국 Seoul, 2.0.0.0/8 한국 Gyeonggi-do, 3.0.0.0/8 한국(시/도 없음), 4.0.0.0/8 미국 California.
+쓰는 법: python -I make_test_mmdb.py 만들_파일_경로"""
 import struct
 import sys
 
 
 def enc_size(type_id, size, extended):
-    # control byte: type in top 3 bits (0 for extended types), size in low 5 bits (sizes here are all < 29)
+    # 제어 바이트: 위 3비트는 종류(확장 종류는 0), 아래 5비트는 크기 (여기서 쓰는 크기는 모두 29보다 작다)
     assert size < 29
     if extended:
         return bytes([size, type_id - 7])
@@ -53,14 +53,14 @@ NETWORKS = [
     (4, city("US", "California")),
 ]
 
-# data section: one record per network
+# 데이터 영역: 대역마다 기록 하나
 data = b""
 offsets = []
 for _, record in NETWORKS:
     offsets.append(len(data))
     data += enc(record)
 
-# binary trie over the first 8 bits; children: None (empty), ("node", i) or ("data", offset)
+# 앞 8비트로 가르는 이진 트리. 자식은 None(빈 곳), ("node", 번호), ("data", 데이터 위치) 중 하나
 nodes = [[None, None]]
 for (first_octet, _), offset in zip(NETWORKS, offsets):
     node = 0

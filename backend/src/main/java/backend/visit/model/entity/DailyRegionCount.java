@@ -4,6 +4,9 @@ package backend.visit.model.entity;
 import java.io.Serializable;
 import java.time.LocalDate;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -32,8 +35,11 @@ public class DailyRegionCount {
 	@Column(name = "stat_day")
 	private LocalDate statDay;
 
+	// @JdbcTypeCode(VARCHAR): MySQL의 enum 칸이 아니라 글자 칸으로 만든다. enum 칸은 ddl-auto=update가 고치지 않아서
+	// 나중에 종류를 더하면 DB가 저장을 거절한다 (다른 상태 칸과 같은 방식, docs/troubleshooting/2026-11-02-enum-check-constraint.md)
 	@Id
 	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(length = 10)
 	private VisitMetric metric;
 

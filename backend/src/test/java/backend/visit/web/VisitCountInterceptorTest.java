@@ -28,37 +28,54 @@ class VisitCountInterceptorTest {
 	});
 
 	@Test
-	void 처음_받은_화면만_방문으로_센다() {
-		run(page("GET", "/", BROWSER, true), html(200));
-		run(page("GET", "/posts/7", BROWSER, false), html(200));
+	void 세션의_첫_화면만_방문으로_센다() {
+		MockHttpSession session = new MockHttpSession();
+
+		run(page("GET", "/", BROWSER, session), html(200));
+		run(page("GET", "/posts/7", BROWSER, session), html(200));
+
+		assertThat(counted).containsExactly("VISIT 1.2.3.4");
+		assertThat(session.getAttribute(VisitCountInterceptor.COUNTED)).isEqualTo(Boolean.TRUE);
+	}
+
+	// 지워진 글의 링크로 처음 들어와 404를 본 뒤 목록으로 가도, 그 세션의 첫 200 화면에서 한 번 센다 (JM-86 검토)
+	@Test
+	void 첫_화면이_에러_화면이어도_다음_화면에서_한_번_센다() {
+		MockHttpSession session = new MockHttpSession();
+
+		run(page("GET", "/posts/999", BROWSER, session), html(404));
+		run(page("GET", "/", BROWSER, session), html(200));
+		run(page("GET", "/notice", BROWSER, session), html(200));
 
 		assertThat(counted).containsExactly("VISIT 1.2.3.4");
 	}
 
 	@Test
 	void 로봇과_User_Agent가_없는_요청은_세지_않는다() {
-		run(page("GET", "/", "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)", true), html(200));
-		run(page("GET", "/", "Go-http-client/1.1", true), html(200));
-		run(page("GET", "/", null, true), html(200));
+		run(page("GET", "/", "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)", new MockHttpSession()), html(200));
+		run(page("GET", "/", "Mozilla/5.0 (compatible; Yeti/1.1; +https://naver.me/spd)", new MockHttpSession()), html(200));
+		run(page("GET", "/", "Go-http-client/1.1", new MockHttpSession()), html(200));
+		run(page("GET", "/", null, new MockHttpSession()), html(200));
 
 		assertThat(counted).isEmpty();
 	}
 
 	@Test
-	void 에러_화면과_HTML이_아닌_응답은_방문이_아니다() {
-		run(page("GET", "/posts/999", BROWSER, true), html(404));
+	void 에러_화면과_HTML이_아닌_응답과_세션이_없는_요청은_방문이_아니다() {
+		run(page("GET", "/posts/999", BROWSER, new MockHttpSession()), html(404));
 		MockHttpServletResponse json = new MockHttpServletResponse();
 		json.setContentType("application/json");
-		run(page("GET", "/", BROWSER, true), json);
+		run(page("GET", "/", BROWSER, new MockHttpSession()), json);
+		run(page("GET", "/", BROWSER, null), html(200));
 
 		assertThat(counted).isEmpty();
 	}
 
 	@Test
 	void 새_글로_넘어간_글_올리기만_센다() {
-		run(page("POST", "/posts", BROWSER, true), redirect(302));
-		run(page("POST", "/posts", BROWSER, false), html(429));
-		run(page("POST", "/posts/7/comments", BROWSER, false), redirect(302));
+		run(page("POST", "/posts", BROWSER, new MockHttpSession()), redirect(302));
+		run(page("POST", "/posts", BROWSER, new MockHttpSession()), html(429));
+		run(page("POST", "/posts/7/comments", BROWSER, new MockHttpSession()), redirect(302));
 
 		assertThat(counted).containsExactly("UPLOAD 1.2.3.4");
 	}
@@ -67,20 +84,16 @@ class VisitCountInterceptorTest {
 		interceptor.afterCompletion(request, response, new Object(), null);
 	}
 
-	// newSession: 이 요청에서 세션이 새로 생겼는지 (브라우저의 첫 화면)
-	// 실제 Tomcat은 세션을 만든 요청이 끝날 때까지 isNew()가 true다. MockHttpSession은 꺼낼 때마다 false로 바꿔서 값을 고정해 둔다
-	private static MockHttpServletRequest page(String method, String path, String userAgent, boolean newSession) {
+	// session: 이 브라우저의 세션 (null이면 세션 없음). 같은 객체를 넘기면 같은 브라우저의 다음 요청이다
+	private static MockHttpServletRequest page(String method, String path, String userAgent, MockHttpSession session) {
 		MockHttpServletRequest request = new MockHttpServletRequest(method, path);
 		request.setRemoteAddr("1.2.3.4");
 		if (userAgent != null) {
 			request.addHeader("User-Agent", userAgent);
 		}
-		request.setSession(new MockHttpSession() {
-			@Override
-			public boolean isNew() {
-				return newSession;
-			}
-		});
+		if (session != null) {
+			request.setSession(session);
+		}
 		return request;
 	}
 

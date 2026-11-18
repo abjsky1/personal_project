@@ -12,5 +12,5 @@
 		<admin:regions title="글 올리기" level="${vs.uploadRegions}" />
 	</div>
 	<p class="stats-note">IP로 찾은 시/도입니다. 휴대폰은 통신사 위치로 잡히는 일이 많아 서울, 경기가 많게 나오고, 사는 곳과 다를 수 있습니다. JM-86을 배포한 날부터 셉니다.</p>
-	<p class="stats-note"><a href="https://db-ip.com">IP Geolocation by DB-IP</a> (CC BY 4.0)</p>
+	<p class="stats-note"><a href="https://db-ip.com">IP Geolocation by DB-IP</a> (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>)</p>
 </section>
