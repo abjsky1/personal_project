@@ -15,3 +15,5 @@ records/
 
 # https 인증서와 비밀키 (JM-67): 서버에만 둔다. 비밀키가 들어 있어서 Git에 올리지 않는다
 deploy/nginx/ssl/
+# IP 위치 파일 (JM-86, DB-IP 무료판 약 121MB). 서버에만 둔다
+deploy/geoip/

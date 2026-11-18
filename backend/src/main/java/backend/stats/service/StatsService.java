@@ -26,6 +26,7 @@ import backend.stats.model.dto.AdminStatsResponse.ConfirmStats;
 import backend.stats.model.dto.AdminStatsResponse.LocationStats;
 import backend.stats.model.dto.AdminStatsResponse.RegionStats;
 import backend.stats.model.dto.AdminStatsResponse.Totals;
+import backend.stats.model.dto.AdminStatsResponse.VisitStats;
 import backend.stats.model.dto.ConfirmedPost;
 import backend.stats.model.dto.ConfirmedRow;
 import backend.stats.model.dto.DailyActivity;
@@ -76,7 +77,7 @@ public class StatsService {
 
 		return new AdminStatsResponse(days, firstDay, today, daily, Totals.of(daily), analysis,
 				LocationStats.of(statsMapper.findLocationCounts(from)), statsMapper.findFeedbackCounts(),
-				confirmStats(confirmStart(from)), regionStats(from));
+				confirmStats(confirmStart(from)), regionStats(from), VisitStats.of(statsMapper.findVisitRegionCounts(firstDay)));
 	}
 
 	// 확정 통계를 셀 시작 시각 (UTC): 기간의 시작과 고쳐 쓰는 AI 배포 시각 중 늦은 쪽

@@ -45,6 +45,8 @@ dependencies {
 	implementation 'com.bucket4j:bucket4j_jdk17-core:8.21.0'
 	// Caffeine: IP별 남은 횟수를 메모리에 보관하고, 오래 안 쓴 IP는 자동으로 지운다. (버전은 Spring Boot가 관리)
 	implementation 'com.github.ben-manes.caffeine:caffeine'
+	// MaxMind DB 읽기: 서버에 둔 IP 위치 파일(DB-IP 무료판, .mmdb)에서 IP가 어느 시/도인지 찾는다 (JM-86). 다른 라이브러리를 끌고 오지 않는다 (버전 직접 지정)
+	implementation 'com.maxmind.db:maxmind-db:4.2.0'
 	// JSP를 실행 가능한 코드로 바꿔 주는 엔진 (내장 Tomcat용)
 	implementation 'org.apache.tomcat.embed:tomcat-embed-jasper'
 	// JSTL: JSP에서 <c:forEach>, <c:if> 같은 태그를 쓰게 해 준다 (규격 + 실제 구현 두 개가 한 쌍)
