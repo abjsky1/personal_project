@@ -15,17 +15,8 @@
 </head>
 <body>
 <main class="admin">
-	<header class="admin-top">
-		<h1>찍먹 관리자</h1>
-		<nav class="admin-nav">
-			<a href="/admin/posts" class="active" aria-current="page">글 목록</a>
-			<a href="/" target="_blank" rel="noopener">사이트 열기</a>
-		</nav>
-		<form method="post" action="/admin/logout" class="admin-logout">
-			<input type="hidden" name="_csrf" value="${csrf}">
-			<button type="submit">로그아웃</button>
-		</form>
-	</header>
+	<c:set var="adminTab" value="posts" />
+	<%@ include file="/WEB-INF/views/admin/header.jspf" %>
 
 	<c:if test="${not empty message}"><p class="admin-flash"><c:out value="${message}" /></p></c:if>
 	<p class="hint">피드에 보이는 글을 최신순으로 보여 줍니다. 번호를 누르면 글 화면이, 사진을 누르면 큰 사진이 새 탭으로 열립니다.</p>

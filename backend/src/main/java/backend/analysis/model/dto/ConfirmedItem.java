@@ -32,6 +32,15 @@ public record ConfirmedItem(String choice, Integer pick, String name, double amo
 		return new ConfirmedItem(REMOVED, null, aiName, 0, 0, 0, 0, 0, null);
 	}
 
+	// "AI와 같음"의 기준: AI의 첫 답(후보 0번)을 그대로 고르고 양도 그대로 둔 경우.
+	// 글 화면의 줄 표시(FoodAnalysisService.compare)와 운영자 통계(JM-75, AdminStatsResponse.ConfirmStats)가 함께 쓴다.
+	// 양은 g 단위의 정수로 견준다: 확정 칸이 AI의 양을 정수로 채워 두므로, AI가 152.4g이라고 했어도 손대지 않고 확정하면 152g으로 온다
+	// Math.rint: 확정 칸을 채우는 fmt:formatNumber와 같은 반올림 (딱 .5면 짝수 쪽: 152.5 → 152, 153.5 → 154). Math.round(.5는 올림)를
+	// 쓰면 152.5g을 손대지 않고 확정해도 칸에 채워진 152와 153이 달라 "양만 고침"이 된다 (JM-75 검토)
+	public boolean sameAs(FoodItem ai) {
+		return CANDIDATE.equals(choice) && Integer.valueOf(0).equals(pick) && Math.rint(ai.amountG()) == Math.rint(amountG);
+	}
+
 	// 합계와 화면의 음식 표에 들어가는 음식인지 (뺀 음식이 아닌지)
 	public boolean kept() {
 		return !REMOVED.equals(choice);

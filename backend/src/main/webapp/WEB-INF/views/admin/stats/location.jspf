@@ -1,0 +1,8 @@
+<%@ page pageEncoding="UTF-8" %>
+<%-- 사진 위치 카드 (JM-68). 위치 제공에 동의했고 사진에 GPS가 있는 글만 위치가 저장된다. 좌표는 읽지 않고 개수만 --%>
+<section class="stats-card">
+	<h2>사진 위치</h2>
+	<table class="stats-table">
+		<tr><th>남아 있는 글 중 위치가 저장된 글</th><td><admin:rate rate="${stats.location.collectionRate}" part="${stats.location.withLocation}" whole="${stats.location.activePosts}" /></td></tr>
+	</table>
+</section>

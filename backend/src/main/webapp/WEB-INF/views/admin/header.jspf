@@ -1,0 +1,15 @@
+<%@ page pageEncoding="UTF-8" %>
+<%-- 관리자 화면의 머리말 (JM-82). 글 목록과 통계(JM-75)가 함께 쓴다.
+     include하는 쪽에서 adminTab(posts 또는 stats)과 csrf(로그아웃 폼이 보내는 값)를 정해 둔다 --%>
+	<header class="admin-top">
+		<h1>찍먹 관리자</h1>
+		<nav class="admin-nav">
+			<a href="/admin/posts"<c:if test="${adminTab == 'posts'}"> class="active" aria-current="page"</c:if>>글 목록</a>
+			<a href="/admin/stats"<c:if test="${adminTab == 'stats'}"> class="active" aria-current="page"</c:if>>통계</a>
+			<a href="/" target="_blank" rel="noopener">사이트 열기</a>
+		</nav>
+		<form method="post" action="/admin/logout" class="admin-logout">
+			<input type="hidden" name="_csrf" value="${csrf}">
+			<button type="submit">로그아웃</button>
+		</form>
+	</header>

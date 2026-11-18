@@ -12,6 +12,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import backend.admin.auth.AdminAuthService;
 import backend.post.model.dto.FeedPage;
 import backend.post.service.PostService;
+import backend.stats.service.StatsService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 // 주소는 어디에도 링크하지 않는다. 들어오는 사람 확인은 AdminAuthService, 로그인 뒤의 문지기는 AdminSessionInterceptor가 한다.
 // - /admin/login: 등록한 노트북 브라우저에서, 관리자 비밀번호로
 // - /admin/setup: 처음 한 번, 이 브라우저를 관리자 기기로 등록
+// - /admin/stats: 운영 통계 (JM-75). 운영자 API(/api/admin/stats)와 같은 값을 서버에서 읽어 그린다
 // - /admin/posts: 글 목록. 번호, 사진, 닉네임, 시각, AI 결과를 보고 지운다.
 //   첫 쪽 위에는 AI가 음식이 아니라고 봐서 사진을 가린 글(검토할 사진, JM-80)을 모아 두고, 올리거나 지운다
 @Controller
@@ -29,6 +31,7 @@ public class AdminPageController {
 
 	private final AdminAuthService adminAuthService;
 	private final PostService postService;
+	private final StatsService statsService;
 
 	@GetMapping({"", "/"})
 	public String home() {
@@ -114,6 +117,17 @@ public class AdminPageController {
 		}
 		model.addAttribute("csrf", adminAuthService.csrfToken(request.getSession(false)));
 		return "admin/posts";
+	}
+
+	// 운영 통계 (JM-75). 운영자 API(/api/admin/stats)와 같은 값을 서버에서 읽어 그린다: 화면이 API를 부르지 않으므로 API 열쇠는 서버 밖으로 나가지 않는다
+	// days: 오늘을 포함한 기간 (1~90일, 안 주면 7일). 범위 밖이면 400 에러 화면
+	// csrf: 머리말의 로그아웃 폼이 보내는 값
+	@GetMapping("/stats")
+	public String stats(@RequestParam(defaultValue = "7") int days, HttpServletRequest request, Model model) {
+		model.addAttribute("stats", statsService.getStats(days));
+		model.addAttribute("days", days);
+		model.addAttribute("csrf", adminAuthService.csrfToken(request.getSession(false)));
+		return "admin/stats";
 	}
 
 	// 운영자 삭제: 운영자 API의 글 삭제와 같다 (상태만 바꾸고, 위치 정보는 완전히 지운다)

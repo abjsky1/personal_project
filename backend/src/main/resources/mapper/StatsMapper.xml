@@ -64,6 +64,36 @@
 		WHERE post.status = 'ACTIVE' AND post.created_at >= #{from}
 	</select>
 
+	<!-- 고쳐 쓰는 AI의 확정 통계 (JM-75). #{from}은 기간의 시작과 고쳐 쓰는 AI 배포 시각 중 늦은 쪽 (StatsService.confirmStart) -->
+	<!-- 운영자가 지운 글(장난, 시험 글)은 빼고, 글쓴이가 지운 글은 넣는다: 그 사람이 확정 방식을 고르고 확정한 것은 실제로 있었던 일이다 -->
+	<!-- confirmable: 확정할 수 있던 글 = "내가 보고 확정"으로 올렸고 분석이 끝나 후보가 있는 글 (FoodAnalysisService.confirm이 받는 글) -->
+	<!-- typed_mismatch는 bit(1)이라 = 1로 센다. 같지 않음은 XML에서 < 를 피하려고 != 로 쓴다 -->
+	<select id="findConfirmCounts" resultType="backend.stats.model.dto.ConfirmCounts">
+		SELECT
+			COALESCE(SUM(a.confirm_mode = 'AUTO'), 0) AS auto_mode,
+			COALESCE(SUM(a.confirm_mode = 'USER'), 0) AS user_mode,
+			COALESCE(SUM(a.status = 'DONE'), 0) AS done,
+			COALESCE(SUM(a.confirm_mode = 'USER' AND a.status = 'DONE' AND a.candidates IS NOT NULL), 0) AS confirmable,
+			COALESCE(SUM(a.confirmed_at IS NOT NULL), 0) AS confirmed,
+			COALESCE(SUM(a.typed_called_at IS NOT NULL), 0) AS typed_calls,
+			COALESCE(SUM(a.typed_mismatch = 1), 0) AS typed_mismatch,
+			COALESCE(SUM(a.typed_input_tokens), 0) AS typed_input_tokens,
+			COALESCE(SUM(a.typed_output_tokens), 0) AS typed_output_tokens
+		FROM food_analyses a
+		JOIN posts p ON p.id = a.post_id
+		WHERE a.created_at >= #{from} AND p.status != 'DELETED_BY_ADMIN'
+	</select>
+
+	<!-- 확정한 글의 AI 첫 답과 확정 값 (JM-75). 음식마다 무엇을 했는지는 JSON 글자라서 Java(AdminStatsResponse.ConfirmStats)가 센다 -->
+	<!-- 음식 이름과 직접 적은 글자가 들어 있지만 응답에는 내지 않는다 (개수만 낸다) -->
+	<select id="findConfirmedRows" resultType="backend.stats.model.dto.ConfirmedRow">
+		SELECT a.post_id, a.total_kcal, a.confirmed_total_kcal, a.items, a.confirmed_items
+		FROM food_analyses a
+		JOIN posts p ON p.id = a.post_id
+		WHERE a.created_at >= #{from} AND p.status != 'DELETED_BY_ADMIN' AND a.confirmed_at IS NOT NULL
+		ORDER BY a.post_id
+	</select>
+
 	<select id="findFeedbackCounts" resultType="backend.stats.model.dto.FeedbackCounts">
 		SELECT
 			COALESCE(SUM(progress = 'RECEIVED'), 0) AS received,

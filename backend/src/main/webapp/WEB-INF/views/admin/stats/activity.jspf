@@ -1,0 +1,13 @@
+<%@ page pageEncoding="UTF-8" %>
+<%-- 올라온 것 카드 (JM-68): 기간의 합계와 날짜별 글, 댓글, 피드백 수. 지운 것도 그날 올라온 수에 들어간다 --%>
+<section class="stats-card">
+	<h2>올라온 것</h2>
+	<p class="stats-total">글 <strong>${stats.totals.posts}</strong>, 댓글 <strong>${stats.totals.comments}</strong>, 피드백 <strong>${stats.totals.feedbacks}</strong></p>
+	<table class="stats-table stats-daily">
+		<tr><th>날짜</th><th>글</th><th>댓글</th><th>피드백</th></tr>
+		<c:forEach var="day" items="${stats.daily}">
+			<tr><td>${day.day.monthValue}.${day.day.dayOfMonth}</td><td>${day.posts}</td><td>${day.comments}</td><td>${day.feedbacks}</td></tr>
+		</c:forEach>
+	</table>
+	<p class="stats-note">지운 글, 댓글, 피드백도 올라온 날에 셉니다.</p>
+</section>

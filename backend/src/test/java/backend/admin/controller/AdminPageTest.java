@@ -36,6 +36,7 @@ import backend.post.model.dto.PostSummary;
 import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
 import backend.post.model.repository.PostRepository;
+import backend.stats.model.dto.AdminStatsResponse;
 import jakarta.servlet.http.Cookie;
 
 // 관리자 화면(/admin)의 기기 등록, 로그인(등록한 브라우저와 비밀번호), 글 목록과 삭제를 확인하는 테스트 (JM-82)
@@ -209,6 +210,35 @@ class AdminPageTest {
 		@SuppressWarnings("unchecked")
 		List<PostSummary> reviewAfter = (List<PostSummary>) after.getModelAndView().getModel().get("held");
 		assertThat(reviewAfter).extracting(PostSummary::id).doesNotContain(held.getId());
+	}
+
+	// 운영 통계 화면 (JM-75): 운영자 API와 같은 값을 서버에서 그린다. 머리말의 로그아웃 폼에 CSRF 값이 들어간다
+	@Test
+	void 통계_화면은_로그인한_관리자에게_기간별_통계를_보여주고_기간이_틀리면_400이다() throws Exception {
+		MockHttpSession session = loggedIn("10.2.0.10");
+
+		MvcResult page = mockMvc.perform(get("/admin/stats").session(session))
+				.andExpect(status().isOk())
+				.andExpect(view().name("admin/stats"))
+				.andReturn();
+		AdminStatsResponse stats = (AdminStatsResponse) page.getModelAndView().getModel().get("stats");
+		assertThat(stats.days()).isEqualTo(7);
+		assertThat(stats.confirm()).isNotNull();
+		assertThat(page.getModelAndView().getModel().get("csrf")).isEqualTo(session.getAttribute("admin.csrf"));
+
+		MvcResult month = mockMvc.perform(get("/admin/stats").session(session).param("days", "30"))
+				.andExpect(status().isOk())
+				.andReturn();
+		assertThat(((AdminStatsResponse) month.getModelAndView().getModel().get("stats")).days()).isEqualTo(30);
+
+		mockMvc.perform(get("/admin/stats").session(session).param("days", "0"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void 로그인하지_않으면_통계_화면도_로그인_화면으로_보낸다() throws Exception {
+		mockMvc.perform(get("/admin/stats"))
+				.andExpect(redirectedUrl("/admin/login"));
 	}
 
 	@Test
