@@ -51,8 +51,10 @@ import backend.stats.model.dto.ConfirmedRow;
 import backend.stats.model.dto.DailyActivity;
 import backend.stats.model.dto.FeedbackCounts;
 import backend.stats.model.dto.LocationCounts;
+import backend.stats.model.dto.VisitRegionRow;
 import backend.stats.model.mapper.StatsMapper;
 import backend.stats.service.StatsService;
+import backend.visit.model.repository.DailyRegionCountRepository;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -101,6 +103,9 @@ class AdminStatsTest {
 
 	@Autowired
 	private JsonMapper jsonMapper;
+
+	@Autowired
+	private DailyRegionCountRepository dailyRegionCountRepository;
 
 	@Test
 	void 토큰이_없으면_통계를_볼_수_없다() throws Exception {
@@ -256,6 +261,23 @@ class AdminStatsTest {
 		assertThat(statsMapper.findLocatedPoints(FUTURE.plusYears(1))).isEmpty();
 	}
 
+	// IP로 본 시/도별 방문과 글 올리기 (JM-86): 기간 첫날부터 종류와 시/도마다 더한다
+	@Test
+	void 방문_지역은_기간_첫날부터_종류와_시도마다_더한다() {
+		LocalDate day = LocalDate.of(2099, 1, 1);
+		dailyRegionCountRepository.increment(day, "VISIT", "서울특별시");
+		dailyRegionCountRepository.increment(day, "VISIT", "서울특별시");
+		dailyRegionCountRepository.increment(day.plusDays(1), "VISIT", "서울특별시");
+		dailyRegionCountRepository.increment(day, "VISIT", "해외");
+		dailyRegionCountRepository.increment(day, "UPLOAD", "서울특별시");
+		dailyRegionCountRepository.increment(day.minusDays(1), "VISIT", "경기도");
+
+		assertThat(statsMapper.findVisitRegionCounts(day)).containsExactlyInAnyOrder(
+				new VisitRegionRow("VISIT", "서울특별시", 3), new VisitRegionRow("VISIT", "해외", 1),
+				new VisitRegionRow("UPLOAD", "서울특별시", 1));
+		assertThat(statsMapper.findVisitRegionCounts(day.plusYears(1))).isEmpty();
+	}
+
 	@Test
 	void 피드백을_처리_상태별로_세고_삭제된_것은_뺀다() {
 		FeedbackCounts before = statsMapper.findFeedbackCounts();
@@ -368,6 +390,7 @@ class AdminStatsTest {
 				.andExpect(jsonPath("$.confirm.since").exists())
 				.andExpect(jsonPath("$.feedback").exists())
 				.andExpect(jsonPath("$.regions.dong.top").isArray())
+				.andExpect(jsonPath("$.visits.visitRegions.top").isArray())
 				.andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
 
 		// 직접 적은 음식이 하나 늘어난 응답이다 (만든 기록이 통계에 들어갔다). 그래도 음식 이름은 나가지 않는다

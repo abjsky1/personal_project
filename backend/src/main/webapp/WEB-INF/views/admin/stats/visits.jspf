@@ -1,0 +1,16 @@
+<%@ page pageEncoding="UTF-8" %>
+<%-- 방문 지역 카드 (JM-86, AdminStatsResponse.VisitStats). IP로 찾은 시/도의 하루 합계만 있고, IP는 저장하지 않는다 --%>
+<c:set var="vs" value="${stats.visits}" />
+<section class="stats-card">
+	<h2>방문 지역 (IP)</h2>
+	<table class="stats-table">
+		<tr><th>방문 (브라우저가 들어온 횟수, 30분 넘게 쉬었다 오면 다시 셈)</th><td>${vs.visits}</td></tr>
+		<tr><th>글 올리기</th><td>${vs.uploads}</td></tr>
+	</table>
+	<div class="stats-regions">
+		<admin:regions title="방문" level="${vs.visitRegions}" />
+		<admin:regions title="글 올리기" level="${vs.uploadRegions}" />
+	</div>
+	<p class="stats-note">IP로 찾은 시/도입니다. 휴대폰은 통신사 위치로 잡히는 일이 많아 서울, 경기가 많게 나오고, 사는 곳과 다를 수 있습니다. JM-86을 배포한 날부터 셉니다.</p>
+	<p class="stats-note"><a href="https://db-ip.com">IP Geolocation by DB-IP</a> (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>)</p>
+</section>

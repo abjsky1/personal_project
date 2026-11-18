@@ -32,6 +32,7 @@
 	<%@ include file="/WEB-INF/views/admin/stats/activity.jspf" %>
 	<%@ include file="/WEB-INF/views/admin/stats/analysis.jspf" %>
 	<%@ include file="/WEB-INF/views/admin/stats/location.jspf" %>
+	<%@ include file="/WEB-INF/views/admin/stats/visits.jspf" %>
 	<%@ include file="/WEB-INF/views/admin/stats/feedback.jspf" %>
 </main>
 </body>

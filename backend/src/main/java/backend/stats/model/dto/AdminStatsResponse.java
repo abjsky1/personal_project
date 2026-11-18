@@ -4,7 +4,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -15,10 +17,10 @@ import backend.location.model.vo.Region;
 
 // 운영자 통계 API의 응답 (GET /api/admin/stats). 개인을 알아볼 수 있는 값 없이 집계 숫자만 담는다.
 // 비율은 모두 퍼센트(소수점 한 자리)이고, 계산할 기록이 없으면 null이다.
-// 새 항목은 맨 뒤에 붙인다 (예전 키는 그대로 두어 curl | jq 명령이 계속 맞게): confirm (JM-75), regions (JM-85)
+// 새 항목은 맨 뒤에 붙인다 (예전 키는 그대로 두어 curl | jq 명령이 계속 맞게): confirm (JM-75), regions (JM-85), visits (JM-86)
 public record AdminStatsResponse(int days, LocalDate from, LocalDate to, List<DailyActivity> daily, Totals totals,
 		AnalysisStats analysis, LocationStats location, FeedbackCounts feedback, ConfirmStats confirm,
-		RegionStats regions) {
+		RegionStats regions, VisitStats visits) {
 
 	// 기간 전체의 합계
 	public record Totals(long posts, long comments, long feedbacks) {
@@ -178,16 +180,44 @@ public record AdminStatsResponse(int days, LocalDate from, LocalDate to, List<Da
 		static final int TOP = 10;
 
 		static RegionLevel of(List<Region> regions, Function<Region, String> name) {
-			List<RegionCount> counts = regions.stream()
-					.collect(Collectors.groupingBy(name, Collectors.counting()))
-					.entrySet().stream()
+			return of(regions.stream().collect(Collectors.groupingBy(name, Collectors.counting())));
+		}
+
+		// counts: 곳 이름 → 횟수 (0인 곳은 넣지 않는다)
+		static RegionLevel of(Map<String, Long> counts) {
+			List<RegionCount> sorted = counts.entrySet().stream()
 					.map(entry -> new RegionCount(entry.getKey(), entry.getValue()))
 					.sorted(Comparator.comparingLong(RegionCount::count).reversed().thenComparing(RegionCount::name))
 					.toList();
-			return new RegionLevel(counts.size(), counts.stream().limit(TOP).toList());
+			return new RegionLevel(sorted.size(), sorted.stream().limit(TOP).toList());
 		}
 	}
 
 	public record RegionCount(String name, long count) {
+	}
+
+	// IP로 본 시/도별 방문과 글 올리기 (JM-86, 기획서 6.2절). 날짜는 한국 날짜이고, JM-86을 배포한 날부터 쌓여서 그 전은 0이다
+	// visits: 사람이 사이트에 들어온 횟수 (브라우저가 처음 받은 화면, 30분 넘게 쉬었다 오면 다시 셈) / uploads: 글 올리기
+	// visitRegions, uploadRegions: 시/도(해외, 알 수 없음 포함)마다 많은 순 10곳. IP는 저장하지 않아서 여기에도 없다
+	// 휴대폰은 통신사 위치(서울, 경기)로 잡히는 일이 많아 사는 곳과 다를 수 있다
+	public record VisitStats(long visits, long uploads, RegionLevel visitRegions, RegionLevel uploadRegions) {
+
+		// rows: 종류(VISIT, UPLOAD)와 시/도마다 기간의 합 (StatsMapper.findVisitRegionCounts)
+		public static VisitStats of(List<VisitRegionRow> rows) {
+			Map<String, Long> visits = new HashMap<>();
+			Map<String, Long> uploads = new HashMap<>();
+			for (VisitRegionRow row : rows) {
+				if ("VISIT".equals(row.metric())) {
+					visits.merge(row.region(), row.hits(), Long::sum);
+				} else if ("UPLOAD".equals(row.metric())) {
+					uploads.merge(row.region(), row.hits(), Long::sum);
+				}
+			}
+			return new VisitStats(sum(visits), sum(uploads), RegionLevel.of(visits), RegionLevel.of(uploads));
+		}
+
+		private static long sum(Map<String, Long> counts) {
+			return counts.values().stream().mapToLong(Long::longValue).sum();
+		}
 	}
 }

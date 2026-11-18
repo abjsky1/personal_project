@@ -74,6 +74,14 @@
 		WHERE post.status = 'ACTIVE' AND post.created_at >= #{from}
 	</select>
 
+	<!-- IP로 본 시/도별 방문과 글 올리기 (JM-86). #{fromDay}는 기간 첫날(한국 날짜). 하루 합계만 있고 IP는 없다 -->
+	<select id="findVisitRegionCounts" resultType="backend.stats.model.dto.VisitRegionRow">
+		SELECT metric, region, COALESCE(SUM(hit_count), 0) AS hits
+		FROM daily_region_counts
+		WHERE stat_day >= #{fromDay}
+		GROUP BY metric, region
+	</select>
+
 	<!-- 고쳐 쓰는 AI의 확정 통계 (JM-75). #{from}은 기간의 시작과 고쳐 쓰는 AI 배포 시각 중 늦은 쪽 (StatsService.confirmStart) -->
 	<!-- 운영자가 지운 글(장난, 시험 글)은 빼고, 글쓴이가 지운 글은 넣는다: 그 사람이 확정 방식을 고르고 확정한 것은 실제로 있었던 일이다 -->
 	<!-- confirmable: 확정할 수 있던 글 = "내가 보고 확정"으로 올렸고 분석이 끝나 후보가 있는 글 (FoodAnalysisService.confirm이 받는 글) -->

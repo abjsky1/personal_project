@@ -101,6 +101,11 @@ services:
       # 서버 메모리 2GB를 Nginx, 운영체제와 나눠 쓰므로(DB는 서버 밖 RDS), 자바가 메모리를 끝없이 늘리지 않게 한다.
       JAVA_TOOL_OPTIONS: -Xmx512m
       TZ: Asia/Seoul
+    # IP 위치 파일(DB-IP 무료판, JM-86): 서버의 deploy/geoip 폴더(git에 없음)를 읽기 전용으로 붙인다.
+    # 파일이 없어도 app은 켜지고 방문 지역은 "알 수 없음"으로 센다. 파일을 넣는 순서는 기획서 16절
+    # 파일은 힙에 올리지 않고 운영체제가 필요한 부분만 읽는다 (아래 메모리 한도와 따로)
+    volumes:
+      - ./geoip:/app/geoip:ro
     # 컨테이너 전체 메모리 한도 (힙 512MB + 자바 자체가 쓰는 메모리). 넘으면 이 컨테이너만 꺼졌다가 다시 켜진다.
     mem_limit: 1g
     # 상태 검사: 서버가 요청을 받을 수 있는지 30초마다 확인한다 (docker ps에 healthy로 표시)

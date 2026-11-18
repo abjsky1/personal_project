@@ -1,6 +1,7 @@
 // 운영자 통계를 읽는 MyBatis 매퍼를 두는 패키지
 package backend.stats.model.mapper;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -14,6 +15,7 @@ import backend.stats.model.dto.ConfirmedRow;
 import backend.stats.model.dto.DailyActivity;
 import backend.stats.model.dto.FeedbackCounts;
 import backend.stats.model.dto.LocationCounts;
+import backend.stats.model.dto.VisitRegionRow;
 
 // 운영자 통계 조회 (JM-68). 실제 SQL은 resources/mapper/StatsMapper.xml에 있다.
 // JPA Repository는 메서드 이름에서 SQL을 만들어 주고, MyBatis는 사람이 쓴 SQL의 결과를 객체에 담아 준다.
@@ -35,6 +37,9 @@ public interface StatsMapper {
 
 	// 위치가 저장된 남아 있는 글의 좌표 (JM-85). 행정동을 찾는 데만 쓰고 내보내지 않는다
 	List<GeoPoint> findLocatedPoints(@Param("from") LocalDateTime from);
+
+	// IP로 본 시/도별 방문과 글 올리기의 기간 합계 (JM-86). fromDay: 기간 첫날 (한국 날짜)
+	List<VisitRegionRow> findVisitRegionCounts(@Param("fromDay") LocalDate fromDay);
 
 	// 지금 남아 있는 피드백의 처리 상태별 수 (기간과 상관없이 전체)
 	FeedbackCounts findFeedbackCounts();
