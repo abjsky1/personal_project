@@ -369,4 +369,4 @@
 ### 한 일
 | 커밋 | 조각 | 내용 |
 |---|---|---|
-| PR #49 | JM-91 | 성능 측정과 개선 문서 [`performance.md`](performance.md) (운영자 요청: 성능 개선, 비용 절감, 사용자 경험 개선을 숫자로 남기려면 꾸준히 재야 한다). 무엇을 어디서 재는지, 11-18 기준선(피드 1쪽 서버 대기 p50 43ms, p95 55ms, 1쪽 썸네일 24장 1.97MB, 쿼리는 피드 4개와 글 상세 6개, AI 분석 평균 2,505ms와 p95 4,040ms), 측정의 다음 조각(LLM 응답 속도, CPU와 메모리, CloudWatch 대시보드, 내 PC의 Prometheus와 Grafana), 개선 후보. 기획서 11절에서 가리킨다. 화면 변경 없음. 기록: [JM-91 폴더](https://github.com/abjsky1/jjikmuk_update_picture/tree/main/update_picture/JM-91) |
+| PR #49 | JM-91 | 성능 측정과 개선 문서 [`performance.md`](performance.md) (운영자 요청: 성능 개선, 비용 절감, 사용자 경험 개선을 숫자로 남기려면 꾸준히 재야 한다). 무엇을 어디서 재는지, 11-18 기준선(피드 1쪽 서버 대기 p50 43ms, p95 55ms, 1쪽 썸네일 24장 1.97MB, 쿼리는 피드 4개와 글 상세 6개, AI 분석 평균 2,505ms와 p95 4,040ms. nginx 기록 14일치로는 사람이 받은 사진 p95 4.8초, 배포 뒤 화면마다 첫 요청 가운데 2.4~2.9초, 502 87건), 측정의 다음 조각(LLM 응답 속도, CPU와 메모리, CloudWatch 대시보드, 내 PC의 Prometheus와 Grafana), 개선 후보. 기획서 11절에서 가리킨다. 화면 변경 없음. 기록: [JM-91 폴더](https://github.com/abjsky1/jjikmuk_update_picture/tree/main/update_picture/JM-91) |
