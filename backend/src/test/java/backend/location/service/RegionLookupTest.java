@@ -47,6 +47,15 @@ class RegionLookupTest {
 				.contains(new Region("경기도", "경기도 성남시 분당구", "경기도 성남시 분당구 삼평동"));
 	}
 
+	// 조각(섬)이 여럿인 동: 첫 조각이 아닌 곳의 점도 찾는다 (MultiPolygon의 모든 조각을 본다. JM-85 검토)
+	@Test
+	void 조각이_여럿인_동은_첫_조각이_아닌_곳도_찾는다() {
+		assertThat(lookup.find(GeoPoint.of(35.074316, 129.008681)))
+				.contains(new Region("부산광역시", "부산광역시 서구", "부산광역시 서구 암남동"));
+		assertThat(lookup.find(GeoPoint.of(35.068881, 128.955787)))
+				.contains(new Region("부산광역시", "부산광역시 사하구", "부산광역시 사하구 다대1동"));
+	}
+
 	@Test
 	void 바다_위와_한국_밖은_찾지_못한다() {
 		assertThat(lookup.find(GeoPoint.of(36.0, 124.0))).isEmpty();

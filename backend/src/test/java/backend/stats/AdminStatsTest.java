@@ -373,8 +373,23 @@ class AdminStatsTest {
 		// 직접 적은 음식이 하나 늘어난 응답이다 (만든 기록이 통계에 들어갔다). 그래도 음식 이름은 나가지 않는다
 		assertThat(jsonMapper.readTree(body).path("confirm").path("foods").path("typed").asLong()).isEqualTo(typedBefore + 1);
 		assertThat(body).doesNotContain("검증용비밀음식").doesNotContain("직접적은비밀음식");
-		// 지역별 글 수(JM-85)는 이름과 개수만 낸다: 좌표의 키가 없다
-		assertThat(body).doesNotContain("latitude").doesNotContain("longitude");
+	}
+
+	// 지역별 글 수(JM-85): 기간 안에 위치가 있는 글이 있어도 응답에는 지역 이름과 개수만 있고 좌표는 없다
+	@Test
+	void 통계_API의_지역별_글_수에는_이름과_개수만_있고_좌표는_없다() throws Exception {
+		long locatedBefore = statsService.getStats(1).regions().located();
+		Post located = savePost();
+		postLocationRepository.saveAndFlush(new PostLocation(located, GeoPoint.of(37.566535, 126.977969), Instant.now()));
+		moveCreatedAt("posts", "id", located.getId(), FUTURE);
+
+		String body = mockMvc.perform(get("/api/admin/stats").param("days", "1").header(AdminTokenInterceptor.HEADER, TOKEN))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+
+		assertThat(jsonMapper.readTree(body).path("regions").path("located").asLong()).isEqualTo(locatedBefore + 1);
+		assertThat(body).contains("서울특별시 중구 명동");
+		assertThat(body).doesNotContain("latitude").doesNotContain("longitude").doesNotContain("37.566535").doesNotContain("126.977969");
 	}
 
 	private DailyActivity lastDay(AdminStatsResponse stats) {

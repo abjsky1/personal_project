@@ -30,4 +30,4 @@ gzip -9 -n hangjeongdong.geojson
 
 ## 새 판으로 바꿀 때
 
-같은 명령으로 만들고, `RegionLookupTest`의 기대 이름을 새 원본에서 다시 확인한다. 이 문서와 `RegionLookup`의 판 날짜, 기획서 18절의 결정 사항도 고친다.
+같은 명령으로 만들고, `RegionLookupTest`의 기대 이름을 새 원본에서 다시 확인한다. 이 문서와 `RegionLookup`의 판 날짜, 관리자 화면 사진 위치 카드의 출처 문구(`WEB-INF/views/admin/stats/location.jspf`의 판 날짜, CC BY 4.0 표기), 기획서 18절의 결정 사항도 고친다.
