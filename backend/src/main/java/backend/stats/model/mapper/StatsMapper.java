@@ -7,6 +7,7 @@ import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import backend.location.model.vo.GeoPoint;
 import backend.stats.model.dto.AnalysisCounts;
 import backend.stats.model.dto.ConfirmCounts;
 import backend.stats.model.dto.ConfirmedRow;
@@ -31,6 +32,9 @@ public interface StatsMapper {
 	Long findLatencyP95(@Param("from") LocalDateTime from);
 
 	LocationCounts findLocationCounts(@Param("from") LocalDateTime from);
+
+	// 위치가 저장된 남아 있는 글의 좌표 (JM-85). 행정동을 찾는 데만 쓰고 내보내지 않는다
+	List<GeoPoint> findLocatedPoints(@Param("from") LocalDateTime from);
 
 	// 지금 남아 있는 피드백의 처리 상태별 수 (기간과 상관없이 전체)
 	FeedbackCounts findFeedbackCounts();

@@ -64,6 +64,16 @@
 		WHERE post.status = 'ACTIVE' AND post.created_at >= #{from}
 	</select>
 
+	<!-- 사진 위치로 본 지역별 글 수 (JM-85). findLocationCounts와 같은 글(남아 있고 위치가 저장된 글)의 좌표만 읽는다 -->
+	<!-- 좌표는 RegionLookup이 메모리에서 행정동을 찾는 데만 쓰고, 응답에는 지역 이름과 개수만 나간다. 글 번호는 읽지 않는다 -->
+	<!-- 열 순서 = GeoPoint의 순서 (위도, 경도) -->
+	<select id="findLocatedPoints" resultType="backend.location.model.vo.GeoPoint">
+		SELECT location.latitude, location.longitude
+		FROM posts post
+		JOIN post_locations location ON location.post_id = post.id
+		WHERE post.status = 'ACTIVE' AND post.created_at >= #{from}
+	</select>
+
 	<!-- 고쳐 쓰는 AI의 확정 통계 (JM-75). #{from}은 기간의 시작과 고쳐 쓰는 AI 배포 시각 중 늦은 쪽 (StatsService.confirmStart) -->
 	<!-- 운영자가 지운 글(장난, 시험 글)은 빼고, 글쓴이가 지운 글은 넣는다: 그 사람이 확정 방식을 고르고 확정한 것은 실제로 있었던 일이다 -->
 	<!-- confirmable: 확정할 수 있던 글 = "내가 보고 확정"으로 올렸고 분석이 끝나 후보가 있는 글 (FoodAnalysisService.confirm이 받는 글) -->
