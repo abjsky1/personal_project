@@ -52,6 +52,39 @@ class ImageProcessorTest {
 	}
 
 	@Test
+	void 긴_변이_2560보다_긴_사진은_펼칠_때_2560으로_줄여서_세운다() throws IOException {
+		// 가로 2600 × 세로 1950으로 저장된 세로 사진(방향 6). 원래 크기로 펼치지 않고 읽으면서 줄인다. (JM-94)
+		byte[] photo = TestImages.withExifOrientation(TestImages.jpeg(2600, 1950), 6);
+
+		BufferedImage upright = processor.readUpright(photo, 2600);
+
+		// 긴 변 2600 → 2560으로 줄인 뒤(2560 × 1920) 세웠으므로 1920 × 2560
+		assertThat(upright.getWidth()).isEqualTo(1920);
+		assertThat(upright.getHeight()).isEqualTo(2560);
+	}
+
+	@Test
+	void 긴_변이_2560_이하인_사진은_원래_크기로_펼친다() throws IOException {
+		BufferedImage upright = processor.readUpright(TestImages.jpeg(2000, 1500), 2000);
+
+		// 작은 사진을 2560까지 키우지 않는다
+		assertThat(upright.getWidth()).isEqualTo(2000);
+		assertThat(upright.getHeight()).isEqualTo(1500);
+	}
+
+	@Test
+	void 줄여_읽은_큰_세로_사진도_세워서_1280으로_저장한다() throws IOException {
+		byte[] photo = TestImages.withExifOrientation(TestImages.jpeg(2600, 1950), 6);
+
+		ProcessedImage result = processor.process(upload(photo));
+
+		// 2560 × 1920으로 읽고 세운 그림(1920 × 2560)을 긴 변 1280으로 줄인다
+		assertSize(result.main(), 960, 1280);
+		assertSize(result.thumbnail(), 600, 600);
+		assertThat(TestImages.containsExif(result.main())).isFalse();
+	}
+
+	@Test
 	void 저장할_사진에는_EXIF가_남지_않는다() {
 		byte[] withExif = TestImages.withExifOrientation(TestImages.jpeg(200, 100), 6);
 		// 처리 전에는 EXIF가 들어 있다 (테스트용 사진이 제대로 만들어졌는지 먼저 확인)
@@ -109,6 +142,18 @@ class ImageProcessorTest {
 		assertThat(result.main()[1] & 0xFF).isEqualTo(0xD8);
 		// 투명했던 곳이 검은색이 아니라 흰색(에 가까운 색)이어야 한다. (JPEG 압축 때문에 정확히 255가 아닐 수 있다)
 		int rgb = image.getRGB(50, 50);
+		assertThat((rgb >> 16) & 0xFF).isGreaterThan(240);
+	}
+
+	@Test
+	void 긴_변이_2560보다_긴_투명한_PNG도_흰_배경으로_줄여_저장한다() throws IOException {
+		// 줄여 읽는 길(size)에서도 투명한 부분이 검게 바뀌지 않는지 본다
+		ProcessedImage result = processor.process(upload(TestImages.transparentPng(2600, 1300)));
+
+		BufferedImage image = read(result.main());
+		assertThat(image.getWidth()).isEqualTo(1280);
+		assertThat(image.getHeight()).isEqualTo(640);
+		int rgb = image.getRGB(640, 320);
 		assertThat((rgb >> 16) & 0xFF).isGreaterThan(240);
 	}
 
