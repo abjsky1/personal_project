@@ -3,6 +3,10 @@ package backend.image;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
@@ -70,6 +74,19 @@ class ImageProcessorTest {
 		// 작은 사진을 2560까지 키우지 않는다
 		assertThat(upright.getWidth()).isEqualTo(2000);
 		assertThat(upright.getHeight()).isEqualTo(1500);
+	}
+
+	@Test
+	void 올린_사진은_헤더에서_읽은_긴_변으로_줄여_읽기를_거친다() throws IOException {
+		// process가 줄여 읽기(readUpright)를 건너뛰고 원래 크기로 펼치게 되돌아가면 이 테스트가 실패한다.
+		// spy: 진짜 처리기를 그대로 쓰면서, 어떤 메서드가 어떤 값으로 불렸는지 기록해 두는 감시용 사본
+		ImageProcessor watched = spy(processor);
+		byte[] photo = TestImages.withExifOrientation(TestImages.jpeg(2600, 1950), 6);
+
+		watched.process(upload(photo));
+
+		// 짧은 변(1950)이 아니라 긴 변(2600)을 넘겨야 2560보다 긴 사진으로 보고 줄여 읽는다
+		verify(watched).readUpright(any(), eq(2600));
 	}
 
 	@Test
