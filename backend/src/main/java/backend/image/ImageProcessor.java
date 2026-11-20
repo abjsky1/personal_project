@@ -6,6 +6,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.Date;
 import java.util.Iterator;
@@ -36,7 +37,8 @@ import net.coobird.thumbnailator.Thumbnails;
 import net.coobird.thumbnailator.geometry.Positions;
 
 // 올린 사진을 저장하기 전에 다듬는다. (기획서 6.2절)
-// 순서: 1. 진짜 사진인지 검사 → 2. 화소 수 검사 → 3. 위치, 촬영 시각 꺼내기 → 4. 방향 바로잡기(회전 보정)
+// 순서: 1. 진짜 사진인지 검사 → 2. 화소 수 검사 → 3. 위치, 촬영 시각 꺼내기
+//       → 4. 펼치기(큰 사진은 긴 변 2560으로 줄이면서) + 방향 바로잡기(회전 보정)
 //       → 5. 크기 줄이기 + JPEG로 새로 저장(EXIF 제거)
 //
 // EXIF: 사진 파일 안에 숨어 있는 정보(촬영 시각, 카메라 기종, GPS 위치, 사진 방향 등)
@@ -51,6 +53,10 @@ public class ImageProcessor {
 	private static final int THUMBNAIL_SIZE = 600;
 	// JPEG 화질 (0~1). 0.85면 눈으로 차이가 거의 없으면서 용량은 크게 줄어든다.
 	private static final double JPEG_QUALITY = 0.85;
+	// 펼칠 때의 최대 크기: 긴 변이 이보다 긴 사진은 펼치면서 바로 2560px로 줄인다. (JM-94)
+	// 원래 크기로 다 펼친 뒤 돌리면, 큰 세로 사진은 원본 크기 그림이 한 장 더 생겨 메모리와 시간을 많이 쓴다.
+	// 2560 = 저장할 큰 사진(1280)의 두 배. 마지막에 한 번 더 반으로 줄여 1280을 만든다.
+	private static final int READ_MAX_SIZE = 2560;
 
 	// 파일 맨 앞 몇 바이트(매직 바이트): 파일 형식마다 정해진 "서명" 같은 값
 	// 확장자(.jpg)나 브라우저가 알려 준 형식은 바꿔치기할 수 있지만, 파일 내용의 시작 부분은 실제 형식을 보여 준다.
@@ -68,7 +74,8 @@ public class ImageProcessor {
 	}
 
 	// synchronized: 사진 처리를 한 번에 한 장씩만 한다. (다른 요청은 앞 사진이 끝날 때까지 줄 서서 기다린다)
-	// 사진을 펼치면 화소 수만큼 메모리를 쓴다. 큰 사진(약 5,000만 화소)은 한 장에 수백 MB.
+	// 사진을 펼치면 화소 수만큼 메모리를 쓴다. 큰 사진(약 5,000만 화소)은 긴 변 2560으로 줄여 읽어도
+	// 읽는 동안 한 번은 원본 크기로 펼쳐져 150 MB쯤 든다.
 	// 메모리 2GB 서버에서 큰 사진 여러 장을 동시에 펼치면 메모리가 모자라 서버가 멈출 수 있어서 막는다.
 	// 보통 사진은 1초 안에 끝나므로 사용자가 적은 지금은 기다림이 거의 없다.
 	public synchronized ProcessedImage process(MultipartFile file) {
@@ -82,7 +89,8 @@ public class ImageProcessor {
 		}
 
 		// 2. 사진 전체를 펼치기 전에 가로, 세로 크기만 먼저 읽어서, 너무 큰 사진을 거절한다.
-		checkPixelCount(original);
+		// 통과하면 긴 변의 길이를 받아 둔다 (4에서 줄여 읽을지 정할 때 쓴다).
+		int longSide = checkPixelCount(original);
 
 		// 3. EXIF를 지우기 전에, 원본에서 위치와 촬영 시각을 꺼내 둔다. (EXIF를 지운 뒤에는 읽을 수 없다)
 		PhotoMetadata metadata = readMetadata(original);
@@ -91,7 +99,8 @@ public class ImageProcessor {
 			// 4. 사진을 펼치면서 EXIF의 방향 정보를 반영한다.
 			// 휴대폰은 세로 사진도 가로로 저장하고 "90도 돌려서 보여 줘"라는 방향 정보만 EXIF에 적어 둔다.
 			// EXIF를 지우기 전에 이 방향대로 실제로 돌려 두지 않으면, 세로 사진이 눕혀져 보인다.
-			BufferedImage upright = Thumbnails.of(new ByteArrayInputStream(original)).scale(1.0).asBufferedImage();
+			// 큰 사진은 펼치면서 긴 변 2560으로 줄이고, 줄인 그림을 돌린다 (readUpright).
+			BufferedImage upright = readUpright(original, longSide);
 			BufferedImage rgb = removeTransparency(upright);
 
 			// 5. 크기를 줄여 JPEG로 새로 저장한다.
@@ -121,7 +130,8 @@ public class ImageProcessor {
 	}
 
 	// 사진 파일의 머리 부분(헤더)만 읽어 가로 × 세로를 확인한다. 사진 전체를 메모리에 펼치지 않는다.
-	private void checkPixelCount(byte[] data) {
+	// 한도 안이면 긴 변의 길이(가로와 세로 중 긴 쪽)를 돌려준다.
+	private int checkPixelCount(byte[] data) {
 		try (ImageInputStream input = ImageIO.createImageInputStream(new ByteArrayInputStream(data))) {
 			Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
 			if (!readers.hasNext()) {
@@ -137,6 +147,7 @@ public class ImageProcessor {
 					log.warn("Image too large: {}x{}", width, height);
 					throw new BusinessException(ErrorCode.IMAGE_TOO_LARGE);
 				}
+				return Math.max(width, height);
 			} finally {
 				// 사진을 읽는 도구가 잡고 있던 자원을 돌려준다.
 				reader.dispose();
@@ -186,6 +197,19 @@ public class ImageProcessor {
 		return StreamSupport.stream(metadata.getDirectories().spliterator(), false)
 				.map(Directory::getName)
 				.toList();
+	}
+
+	// 사진을 펼치고 EXIF 방향대로 돌린 그림을 돌려준다. (Thumbnailator가 방향 정보를 읽어 돌린다)
+	// 긴 변이 2560보다 길면 size(2560, 2560): 비율을 지킨 채 2560 안에 들어가게 먼저 줄이고, 줄인 그림을 돌린다.
+	//   → 원본 크기 그림은 읽을 때 한 장만 생기고, 돌릴 때는 작은 그림(약 490만 화소)만 새로 만든다.
+	// 그보다 작으면 scale(1.0): 크기는 그대로 두고 돌리기만 한다. (size는 작은 사진을 2560까지 키워 버린다)
+	// 테스트에서 읽은 크기를 확인하려고 private이 아니라 같은 패키지에서 부를 수 있게 둔다.
+	BufferedImage readUpright(byte[] original, int longSide) throws IOException {
+		Thumbnails.Builder<? extends InputStream> builder = Thumbnails.of(new ByteArrayInputStream(original));
+		if (longSide > READ_MAX_SIZE) {
+			return builder.size(READ_MAX_SIZE, READ_MAX_SIZE).asBufferedImage();
+		}
+		return builder.scale(1.0).asBufferedImage();
 	}
 
 	// PNG의 투명한 부분을 흰색으로 채운다. JPEG는 투명을 저장할 수 없어서, 그대로 두면 투명한 곳이 검게 나온다.

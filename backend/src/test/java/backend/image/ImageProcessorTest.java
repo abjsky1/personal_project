@@ -3,6 +3,10 @@ package backend.image;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
@@ -49,6 +53,52 @@ class ImageProcessorTest {
 
 		// 실제로 돌려서 저장했으므로 세로 사진(100 × 200)이 된다.
 		assertSize(result.main(), 100, 200);
+	}
+
+	@Test
+	void 긴_변이_2560보다_긴_사진은_펼칠_때_2560으로_줄여서_세운다() throws IOException {
+		// 가로 2600 × 세로 1950으로 저장된 세로 사진(방향 6). 원래 크기로 펼치지 않고 읽으면서 줄인다. (JM-94)
+		byte[] photo = TestImages.withExifOrientation(TestImages.jpeg(2600, 1950), 6);
+
+		BufferedImage upright = processor.readUpright(photo, 2600);
+
+		// 긴 변 2600 → 2560으로 줄인 뒤(2560 × 1920) 세웠으므로 1920 × 2560
+		assertThat(upright.getWidth()).isEqualTo(1920);
+		assertThat(upright.getHeight()).isEqualTo(2560);
+	}
+
+	@Test
+	void 긴_변이_2560_이하인_사진은_원래_크기로_펼친다() throws IOException {
+		BufferedImage upright = processor.readUpright(TestImages.jpeg(2000, 1500), 2000);
+
+		// 작은 사진을 2560까지 키우지 않는다
+		assertThat(upright.getWidth()).isEqualTo(2000);
+		assertThat(upright.getHeight()).isEqualTo(1500);
+	}
+
+	@Test
+	void 올린_사진은_헤더에서_읽은_긴_변으로_줄여_읽기를_거친다() throws IOException {
+		// process가 줄여 읽기(readUpright)를 건너뛰고 원래 크기로 펼치게 되돌아가면 이 테스트가 실패한다.
+		// spy: 진짜 처리기를 그대로 쓰면서, 어떤 메서드가 어떤 값으로 불렸는지 기록해 두는 감시용 사본
+		ImageProcessor watched = spy(processor);
+		byte[] photo = TestImages.withExifOrientation(TestImages.jpeg(2600, 1950), 6);
+
+		watched.process(upload(photo));
+
+		// 짧은 변(1950)이 아니라 긴 변(2600)을 넘겨야 2560보다 긴 사진으로 보고 줄여 읽는다
+		verify(watched).readUpright(any(), eq(2600));
+	}
+
+	@Test
+	void 줄여_읽은_큰_세로_사진도_세워서_1280으로_저장한다() throws IOException {
+		byte[] photo = TestImages.withExifOrientation(TestImages.jpeg(2600, 1950), 6);
+
+		ProcessedImage result = processor.process(upload(photo));
+
+		// 2560 × 1920으로 읽고 세운 그림(1920 × 2560)을 긴 변 1280으로 줄인다
+		assertSize(result.main(), 960, 1280);
+		assertSize(result.thumbnail(), 600, 600);
+		assertThat(TestImages.containsExif(result.main())).isFalse();
 	}
 
 	@Test
@@ -109,6 +159,18 @@ class ImageProcessorTest {
 		assertThat(result.main()[1] & 0xFF).isEqualTo(0xD8);
 		// 투명했던 곳이 검은색이 아니라 흰색(에 가까운 색)이어야 한다. (JPEG 압축 때문에 정확히 255가 아닐 수 있다)
 		int rgb = image.getRGB(50, 50);
+		assertThat((rgb >> 16) & 0xFF).isGreaterThan(240);
+	}
+
+	@Test
+	void 긴_변이_2560보다_긴_투명한_PNG도_흰_배경으로_줄여_저장한다() throws IOException {
+		// 줄여 읽는 길(size)에서도 투명한 부분이 검게 바뀌지 않는지 본다
+		ProcessedImage result = processor.process(upload(TestImages.transparentPng(2600, 1300)));
+
+		BufferedImage image = read(result.main());
+		assertThat(image.getWidth()).isEqualTo(1280);
+		assertThat(image.getHeight()).isEqualTo(640);
+		int rgb = image.getRGB(640, 320);
 		assertThat((rgb >> 16) & 0xFF).isGreaterThan(240);
 	}
 
