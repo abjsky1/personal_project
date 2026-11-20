@@ -252,6 +252,18 @@ class AdminPageTest {
 				.andExpect(redirectedUrl("/admin/login"));
 	}
 
+	// 관리자로 들어온 브라우저가 본 사용자 화면은 사용자 흐름(JM-92)에서 뺀다. 그 판단(isAdminSession)이 실제 로그인, 로그아웃과 맞는지
+	@Test
+	void 관리자로_들어온_세션만_관리자_세션으로_본다() throws Exception {
+		MockHttpSession session = loggedIn("10.2.0.11");
+		assertThat(AdminAuthService.isAdminSession(session)).isTrue();
+		assertThat(AdminAuthService.isAdminSession(new MockHttpSession())).isFalse();
+
+		mockMvc.perform(post("/admin/logout").session(session).param("_csrf", (String) session.getAttribute("admin.csrf")))
+				.andExpect(redirectedUrl("/admin/login"));
+		assertThat(AdminAuthService.isAdminSession(session)).isFalse();
+	}
+
 	// 처음 등록을 거쳐 노트북 브라우저의 기기 쿠키를 받는다
 	private Cookie registerLaptop(String address) throws Exception {
 		MockHttpSession session = new MockHttpSession();

@@ -173,6 +173,12 @@ public class AdminAuthService {
 		return until != null && Instant.now().isBefore(until);
 	}
 
+	// 이 세션으로 관리자 화면에 들어온 적이 있는지. 2시간이 지나 다시 비밀번호를 물어도 표시는 남아 있고, 로그아웃하면 지워진다.
+	// 사용자 흐름(JM-92)이 운영자가 같은 브라우저로 본 사용자 화면을 빼는 데 쓴다. 지금 들어와 있는지는 isLoggedIn이 따로 본다
+	public static boolean isAdminSession(HttpSession session) {
+		return session != null && session.getAttribute(UNTIL) != null;
+	}
+
 	// 관리자 화면의 폼마다 숨겨 두는 값 (CSRF 방지). 다른 사이트가 몰래 보낸 요청에는 이 값이 없어서 막힌다
 	public String csrfToken(HttpSession session) {
 		return session == null ? null : (String) session.getAttribute(CSRF);
