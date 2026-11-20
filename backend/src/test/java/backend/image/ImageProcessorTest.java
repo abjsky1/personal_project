@@ -230,15 +230,64 @@ class ImageProcessorTest {
 	}
 
 	@Test
-	void PNG가_16비트면_화소당_8바이트로_센다() throws IOException {
-		// 100 × 100 = 1만 화소. 펼친 크기가 8비트 투명 PNG는 4만 바이트, 16비트 투명 PNG는 8만 바이트 → 한도 5만 바이트
-		ImageProcessor strict = new ImageProcessor(50_000_000, 50_000);
+	void 투명색이_있는_RGB_PNG는_자바가_펼치는_대로_화소당_4바이트로_센다() throws IOException {
+		// 100 × 100 = 1만 화소. 투명색(tRNS)이 없으면 3바이트(3만 바이트), 있으면 4바이트(4만 바이트)로 펼쳐진다 → 한도 3만 5천 바이트
+		// 펼치는 형식이 아니라 파일의 원래 형식(getRawImageType, RGB 3바이트)으로 세면 이 테스트가 실패한다
+		ImageProcessor strict = new ImageProcessor(50_000_000, 35_000);
+		byte[] rgb = TestImages.rgbPng(100, 100);
 
-		assertSize(strict.process(upload(TestImages.transparentPng(100, 100))).main(), 100, 100);
-		assertThatThrownBy(() -> strict.process(upload(TestImages.transparentPng16(100, 100))))
+		assertSize(strict.process(upload(rgb)).main(), 100, 100);
+		assertThatThrownBy(() -> strict.process(upload(TestImages.withTransparentColor(rgb))))
 				.isInstanceOf(BusinessException.class)
 				.extracting(e -> ((BusinessException) e).getErrorCode())
 				.isEqualTo(ErrorCode.IMAGE_DECODED_TOO_LARGE);
+	}
+
+	@Test
+	void 자바_그리기가_바로_줄이지_못하는_형식은_복사본_몫_8바이트를_더_센다() throws IOException {
+		// 100 × 100 = 1만 화소, 한도 5만 바이트
+		ImageProcessor strict = new ImageProcessor(50_000_000, 50_000);
+
+		// 바로 줄이는 형식: 투명 PNG 4바이트(4만), 8비트 팔레트 PNG 1바이트(1만) → 받는다
+		assertSize(strict.process(upload(TestImages.transparentPng(100, 100))).main(), 100, 100);
+		assertSize(strict.process(upload(TestImages.palettePng(100, 100))).main(), 100, 100);
+		// 바로 줄이지 못하는 형식: 16비트 투명 PNG 8 + 8(16만), 회색+투명 PNG 2 + 8(10만), 1비트 팔레트 PNG 1 + 8(9만) → 거절
+		for (byte[] png : new byte[][] {TestImages.transparentPng16(100, 100), TestImages.grayAlphaPng(100, 100),
+				TestImages.onebitPalettePng(100, 100)}) {
+			assertThatThrownBy(() -> strict.process(upload(png)))
+					.isInstanceOf(BusinessException.class)
+					.extracting(e -> ((BusinessException) e).getErrorCode())
+					.isEqualTo(ErrorCode.IMAGE_DECODED_TOO_LARGE);
+		}
+	}
+
+	@Test
+	void 한_변이_65535보다_긴_사진은_펼치지_않고_거절한다() {
+		// 65,536 × 1 = 화소 6만 남짓이라 화소와 펼친 크기는 한도 안이지만, 한 줄이 너무 길다
+		assertThatThrownBy(() -> processor.process(upload(TestImages.pngHeaderOnly(65_536, 1, 8, 6))))
+				.isInstanceOf(BusinessException.class)
+				.extracting(e -> ((BusinessException) e).getErrorCode())
+				.isEqualTo(ErrorCode.IMAGE_DECODED_TOO_LARGE);
+		// 65,535까지는 한 변 검사를 지나간다 (그림 데이터가 없는 파일이라 펼치는 단계에서 INVALID_IMAGE)
+		assertThatThrownBy(() -> processor.process(upload(TestImages.pngHeaderOnly(65_535, 1, 8, 6))))
+				.isInstanceOf(BusinessException.class)
+				.extracting(e -> ((BusinessException) e).getErrorCode())
+				.isEqualTo(ErrorCode.INVALID_IMAGE);
+	}
+
+	@Test
+	void 깨진_PNG는_색_형식과_상관없이_INVALID_IMAGE로_거절한다() {
+		// 머리만 있고 그림 데이터가 없는 PNG. 회색(0), RGB(2), 팔레트(3)는 형식을 정하려고 뒤의 조각까지 읽다가
+		// IOException이 아닌 예외(IndexOutOfBoundsException)가 난다. 그대로 새면 에러 화면(500)이 된다
+		for (int colorType : new int[] {0, 2, 3, 4, 6}) {
+			byte[] png = TestImages.pngHeaderOnly(100, 100, 8, colorType);
+
+			assertThatThrownBy(() -> processor.process(upload(png)))
+					.as("색 형식 %d", colorType)
+					.isInstanceOf(BusinessException.class)
+					.extracting(e -> ((BusinessException) e).getErrorCode())
+					.isEqualTo(ErrorCode.INVALID_IMAGE);
+		}
 	}
 
 	@Test

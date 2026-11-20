@@ -11,9 +11,11 @@ import java.io.UncheckedIOException;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.stream.StreamSupport;
 
+import javax.imageio.IIOException;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.ImageTypeSpecifier;
@@ -58,6 +60,16 @@ public class ImageProcessor {
 	// 원래 크기로 다 펼친 뒤 돌리면, 큰 세로 사진은 원본 크기 그림이 한 장 더 생겨 메모리와 시간을 많이 쓴다.
 	// 2560 = 저장할 큰 사진(1280)의 두 배. 마지막에 한 번 더 반으로 줄여 1280을 만든다.
 	private static final int READ_MAX_SIZE = 2560;
+	// 한 변의 최대 길이 (JM-105). JPEG가 담을 수 있는 가장 긴 변과 같다.
+	// PNG는 펼칠 때 한 줄짜리 버퍼를 세 개 더 만든다. 50,000,000 × 1 같은 사진은 한 줄이 곧 사진 전체라 버퍼만 4억 5천만 바이트가 된다.
+	private static final int MAX_SIDE = 65_535;
+	// 자바 그리기(Java2D)가 바로 줄일 수 있는 형식 (JM-105, 재어서 확인)
+	// JPEG(3BYTE_BGR), 투명 PNG(4BYTE_ABGR), 8비트 회색 PNG(BYTE_GRAY), 8비트 팔레트 PNG(BYTE_INDEXED)
+	private static final Set<Integer> DIRECT_TYPES = Set.of(BufferedImage.TYPE_3BYTE_BGR, BufferedImage.TYPE_4BYTE_ABGR,
+			BufferedImage.TYPE_BYTE_GRAY, BufferedImage.TYPE_BYTE_INDEXED);
+	// 그 밖의 형식(16비트 PNG, 회색+투명 PNG, 1 ~ 4비트 팔레트 PNG, CMYK JPEG 등)은 Thumbnailator가 줄이려고 그릴 때
+	// 자바가 원본 전체를 화소당 4바이트 그림으로 바꾸고, 바꾸는 동안 같은 크기의 버퍼를 하나 더 만든다 → 화소당 8바이트를 더 쓴다
+	private static final int CONVERSION_BYTES_PER_PIXEL = 8;
 
 	// 파일 맨 앞 몇 바이트(매직 바이트): 파일 형식마다 정해진 "서명" 같은 값
 	// 확장자(.jpg)나 브라우저가 알려 준 형식은 바꿔치기할 수 있지만, 파일 내용의 시작 부분은 실제 형식을 보여 준다.
@@ -142,7 +154,7 @@ public class ImageProcessor {
 
 	// 사진 파일의 머리 부분(헤더)만 읽어 가로 × 세로와 펼쳤을 때의 크기를 확인한다. 사진 전체를 메모리에 펼치지 않는다.
 	// 1. 화소 수(가로 × 세로)가 한도를 넘으면 IMAGE_TOO_LARGE
-	// 2. 펼친 크기(가로 × 세로 × 화소 하나의 바이트)가 한도를 넘으면 IMAGE_DECODED_TOO_LARGE (JM-105)
+	// 2. 한 변이 65,535를 넘거나, 펼친 크기(가로 × 세로 × 화소 하나의 바이트)가 한도를 넘으면 IMAGE_DECODED_TOO_LARGE (JM-105)
 	//    화소 수가 같아도 형식에 따라 펼친 크기가 다르다. 5,000만 화소 JPEG는 1억 5천만 바이트지만,
 	//    같은 화소의 투명 PNG는 2억, 16비트 투명 PNG는 4억 바이트라 운영 서버의 힙(512 MB)에서는 펼치다 메모리가 모자란다.
 	// 한도 안이면 긴 변의 길이(가로와 세로 중 긴 쪽)를 돌려준다.
@@ -163,16 +175,21 @@ public class ImageProcessor {
 					throw new BusinessException(ErrorCode.IMAGE_TOO_LARGE);
 				}
 
-				// 자바가 이 사진을 펼칠 때 쓰는 형식들. 따로 정하지 않으면 첫째 형식으로 펼친다 (Thumbnailator도 따로 정하지 않는다)
-				Iterator<ImageTypeSpecifier> types = reader.getImageTypes(0);
-				if (!types.hasNext()) {
+				if (Math.max(width, height) > MAX_SIDE) {
+					log.warn("Image side too long: {}x{}", width, height);
+					throw new BusinessException(ErrorCode.IMAGE_DECODED_TOO_LARGE);
+				}
+
+				ImageTypeSpecifier type = decodeType(reader);
+				if (type == null) {
 					// 펼칠 형식이 없다 = 자바가 펼칠 수 없는 사진 (예: 색 채널이 2개인 JPEG). 펼치는 단계에서도 어차피 실패한다
 					log.warn("Unsupported image type: {}x{}", width, height);
 					throw new BusinessException(ErrorCode.INVALID_IMAGE);
 				}
-				int bytesPerPixel = bytesPerPixel(types.next());
+				int bytesPerPixel = bytesPerPixel(type);
 				if ((long) width * height * bytesPerPixel > maxDecodedBytes) {
-					log.warn("Image too large when decoded: {}x{}, {} bytes per pixel", width, height, bytesPerPixel);
+					log.warn("Image too large when decoded: {}x{}, {} bytes per pixel (type {})",
+							width, height, bytesPerPixel, type.getBufferedImageType());
 					throw new BusinessException(ErrorCode.IMAGE_DECODED_TOO_LARGE);
 				}
 				return Math.max(width, height);
@@ -186,11 +203,31 @@ public class ImageProcessor {
 		}
 	}
 
+	// 자바가 이 사진을 펼칠 때 쓰는 형식. 따로 정하지 않으면 getImageTypes의 첫째로 펼친다 (Thumbnailator도 따로 정하지 않는다)
+	// 펼칠 형식이 하나도 없으면 null
+	// PNG는 형식을 정하려고 머리 뒤의 조각(투명색 tRNS, 팔레트 PLTE)까지 읽어서, 깨진 파일이면 IOException이 아닌 예외
+	// (IndexOutOfBoundsException 등)도 난다. 펼칠 때는 자바가 이런 예외를 IIOException으로 감싸 주지만 여기서는 감싸 주지 않으므로,
+	// 직접 IIOException으로 감싸 "읽을 수 없는 사진"(400)으로 보낸다. 그대로 두면 에러 화면(500)과 에러 경보가 된다 (JM-105)
+	private static ImageTypeSpecifier decodeType(ImageReader reader) throws IOException {
+		try {
+			Iterator<ImageTypeSpecifier> types = reader.getImageTypes(0);
+			return types.hasNext() ? types.next() : null;
+		} catch (RuntimeException e) {
+			throw new IIOException("Unreadable image type: " + e, e);
+		}
+	}
+
 	// 펼친 그림에서 화소 하나가 차지하는 바이트 (JM-105)
 	// getPixelSize: 화소 하나의 비트 수. 8비트가 1바이트이고, 8로 나누어떨어지지 않으면 올린다 (팔레트 PNG의 1, 2, 4비트 → 1바이트)
 	// 예: JPEG 24비트 → 3, 투명 PNG 32비트 → 4, 16비트 투명 PNG 64비트 → 8, 인쇄용 CMYK JPEG 32비트 → 4
+	// 자바 그리기가 바로 줄이지 못하는 형식이면, 줄이는 동안 생기는 복사본 몫(화소당 8바이트)을 더한다 (DIRECT_TYPES)
+	//   예: 16비트 투명 PNG 8 + 8 = 16, 회색+투명 PNG 2 + 8 = 10, CMYK JPEG 4 + 8 = 12
 	private static int bytesPerPixel(ImageTypeSpecifier type) {
-		return (type.getColorModel().getPixelSize() + 7) / 8;
+		int decoded = (type.getColorModel().getPixelSize() + 7) / 8;
+		if (DIRECT_TYPES.contains(type.getBufferedImageType())) {
+			return decoded;
+		}
+		return decoded + CONVERSION_BYTES_PER_PIXEL;
 	}
 
 	// EXIF에서 GPS 위치와 촬영 시각을 꺼낸다. (metadata-extractor 라이브러리)

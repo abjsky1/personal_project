@@ -87,9 +87,9 @@ public enum ErrorCode {
 	INVALID_IMAGE(HttpStatus.BAD_REQUEST, "JPEG 또는 PNG 사진만 올릴 수 있습니다."),
 	// 400: 화소 수가 너무 많은 사진 (서버 메모리를 지키기 위한 한도)
 	IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "사진 해상도가 너무 큽니다. 5,000만 화소 이하의 사진을 올려 주세요."),
-	// 400: 화소 수는 한도 안이지만 펼치면 너무 큰 사진 (큰 투명 PNG, 16비트 PNG 등, JM-105)
-	// 같은 사진도 JPEG로 바꾸면 화소 하나가 3바이트라 5,000만 화소까지 올라간다
-	IMAGE_DECODED_TOO_LARGE(HttpStatus.BAD_REQUEST, "사진이 너무 큽니다. 가로, 세로 크기를 줄이거나 JPEG로 바꿔서 올려 주세요.");
+	// 400: 화소 수는 한도 안이지만 펼치면 너무 큰 사진 (큰 투명 PNG, 16비트 PNG, CMYK JPEG 등)이나 한 변이 65,535보다 긴 사진 (JM-105)
+	// PNG는 보통 JPEG(화소 하나가 3바이트)로 바꾸면 5,000만 화소까지 올라간다. CMYK JPEG는 이미 JPEG라 크기를 줄이라고만 안내한다
+	IMAGE_DECODED_TOO_LARGE(HttpStatus.BAD_REQUEST, "사진이 너무 큽니다. 가로, 세로 크기를 줄여서 올려 주세요. PNG는 JPEG로 바꿔 올려도 됩니다.");
 
 	private final HttpStatus status;
 	private final String message;
