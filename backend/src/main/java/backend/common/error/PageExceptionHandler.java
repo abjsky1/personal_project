@@ -2,6 +2,7 @@ package backend.common.error;
 
 import java.util.Map;
 
+import org.apache.tomcat.util.http.InvalidParameterException;
 import org.slf4j.MDC;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.core.Ordered;
@@ -34,7 +35,24 @@ public class PageExceptionHandler {
 		return errorPage(e.getErrorCode().getStatus(), e.getErrorCode());
 	}
 
-	// 2. 그 밖의 모든 예외
+	// 2. 주소나 form의 값을 서버(Tomcat)가 읽지 못함 (JM-107)
+	// 예: 글자가 깨진 값(?page=%zz, %ED%95), 값이 1,000개를 넘음, 2MB가 넘는 form
+	// Tomcat 11은 값을 처음 읽는 곳(@RequestParam, form 묶기)에서 InvalidParameterException을 던지고, 알맞은 상태(보통 400, 너무 크면 413)를 예외에 담아 둔다.
+	// 요청이 잘못된 것이므로 400번대로 답한다. 3번으로 보내면 500과 ERROR 로그가 되고, 운영에서는 ERROR 한 줄이 운영자에게 에러 알림 메일로 간다.
+	// 로그는 WARN 한 줄만 남긴다. 예외 문구에는 보낸 값이 그대로 들어 있어서 남기지 않는다.
+	@ExceptionHandler(InvalidParameterException.class)
+	public ModelAndView handleInvalidParameter(InvalidParameterException e) {
+		// getErrorCode(): Tomcat이 예외에 담아 둔 HTTP 상태 숫자 (400, 413)
+		HttpStatusCode status = HttpStatusCode.valueOf(e.getErrorCode());
+		// Tomcat은 400번대만 담는다. 그 밖의 상태가 오면 서버 쪽 문제로 보고 3번처럼 처리한다
+		if (!status.is4xxClientError()) {
+			return handleException(e);
+		}
+		log.warn("Invalid request parameter: status={}", status.value());
+		return errorPage(status, ErrorCode.INVALID_REQUEST);
+	}
+
+	// 3. 그 밖의 모든 예외
 	// 주의: 여기서 모든 예외를 500으로 만들면, Spring 기본 예외(404, 405 등)까지 500으로 바뀌어 버린다. (S0에서 확인한 함정)
 	// 그래서 예외가 원래 가진 상태를 먼저 확인한다.
 	@ExceptionHandler(Exception.class)

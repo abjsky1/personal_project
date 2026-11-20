@@ -3,14 +3,17 @@ package backend.common.error;
 import static org.assertj.core.api.Assertions.assertThat;
 // get(): 가짜 요청을 만드는 메서드 / status(), jsonPath(): 응답을 검사하는 메서드
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.apache.tomcat.util.http.InvalidParameterException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -55,7 +58,7 @@ class ApiExceptionHandlerTest {
 
 	@Test
 	void 예상하지_못한_예외는_500으로_응답하고_예외_내용은_보내지_않는다() throws Exception {
-		// 이 테스트를 실행하면 테스트 출력에 ERROR 로그와 스택 트레이스가 찍힌다. 3번 처리 메서드가 로그를 남긴 것이므로 정상이다.
+		// 이 테스트를 실행하면 테스트 출력에 ERROR 로그와 스택 트레이스가 찍힌다. 4번 처리 메서드가 로그를 남긴 것이므로 정상이다.
 		// message가 정해 둔 문장과 같다 = 예외에 담긴 내부 내용(아래 테스트 Controller의 문장)이 응답에 나가지 않았다.
 		mockMvc.perform(get("/test/api/unexpected-error"))
 				.andExpect(status().isInternalServerError())
@@ -74,6 +77,34 @@ class ApiExceptionHandlerTest {
 		// 사용자가 받은 번호(본문)로 서버 로그(헤더와 같은 번호)를 찾을 수 있어야 한다.
 		assertThat(headerTraceId).hasSize(8);
 		assertThat(bodyTraceId).isEqualTo(headerTraceId);
+	}
+
+	@Test
+	void Tomcat이_값을_읽지_못한_예외는_예외에_담긴_400번대로_응답한다() throws Exception {
+		// 깨진 주소 값(?page=%zz)이면 Tomcat이 InvalidParameterException을 던진다 (JM-107).
+		// MockMvc는 Tomcat을 거치지 않아서 테스트 Controller가 같은 예외를 직접 던진다. 실제 Tomcat으로 보내 보는 것은 BrokenRequestValueTest
+		mockMvc.perform(get("/test/api/invalid-parameter"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+		// form이 너무 크면 Tomcat이 413을 담아 둔다
+		mockMvc.perform(get("/test/api/form-too-large"))
+				.andExpect(status().is(413))
+				.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+	}
+
+	@Test
+	void JSON을_받지_않는다고_한_요청에도_오류는_JSON으로_응답한다() throws Exception {
+		// accept(TEXT_HTML): 요청 머리의 Accept를 text/html로만 보낸다 (*/* 없음)
+		// 전에는 오류 JSON을 쓰지 못해 처리가 실패하고 500과 ERROR가 났다 (JM-107)
+		mockMvc.perform(get("/test/api/business-error").accept(MediaType.TEXT_HTML))
+				.andExpect(status().isNotFound())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+				.andExpect(jsonPath("$.code").value("POST_NOT_FOUND"));
+		// Spring 기본 예외(값 누락)도 같다
+		mockMvc.perform(get("/test/api/needs-param").accept(MediaType.TEXT_HTML))
+				.andExpect(status().isBadRequest())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+				.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	// 테스트 전용 JSON API: 일부러 예외를 던져서 ApiExceptionHandler가 어떻게 응답하는지 확인한다.
@@ -95,6 +126,18 @@ class ApiExceptionHandlerTest {
 		@GetMapping("/test/api/unexpected-error")
 		void unexpectedError() {
 			throw new IllegalStateException("DB 접속 정보 같은, 사용자에게 보이면 안 되는 내부 내용");
+		}
+
+		// Tomcat이 깨진 주소 값을 읽지 못했을 때 던지는 예외와 같은 것 (상태를 주지 않으면 400)
+		@GetMapping("/test/api/invalid-parameter")
+		void invalidParameter() {
+			throw new InvalidParameterException("Character decoding failed. Parameter [page] with value [%zz] has been ignored.");
+		}
+
+		// form이 너무 클 때 Tomcat이 던지는 예외와 같은 것 (413을 담는다)
+		@GetMapping("/test/api/form-too-large")
+		void formTooLarge() {
+			throw new InvalidParameterException("Parameters were not parsed because the size of the posted data was too big.", 413);
 		}
 	}
 }

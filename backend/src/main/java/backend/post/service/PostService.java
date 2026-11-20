@@ -154,8 +154,8 @@ public class PostService {
 	// readOnly = true: 읽기만 하는 작업이라고 알려서 불필요한 변경 확인을 건너뛴다.
 	@Transactional(readOnly = true)
 	public FeedPage getFeed(int requestedPage) {
-		// 0이나 음수가 오면 1쪽으로
-		Page<Post> page = loadPage(Math.max(1, requestedPage));
+		// 0이나 음수가 오면 1쪽으로, 아주 큰 쪽 번호는 DB가 읽을 수 있는 가장 큰 쪽으로 (JM-107)
+		Page<Post> page = loadPage(PageNav.readablePage(requestedPage, PAGE_SIZE));
 		// 범위를 넘는 쪽(글이 2쪽뿐인데 ?page=9)을 부르면 마지막 쪽을 다시 읽는다
 		if (!page.hasContent() && page.getTotalPages() > 0) {
 			page = loadPage(page.getTotalPages());

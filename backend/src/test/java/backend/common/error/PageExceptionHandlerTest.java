@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
+import org.apache.tomcat.util.http.InvalidParameterException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -65,6 +66,21 @@ class PageExceptionHandlerTest {
 		assertThat(result.getModelAndView().getModel().get("traceId")).isEqualTo(headerTraceId);
 	}
 
+	@Test
+	void Tomcat이_값을_읽지_못한_예외는_예외에_담긴_400번대_에러_화면이다() throws Exception {
+		// 깨진 주소 값(?page=%zz)이면 Tomcat이 InvalidParameterException을 던진다 (JM-107). 전에는 500 에러 화면과 ERROR 로그였다.
+		// MockMvc는 Tomcat을 거치지 않아서 테스트 Controller가 같은 예외를 직접 던진다. 실제 Tomcat으로 보내 보는 것은 BrokenRequestValueTest
+		mockMvc.perform(get("/test/page/invalid-parameter"))
+				.andExpect(status().isBadRequest())
+				.andExpect(view().name("common/error"))
+				.andExpect(model().attribute("status", 400))
+				.andExpect(model().attribute("message", ErrorCode.INVALID_REQUEST.getMessage()));
+		// form이 너무 크면 Tomcat이 413을 담아 둔다. 사진 한도 문구(FILE_TOO_LARGE)가 아니라 요청이 잘못됐다는 문구를 보여 준다
+		mockMvc.perform(get("/test/page/form-too-large"))
+				.andExpect(status().is(413))
+				.andExpect(model().attribute("message", ErrorCode.INVALID_REQUEST.getMessage()));
+	}
+
 	// 테스트 전용 화면 Controller: 일부러 예외를 던진다.
 	@Controller
 	static class PageTestController {
@@ -72,6 +88,18 @@ class PageExceptionHandlerTest {
 		@GetMapping("/test/page/unexpected-error")
 		String unexpectedError() {
 			throw new IllegalStateException("사용자에게 보이면 안 되는 내부 내용");
+		}
+
+		// Tomcat이 깨진 주소 값을 읽지 못했을 때 던지는 예외와 같은 것 (상태를 주지 않으면 400)
+		@GetMapping("/test/page/invalid-parameter")
+		String invalidParameter() {
+			throw new InvalidParameterException("Character decoding failed. Parameter [page] with value [%zz] has been ignored.");
+		}
+
+		// form이 너무 클 때 Tomcat이 던지는 예외와 같은 것 (413을 담는다)
+		@GetMapping("/test/page/form-too-large")
+		String formTooLarge() {
+			throw new InvalidParameterException("Parameters were not parsed because the size of the posted data was too big.", 413);
 		}
 	}
 }
