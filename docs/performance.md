@@ -271,7 +271,7 @@ SPRINTS의 그 스프린트 메모에 한 줄을 남긴다. 예:
 | 검색의 LIKE와 FULLTEXT | 검색이 아직 없다 (글 약 130개) | 많아지면 FULLTEXT | 로컬에 글 10만 개쯤 넣고 EXPLAIN과 시간 | JM-52 |
 | 인덱스 | 피드는 `status` 조건으로 글 24개와 전체 글 수를 읽는다 | 필요하면 `(status, id)` 같은 인덱스 | 로컬 대량 데이터에서 EXPLAIN과 시간 | 새 일감 |
 | 올리기 서버 처리 줄이기 | 앱 안에서만 p50 1.45초, p95 4.5초 (143건). 사진 줄이기와 썸네일 만들기, S3 저장 두 번, DB가 한 요청 안에 있다 | 사진을 읽을 때부터 작게 읽기는 JM-94에서 했다 (8절). 남은 것: 단계별 시간을 로그로 나눠 재기(JM-98), S3 저장 두 번을 함께 | 4.1의 `POST /posts` p50과 p95 | JM-94, JM-98 |
-| 트랜잭션 설정 문장 줄이기 | 피드 1쪽에 DB가 받는 문장 9개 가운데 5개가 트랜잭션 설정 (`SET SESSION TRANSACTION READ ONLY`, `SET autocommit` 등). 로컬에서 문장 사이 0.7 ~ 1.3 ms (JM-92 측정 중 MySQL general log로 찾음) | 드라이버 `readOnlyPropagatesToServer=false`로 2문장, HikariCP `auto-commit=false`와 Hibernate `provider_disables_autocommit`로 2문장 더. 뒤의 것은 트랜잭션 밖의 SQL(사용자 흐름 저장)을 먼저 손봐야 한다 | general log의 문장 수, 운영 앱 쪽 피드 p50과 p95 | [찾은 문제](troubleshooting/2026-11-20-transaction-setup-statements.md) |
+| 트랜잭션 설정 문장 줄이기 | 피드 1쪽에 DB가 받는 문장 9개 가운데 5개가 읽기 전용 트랜잭션의 설정 (`SET SESSION TRANSACTION READ ONLY`, `SET autocommit` 등). 로컬에서 문장 사이 0.7 ~ 1.3 ms (JM-92 측정 중 MySQL general log로 찾음) | 드라이버 `readOnlyPropagatesToServer=false`로 2문장, HikariCP `auto-commit=false`와 Hibernate `provider_disables_autocommit`로 2문장 더. 뒤의 것은 트랜잭션 밖의 SQL(사용자 흐름 저장)을 먼저 손봐야 한다 | general log의 문장 수, 운영 앱 쪽 피드 p50과 p95 | [찾은 문제](troubleshooting/2026-11-20-transaction-setup-statements.md) |
 
 ## 7. 계속 살펴볼 것
 
@@ -287,4 +287,4 @@ SPRINTS의 그 스프린트 메모에 한 줄을 남긴다. 예:
 |---|---|---|---|---|---|
 | 2026-11-18 | JM-91 | 기준선을 처음 잼 (바꾼 것 없음) | 3절 | | 기록 저장소 `update_picture/JM-91` |
 | 2026-11-19 | JM-94 | 긴 변이 2560보다 긴 사진은 펼치면서 2560으로 줄여 읽기 | 로컬 사진 처리 (힙 512 MB, 같은 도구로 번갈아 잼): 12MP 세로 832 ms, 24MP 세로 1,350 ms. 필요한 힙 256 MB, 512 MB | 538 ms, 871 ms. 160 MB, 256 MB. 저장되는 사진은 화질 차이 없음 (가로 사진은 화소까지 같고 세로 사진은 PSNR 50 dB 넘음). 운영 `POST /posts` p50과 p95는 배포 뒤 잰다 | 기록 저장소 `update_picture/JM-94` |
-| 2026-11-20 | JM-92 | 사용자 흐름 기록(사람의 화면마다 한 줄)을 더하면서, 저장이 화면을 늦추지 않게 두 번 고침: JPA 저장 → INSERT 한 문장(JdbcTemplate) → 응답 밖의 일꾼 스레드 | 로컬, 네 판을 함께 띄워 피드 1쪽을 500번씩 번갈아 연 결과 사람 화면이 bot보다 늦은 정도 p50 / p95: main +0.27 / +0.88 ms. JPA 저장 +8.10 / +10.08 ms (DB에 문장 4개). INSERT 한 문장 +4.64 / +6.87 ms | 일꾼 스레드 저장 +0.60 / +1.98 ms (main과 거의 같음). 요청 안의 쿼리 수는 그대로이고, 사람 화면마다 INSERT 하나가 따로 나간다. 운영 앱 쪽 피드 p95는 배포 뒤 잰다 (기준 64 ms) | 기록 저장소 `update_picture/JM-92` |
+| 2026-11-20 | JM-92 | 사용자 흐름 기록(사람의 화면마다 한 줄)을 더하면서, 저장이 화면을 늦추지 않게 두 번 고침: JPA 저장 → INSERT 한 문장(JdbcTemplate) → 응답 밖의 일꾼 스레드 | 로컬, 네 판을 함께 띄워 피드 1쪽을 500번씩 번갈아 연 결과 사람 화면이 bot보다 늦은 정도 p50 / p95: main +0.27 / +0.88 ms. JPA 저장 +8.10 / +10.08 ms (DB에 문장 4개). INSERT 한 문장 +4.64 / +6.87 ms | 일꾼 스레드 저장 +0.60 / +1.98 ms (main과 거의 같음). PR 전 검토로 고친 최종 코드를 main과 둘만 띄워 다시 재도 +0.33 ms (main +0.66 ms, 재는 흔들림 안). 요청 안의 쿼리 수는 그대로이고, 사람 화면마다 INSERT 하나가 따로 나간다. 운영 앱 쪽 피드 p95는 배포 뒤 잰다 (기준 64 ms) | 기록 저장소 `update_picture/JM-92` |

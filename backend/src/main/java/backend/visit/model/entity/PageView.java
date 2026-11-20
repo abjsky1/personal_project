@@ -22,7 +22,8 @@ import lombok.NoArgsConstructor;
 
 // 사용자 흐름의 한 줄 (page_views 테이블, JM-92, 기획서 12절). 사람이 화면을 하나 받았거나 글을 올렸을 때 한 줄.
 // 같은 방문의 줄은 visit_key가 같고 seq가 1, 2, 3 ... 으로 이어진다. 들어온 곳(app부터 click_id까지)은 방문의 첫 줄(seq 1)에만 있다.
-// IP, 세션 번호, User-Agent 전체, 주소 전체, 올린 글의 번호는 둘 칸이 없다. 지우지 않고 모두 보관한다 (기획서 18절)
+// IP, 세션 번호, User-Agent 전체, 주소 전체는 둘 칸이 없다. 이 방문이 올리거나 쓰거나 고친 글의 번호는 target에 남기지 않는다
+// (PageFlowInterceptor). 지우지 않고 모두 보관한다 (기획서 18절)
 // 저장은 PageFlowRecorder가 INSERT 한 문장으로 한다. 이 클래스는 테이블 모양을 정하고(ddl-auto=update) 한 줄의 값을 나른다
 // 상태와 종류 칸은 @JdbcTypeCode(VARCHAR)로 MySQL enum이 아닌 글자 칸으로 만든다: 나중에 화면을 더해도 저장이 거절되지 않는다
 // (daily_region_counts와 같은 방식, docs/troubleshooting/2026-11-02-enum-check-constraint.md)
@@ -54,7 +55,7 @@ public class PageView {
 	@Column(length = 20, nullable = false)
 	private Screen screen;
 
-	// 피드는 쪽 번호, 글 상세와 공지 글과 피드백 글은 그 글의 번호. 나머지는 비움
+	// 피드는 요청한 쪽 번호, 글 상세와 공지 글과 피드백 글은 그 글의 번호. 이 방문이 쓰거나 고친 글이면 비움. 나머지도 비움
 	private Long target;
 
 	// 바로 앞 화면: 이 사이트 안에서 눌러 왔으면 그 화면 (Referer의 경로로 정한다). 밖에서 왔거나 모르면 비움

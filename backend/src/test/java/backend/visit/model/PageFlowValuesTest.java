@@ -9,7 +9,7 @@ import backend.visit.model.entity.Device;
 import backend.visit.model.entity.Screen;
 import backend.visit.model.vo.VisitEntry;
 
-// 사용자 흐름(JM-92)의 값 규칙: 주소 → 화면, User-Agent → 앱 종류와 기기, 들어온 곳을 줄이는 규칙
+// 사용자 흐름(JM-92)의 값 규칙: 주소 → 화면, User-Agent → 앱 종류와 기기, 들어온 곳을 줄이는 규칙 (만들 때 줄인다)
 class PageFlowValuesTest {
 
 	@Test
@@ -70,23 +70,43 @@ class PageFlowValuesTest {
 		assertThat(Device.of(null)).isEqualTo(Device.DESKTOP);
 	}
 
-	// 도메인은 소문자로, 도메인에 쓰지 않는 글자가 있거나 100자를 넘으면 버린다. utm은 빈칸과 제어 문자를 빼고 50자까지
+	// 도메인은 소문자로. 도메인에 쓰지 않는 글자가 있거나, 100자를 넘거나, 점이 없거나(localhost), IP 주소면 버린다
 	@Test
-	void 들어온_곳의_값은_만들_때_줄인다() {
-		VisitEntry entry = new VisitEntry(ClientApp.CHROME, "M.Search.Naver.com", "  insta\ngram\t ", "", null, "fbclid");
-		assertThat(entry.refHost()).isEqualTo("m.search.naver.com");
-		assertThat(entry.utmSource()).isEqualTo("instagram");
-		assertThat(entry.utmMedium()).isNull();
-		assertThat(entry.utmCampaign()).isNull();
-		assertThat(entry.clickId()).isEqualTo("fbclid");
+	void 다른_사이트는_도메인일_때만_남긴다() {
+		assertThat(entry("M.Search.Naver.com", null).refHost()).isEqualTo("m.search.naver.com");
+		assertThat(entry("com.google.android.gm", null).refHost()).isEqualTo("com.google.android.gm");
+		for (String host : new String[] { "evil host", "a".repeat(101) + ".com", "localhost", "devbox", "192.168.0.12", "8.8.8.8", "" }) {
+			assertThat(entry(host, null).refHost()).as(host).isNull();
+		}
+	}
 
-		assertThat(new VisitEntry(ClientApp.OTHER, "evil host", null, null, null, "utm_id").refHost()).isNull();
-		assertThat(new VisitEntry(ClientApp.OTHER, "a".repeat(101), null, null, null, null).refHost()).isNull();
+	// utm은 글자(한글 포함), 숫자, 빈칸, . _ ~ + - 만 남기고 50자까지. HTML, 수식, 보이지 않는 글자, 줄바꿈은 지운다
+	@Test
+	void utm_값은_정한_글자만_50자까지_남긴다() {
+		assertThat(entry(null, "  insta\ngram\t ").utmSource()).isEqualTo("instagram");
+		assertThat(entry(null, "beta_launch-1120 v2.0").utmSource()).isEqualTo("beta_launch-1120 v2.0");
+		assertThat(entry(null, "지인 베타").utmSource()).isEqualTo("지인 베타");
+		assertThat(entry(null, "<script>alert(1)</script>").utmSource()).isEqualTo("scriptalert1script");
+		assertThat(entry(null, "=HYPERLINK(\"x\")@").utmSource()).isEqualTo("HYPERLINKx");
+		assertThat(entry(null, "insta​gram‮").utmSource()).isEqualTo("instagram");
+		assertThat(entry(null, "​<>").utmSource()).isNull();
+		assertThat(entry(null, "").utmSource()).isNull();
+
+		String cut = entry(null, "가".repeat(60)).utmSource();
+		assertThat(cut).isEqualTo("가".repeat(50));
+		assertThat(entry(null, "가".repeat(49) + "😀끝끝").utmSource()).isEqualTo("가".repeat(49) + "끝");
+	}
+
+	// 링크 표시는 정한 이름(fbclid, gclid, igsh, igshid)만. 값이나 다른 이름은 버린다
+	@Test
+	void 링크_표시는_정한_이름만_남긴다() {
+		assertThat(new VisitEntry(ClientApp.OTHER, null, null, null, null, "fbclid").clickId()).isEqualTo("fbclid");
+		assertThat(new VisitEntry(ClientApp.OTHER, null, null, null, null, "utm_id").clickId()).isNull();
 		assertThat(new VisitEntry(ClientApp.OTHER, null, null, null, null, "IwAR0value").clickId()).isNull();
+		assertThat(new VisitEntry(ClientApp.OTHER, null, null, null, null, null).clickId()).isNull();
+	}
 
-		String longValue = "가".repeat(49) + "😀" + "끝";
-		String cut = new VisitEntry(ClientApp.OTHER, null, longValue, null, null, null).utmSource();
-		assertThat(cut.codePointCount(0, cut.length())).isEqualTo(50);
-		assertThat(cut).endsWith("😀");
+	private static VisitEntry entry(String host, String utmSource) {
+		return new VisitEntry(ClientApp.CHROME, host, utmSource, null, null, null);
 	}
 }

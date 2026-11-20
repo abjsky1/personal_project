@@ -21,9 +21,10 @@ public class VisitCountInterceptor implements HandlerInterceptor {
 
 	private final VisitCounter visitCounter;
 
+	// ex: 화면을 그리다 난 예외. 있으면 사용자는 에러 화면을 봤으므로 세지 않는다 (상태가 아직 200으로 보여도. JM-92 검토)
 	@Override
 	public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
-		if (!Visitors.isPerson(request.getHeader("User-Agent"))) {
+		if (ex != null || !Visitors.isPerson(request.getHeader("User-Agent"))) {
 			return;
 		}
 		if (markNewVisit(request, response)) {

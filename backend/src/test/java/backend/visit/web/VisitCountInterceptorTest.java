@@ -71,6 +71,15 @@ class VisitCountInterceptorTest {
 		assertThat(counted).isEmpty();
 	}
 
+	// 화면을 그리다 예외가 나면 사용자는 에러 화면을 봤다. 상태가 아직 200으로 보여도 방문으로 세지 않는다 (JM-92 검토)
+	@Test
+	void 화면을_그리다_실패하면_세지_않는다() {
+		interceptor.afterCompletion(page("GET", "/", BROWSER, new MockHttpSession()), html(200), new Object(),
+				new IllegalStateException("JSP failed"));
+
+		assertThat(counted).isEmpty();
+	}
+
 	@Test
 	void 새_글로_넘어간_글_올리기만_센다() {
 		run(page("POST", "/posts", BROWSER, new MockHttpSession()), redirect(302));

@@ -1,13 +1,18 @@
 package backend.visit.service;
 
 import java.sql.Types;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 //    SET autocommit=1. 2026-11-20 로컬 MySQL의 general log로 확인). JdbcTemplate으로 한 문장만 보낸다 (autocommit).
 //    JdbcTemplate: Spring이 만들어 두는 SQL 실행 도구 (DB 연결은 HikariCP 풀에서 빌려 쓰고 바로 돌려준다).
 //    테이블 모양은 PageView 엔티티가 정한다 (ddl-auto=update가 만든다. DailyRegionCount와 같은 방식)
+// ③ 하루 상한: 줄은 지우지 않고 모두 보관하므로, 쿠키를 안 쓰는 스크립트가 끝없이 줄을 늘리지 못하게 하루에 받는 줄 수를 막는다
 @Slf4j
 @Service
 public class PageFlowRecorder {
@@ -36,6 +42,8 @@ public class PageFlowRecorder {
 	// 저장을 기다리는 줄의 최대 개수. 지금 사람의 화면은 하루 400번쯤이라 DB가 잠깐 멈춰도 충분히 버틴다.
 	// 가득 차면 새 줄은 버린다 (화면을 기다리게 하지도, 메모리를 끝없이 쓰지도 않는다)
 	static final int QUEUE_SIZE = 1000;
+
+	private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
 
 	private static final String INSERT = "INSERT INTO page_views (visit_key, seq, viewed_at, screen, target, prev_screen, device, "
 			+ "app, ref_host, utm_source, utm_medium, utm_campaign, click_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -50,14 +58,31 @@ public class PageFlowRecorder {
 	// (app.page-flow.async=false: 테스트가 저장한 줄을 바로 읽고, 테스트의 트랜잭션과 함께 되돌린다)
 	private final ThreadPoolExecutor writer;
 
+	// 하루(한국 날짜)에 받는 줄의 상한과 오늘 받은 수
+	private final int dailyLimit;
+	private final Clock clock;
+	private LocalDate countedDay;
+	private int countedToday;
+
+	// 서버를 끌 때 남은 줄을 마저 저장하며 기다리는 시간
+	private final long drainMillis;
+
+	// 경고 로그는 1분에 한 줄만 남기고, 그 사이에 건너뛴 수를 다음 줄에 붙인다 (DB가 멈추면 화면마다 한 줄씩 쏟아지지 않게)
+	private final AtomicLong lastWarnMinute = new AtomicLong(-1);
+	private final AtomicInteger skippedWarns = new AtomicInteger();
+
 	@Autowired
-	public PageFlowRecorder(JdbcTemplate jdbcTemplate, @Value("${app.page-flow.async:true}") boolean async) {
-		this(jdbcTemplate, async ? QUEUE_SIZE : 0);
+	public PageFlowRecorder(JdbcTemplate jdbcTemplate, @Value("${app.page-flow.async:true}") boolean async,
+			@Value("${app.page-flow.daily-limit:20000}") int dailyLimit) {
+		this(jdbcTemplate, async ? QUEUE_SIZE : 0, dailyLimit, Clock.system(KOREA), 5000);
 	}
 
-	// queueSize가 0이면 일꾼 없이 바로 저장한다 (줄 크기를 바꿔 보는 테스트도 이 생성자를 쓴다)
-	PageFlowRecorder(JdbcTemplate jdbcTemplate, int queueSize) {
+	// queueSize가 0이면 일꾼 없이 바로 저장한다. 줄 크기, 상한, 시계, 기다리는 시간을 바꿔 보는 테스트도 이 생성자를 쓴다
+	PageFlowRecorder(JdbcTemplate jdbcTemplate, int queueSize, int dailyLimit, Clock clock, long drainMillis) {
 		this.jdbcTemplate = jdbcTemplate;
+		this.dailyLimit = dailyLimit;
+		this.clock = clock;
+		this.drainMillis = drainMillis;
 		this.writer = queueSize <= 0 ? null
 				: new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(queueSize), task -> {
 					Thread thread = new Thread(task, "page-flow-writer");
@@ -66,8 +91,12 @@ public class PageFlowRecorder {
 				});
 	}
 
-	// 줄에 넣고 바로 돌아간다. 가득 차서 못 넣으면 이 줄은 버리고 경고만 남긴다
+	// 줄에 넣고 바로 돌아간다. 오늘의 상한을 넘었거나 줄이 가득 차서 못 넣으면 이 줄은 버리고 경고만 남긴다
 	public void record(PageView view) {
+		if (!countToday()) {
+			warn("Page view dropped: daily limit {}", dailyLimit);
+			return;
+		}
 		if (writer == null) {
 			insert(view);
 			return;
@@ -86,19 +115,33 @@ public class PageFlowRecorder {
 				}
 			});
 		} catch (RejectedExecutionException e) {
-			log.warn("Page view dropped: screen={}, queue full", view.getScreen());
+			warn(writer.isShutdown() ? "Page view dropped: {}, shutting down" : "Page view dropped: {}, queue full", view.getScreen());
 		}
 	}
 
-	// 서버를 끌 때(배포) 줄에 남은 것을 5초까지 마저 저장한다. Spring은 이 빈을 DB 연결보다 먼저 정리해서 그때도 저장할 수 있다
+	// 서버를 끌 때(배포) 줄에 남은 것을 5초까지 마저 저장한다. Spring은 이 빈을 DB 연결보다 먼저 정리해서 그때도 저장할 수 있다.
+	// 5초 안에 못 끝내면 남은 일을 거두고(일꾼도 멈춘다) 몇 줄을 못 남겼는지 한 번만 적는다
 	@PreDestroy
 	void stop() throws InterruptedException {
-		if (writer != null) {
-			writer.shutdown();
-			if (!writer.awaitTermination(5, TimeUnit.SECONDS)) {
-				log.warn("Page views not saved at shutdown: {}", writer.getQueue().size());
-			}
+		if (writer == null) {
+			return;
 		}
+		writer.shutdown();
+		if (!writer.awaitTermination(drainMillis, TimeUnit.MILLISECONDS)) {
+			int left = writer.shutdownNow().size();
+			log.warn("Page views not saved at shutdown: {}", left);
+		}
+	}
+
+	// 오늘 받은 줄 수를 하나 올리고, 상한 안이면 true. 한국 날짜가 바뀌면 0부터 다시 센다
+	private synchronized boolean countToday() {
+		LocalDate today = LocalDate.now(clock);
+		if (!today.equals(countedDay)) {
+			countedDay = today;
+			countedToday = 0;
+		}
+		countedToday++;
+		return countedToday <= dailyLimit;
 	}
 
 	// 저장하지 못해도 예외를 밖으로 던지지 않고 경고 로그만 남긴다 (방문 수의 VisitCounter와 같다).
@@ -113,7 +156,23 @@ public class PageFlowRecorder {
 					nameOf(view.getApp()), view.getRefHost(), view.getUtmSource(), view.getUtmMedium(), view.getUtmCampaign(),
 					view.getClickId() }, TYPES);
 		} catch (RuntimeException e) {
-			log.warn("Page view record failed: screen={}, {}", view.getScreen(), e.getClass().getSimpleName());
+			warn("Page view record failed: {}, " + e.getClass().getSimpleName(), view.getScreen());
+		}
+	}
+
+	// 1분에 한 줄만. 건너뛴 경고가 있었으면 그 수를 붙인다
+	private void warn(String message, Object value) {
+		long minute = clock.millis() / 60_000;
+		long last = lastWarnMinute.get();
+		if (minute != last && lastWarnMinute.compareAndSet(last, minute)) {
+			int skipped = skippedWarns.getAndSet(0);
+			if (skipped > 0) {
+				log.warn(message + " (and {} more page flow warnings before this)", value, skipped);
+			} else {
+				log.warn(message, value);
+			}
+		} else {
+			skippedWarns.incrementAndGet();
 		}
 	}
 
