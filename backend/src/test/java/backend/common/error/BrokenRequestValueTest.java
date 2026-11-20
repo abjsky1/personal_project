@@ -96,6 +96,8 @@ class BrokenRequestValueTest {
 	@Test
 	void form이_2MB를_넘으면_413_에러_화면이고_ERROR가_없다() throws IOException {
 		// Tomcat이 form을 읽는 한도는 2MB (Spring Boot 기본값 server.tomcat.max-http-form-post-size)
+		// 주의: send()가 Connection: close를 보내고 서버가 넘친 본문을 끝까지 받아 주므로(max-swallow-size 20MB) 연결이 깨끗하게 닫힌다.
+		// 연결을 이어 쓰자고(keep-alive) 보내면 Tomcat이 413 뒤에 남은 본문을 읽지 않고 끊어, 응답을 읽다 "Connection reset"이 날 수 있다
 		byte[] body = ("content=" + "a".repeat(2 * 1024 * 1024 + 100)).getBytes(StandardCharsets.US_ASCII);
 
 		Response response = postForm("/feedback", body);
@@ -149,6 +151,60 @@ class BrokenRequestValueTest {
 
 		assertThat(response.status()).isEqualTo(400);
 		assertThat(response.body()).contains("INVALID_REQUEST");
+		assertThat(errors()).isEmpty();
+	}
+
+	@Test
+	void PUT_PATCH_DELETE로_보낸_깨진_form도_ERROR가_없다() throws IOException {
+		// 전에는 Spring의 FormContentFilter가 이 본문을 읽다가 예외를 냈고, Spring MVC보다 앞이라 500과 ERROR였다
+		// (application.properties의 spring.mvc.formcontent.filter.enabled=false). 이런 방식을 받는 화면이 없으므로 405
+		byte[] body = "a=%zz".getBytes(StandardCharsets.US_ASCII);
+
+		assertThat(send("PUT / HTTP/1.1", "text/html", "application/x-www-form-urlencoded", body).status()).isEqualTo(405);
+		assertThat(send("PATCH /feedback HTTP/1.1", "text/html", "application/x-www-form-urlencoded", body).status())
+				.isEqualTo(405);
+		assertThat(send("DELETE /feedback HTTP/1.1", "text/html", "application/x-www-form-urlencoded", body).status())
+				.isEqualTo(405);
+		assertThat(errors()).isEmpty();
+	}
+
+	@Test
+	void 모양이_잘못된_업로드는_400이다() throws IOException {
+		// 경계 표시(boundary)가 없는 업로드: 업로드 본문은 Controller를 찾기 전에 읽어서 어느 POST 주소든 같다. 전에는 500과 ERROR였다
+		Response noBoundary = send("POST /posts HTTP/1.1", "text/html", "multipart/form-data",
+				"x".getBytes(StandardCharsets.US_ASCII));
+		// 마지막 경계 없이 끝난 본문
+		Response cutShort = send("POST /feedback HTTP/1.1", "text/html", "multipart/form-data; boundary=zzz",
+				"--zzz\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\nvalue".getBytes(StandardCharsets.US_ASCII));
+
+		// Tomcat은 받았지만 Spring이 칸의 머리말(Content-Disposition)을 읽지 못하는 업로드
+		Response badHeader = send("POST /feedback HTTP/1.1", "text/html", "multipart/form-data; boundary=z",
+				"--z\r\nContent-Disposition: form-data; name=\"a\"; x\r\n\r\nv\r\n--z--\r\n".getBytes(StandardCharsets.US_ASCII));
+
+		assertThat(noBoundary.status()).isEqualTo(400);
+		assertThat(noBoundary.body()).contains(ErrorCode.INVALID_REQUEST.getMessage());
+		assertThat(cutShort.status()).isEqualTo(400);
+		assertThat(badHeader.status()).isEqualTo(400);
+		assertThat(errors()).isEmpty();
+	}
+
+	@Test
+	void form_칸_이름에_대괄호나_점이_붙어도_400이다() throws IOException {
+		// title[0]=a: Spring이 title을 목록처럼 다루려다 넣을 곳을 찾지 못한다. 전에는 500과 ERROR였다
+		Response response = postForm("/feedback",
+				"title[0]=a&content=b&nickname=c&password=1234".getBytes(StandardCharsets.US_ASCII));
+
+		assertThat(response.status()).isEqualTo(400);
+		assertThat(errors()).isEmpty();
+	}
+
+	@Test
+	void 비밀번호_칸이_없는_form은_입력_화면으로_돌려보낸다() throws IOException {
+		// 전에는 @Size가 칸이 없는 값(null)을 통과시켜, 비밀번호 없이 저장하다 DB 오류(500, ERROR)가 났다
+		Response response = postForm("/feedback", "title=a&content=b&nickname=c".getBytes(StandardCharsets.US_ASCII));
+
+		assertThat(response.status()).isEqualTo(200);
+		assertThat(response.body()).contains("비밀번호는 4~20자로 입력해 주세요.");
 		assertThat(errors()).isEmpty();
 	}
 

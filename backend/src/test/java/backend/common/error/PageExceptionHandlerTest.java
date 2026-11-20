@@ -7,8 +7,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
+import java.io.IOException;
+
+import org.apache.catalina.connector.ClientAbortException;
 import org.apache.tomcat.util.http.InvalidParameterException;
+import org.apache.tomcat.util.http.fileupload.FileUploadException;
+import org.apache.tomcat.util.http.fileupload.MultipartStream;
+import org.apache.tomcat.util.http.fileupload.impl.IOFileUploadException;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -17,6 +24,12 @@ import org.springframework.stereotype.Controller;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.multipart.MultipartException;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 // 화면 요청에서 에러가 나면 JSON이 아니라 에러 화면(common/error.jsp)을 알맞은 상태로 보여 주는지 검사하는 테스트
 // (MockMvc는 JSP를 실제로 그리지 않고, 어떤 화면 이름과 값이 넘어갔는지만 확인한다)
@@ -81,9 +94,69 @@ class PageExceptionHandlerTest {
 				.andExpect(model().attribute("message", ErrorCode.INVALID_REQUEST.getMessage()));
 	}
 
+	@Test
+	void 모양이_잘못된_업로드는_400이고_서버_쪽_업로드_실패는_그대로_500이다() throws Exception {
+		// 요청이 잘못된 것 (JM-107): 경계 표시가 없음, 본문이 끊김 → 400
+		mockMvc.perform(get("/test/page/upload-no-boundary")).andExpect(status().isBadRequest());
+		mockMvc.perform(get("/test/page/upload-cut-short")).andExpect(status().isBadRequest());
+		// 서버 쪽 문제: 디스크에 쓰지 못함, 임시 폴더가 없음 → 지금처럼 500 (ERROR 로그로 에러 알림이 가야 한다)
+		// 이 테스트의 출력에 ERROR 로그와 스택 트레이스가 찍히는 것은 정상이다
+		mockMvc.perform(get("/test/page/upload-disk-full")).andExpect(status().isInternalServerError());
+		mockMvc.perform(get("/test/page/upload-location-invalid")).andExpect(status().isInternalServerError());
+	}
+
+	@Test
+	void 응답을_쓰는_중에_사용자가_연결을_끊은_것은_ERROR를_남기지_않는다() throws Exception {
+		// 사진이나 CSS를 받다가 다른 화면으로 가면 생긴다 (JM-107). 서버 문제가 아니므로 에러 알림이 가면 안 된다
+		Logger logger = (Logger) LoggerFactory.getLogger(PageExceptionHandler.class);
+		ListAppender<ILoggingEvent> logs = new ListAppender<>();
+		logs.start();
+		logger.addAppender(logs);
+		try {
+			mockMvc.perform(get("/test/page/client-gone"));
+		} finally {
+			logger.detachAppender(logs);
+		}
+
+		assertThat(logs.list).noneMatch(event -> event.getLevel() == Level.ERROR);
+	}
+
 	// 테스트 전용 화면 Controller: 일부러 예외를 던진다.
 	@Controller
 	static class PageTestController {
+
+		// 응답을 쓰다가 연결이 끊겼을 때 Tomcat이 던지는 예외
+		@GetMapping("/test/page/client-gone")
+		String clientGone() throws IOException {
+			throw new ClientAbortException(new IOException("Connection reset by peer"));
+		}
+
+		// 아래 넷은 Spring이 업로드 본문을 읽지 못했을 때 던지는 예외와 같은 모양 (MultipartException이 Tomcat의 예외를 감싼다)
+		@GetMapping("/test/page/upload-no-boundary")
+		String uploadNoBoundary() {
+			throw new MultipartException("Failed to parse multipart servlet request",
+					new FileUploadException("the request was rejected because no multipart boundary was found"));
+		}
+
+		@GetMapping("/test/page/upload-cut-short")
+		String uploadCutShort() {
+			throw new MultipartException("Failed to parse multipart servlet request",
+					new IOFileUploadException("Processing of multipart/form-data request failed. Stream ended unexpectedly",
+							new MultipartStream.MalformedStreamException("Stream ended unexpectedly")));
+		}
+
+		@GetMapping("/test/page/upload-disk-full")
+		String uploadDiskFull() {
+			throw new MultipartException("Failed to parse multipart servlet request",
+					new IOFileUploadException("Processing of multipart/form-data request failed. No space left on device",
+							new IOException("No space left on device")));
+		}
+
+		@GetMapping("/test/page/upload-location-invalid")
+		String uploadLocationInvalid() {
+			throw new MultipartException("Failed to parse multipart servlet request",
+					new IOException("The temporary upload location is not valid"));
+		}
 
 		@GetMapping("/test/page/unexpected-error")
 		String unexpectedError() {

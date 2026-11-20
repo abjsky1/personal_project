@@ -7,8 +7,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.io.IOException;
+
+import org.apache.catalina.connector.ClientAbortException;
 import org.apache.tomcat.util.http.InvalidParameterException;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -21,6 +25,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.jayway.jsonpath.JsonPath;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 // JSON API(@RestController)에서 에러가 나면 화면이 아니라 ErrorResponse 모양의 JSON으로 응답하는지 검사하는 테스트
 // (화면 요청의 에러는 PageExceptionHandlerTest에서 검사한다)
@@ -107,6 +116,22 @@ class ApiExceptionHandlerTest {
 				.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
+	@Test
+	void 응답을_쓰는_중에_사용자가_연결을_끊은_것은_ERROR를_남기지_않는다() throws Exception {
+		// 사진을 받다가 다른 화면으로 가면 생긴다 (JM-107). 서버 문제가 아니므로 에러 알림이 가면 안 된다
+		Logger logger = (Logger) LoggerFactory.getLogger(ApiExceptionHandler.class);
+		ListAppender<ILoggingEvent> logs = new ListAppender<>();
+		logs.start();
+		logger.addAppender(logs);
+		try {
+			mockMvc.perform(get("/test/api/client-gone"));
+		} finally {
+			logger.detachAppender(logs);
+		}
+
+		assertThat(logs.list).noneMatch(event -> event.getLevel() == Level.ERROR);
+	}
+
 	// 테스트 전용 JSON API: 일부러 예외를 던져서 ApiExceptionHandler가 어떻게 응답하는지 확인한다.
 	// static: 바깥 테스트 클래스 객체 없이 Spring이 따로 만들 수 있게 한다.
 	@RestController
@@ -126,6 +151,12 @@ class ApiExceptionHandlerTest {
 		@GetMapping("/test/api/unexpected-error")
 		void unexpectedError() {
 			throw new IllegalStateException("DB 접속 정보 같은, 사용자에게 보이면 안 되는 내부 내용");
+		}
+
+		// 응답을 쓰다가 연결이 끊겼을 때 Tomcat이 던지는 예외
+		@GetMapping("/test/api/client-gone")
+		void clientGone() throws IOException {
+			throw new ClientAbortException(new IOException("Connection reset by peer"));
 		}
 
 		// Tomcat이 깨진 주소 값을 읽지 못했을 때 던지는 예외와 같은 것 (상태를 주지 않으면 400)

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import org.springframework.web.util.DisconnectedClientHelper;
 
 // JSON API(@RestController)에서 난 예외를 한곳에서 받아, ErrorResponse 모양의 JSON으로 바꿔 응답한다.
 // → Controller, Service마다 try-catch로 에러 응답을 만들 필요가 없다.
@@ -30,7 +31,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 // 1. BusinessException: 우리 코드가 직접 던진 "예상한 실패" → ErrorCode에 적힌 상태로 응답
 // 2. 주소나 form의 값을 서버(Tomcat)가 읽지 못함 (InvalidParameterException, JM-107) → 그 예외에 담긴 상태(400, 413)로 응답
 // 3. Spring이 던지는 기본 예외(없는 주소, 지원하지 않는 방식, 잘못된 요청 형식 등) → Spring이 정한 상태(404, 405, 400 등) 그대로 응답
-// 4. 그 밖의 모든 예외: 예상하지 못한 오류 → 500으로 응답하고, 원인을 로그에 남긴다
+// 4. 그 밖의 모든 예외: 예상하지 못한 오류 → 500으로 응답하고, 원인을 로그에 남긴다 (사용자가 연결을 끊은 것은 빼고, JM-107)
 // 오류 JSON은 요청의 Accept(받을 수 있는 형식)와 상관없이 보낸다 (맨 아래 json 메서드, JM-107)
 //
 // ResponseEntityExceptionHandler를 상속하는 이유 (3번):
@@ -78,7 +79,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 		ErrorCode errorCode = ErrorCode.fromStatus(statusCode);
 
 		// 500번대는 서버 쪽 문제이므로 4번과 같이 원인을 로그에 남긴다.
+		// 다만 사용자가 연결을 끊어 응답을 쓰지 못한 것이면 4번처럼 ERROR 없이 끝낸다 (JM-107)
 		if (statusCode.is5xxServerError()) {
+			if (DisconnectedClientHelper.isClientDisconnectedException(ex)) {
+				return null;
+			}
 			log.error("Unhandled exception", ex);
 		}
 
@@ -92,6 +97,13 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 	// Exception은 모든 예외의 부모라서, 더 가깝게 맞는 처리 메서드가 없는 예외는 전부 여기로 온다.
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception e) {
+		// 응답을 보내는 중에 사용자가 연결을 끊음 (JM-107): 사진을 받다가 다른 화면으로 가는 등. 서버 문제가 아니고 보낼 곳도 없다.
+		// Spring은 이 경우를 걸러 주지 않고 이 메서드로 넘겨서, 전에는 ERROR(에러 알림 메일)가 됐다.
+		// DisconnectedClientHelper: 예외 종류(ClientAbortException 등)와 문구("broken pipe" 등)로 끊긴 연결인지 보는 Spring의 도구
+		// null을 돌려주면 "처리는 끝났고 더 쓸 응답이 없다"는 뜻이 된다
+		if (DisconnectedClientHelper.isClientDisconnectedException(e)) {
+			return null;
+		}
 		// 예외 객체(e)를 마지막 인자로 넘기면, 어디서 터졌는지(스택 트레이스)까지 로그에 남는다.
 		// 이 로그가 없으면 사용자는 500만 보고, 개발자는 원인을 찾을 방법이 없다.
 		log.error("Unhandled exception", e);

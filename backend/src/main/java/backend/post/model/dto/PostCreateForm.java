@@ -4,6 +4,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import backend.analysis.model.entity.ConfirmMode;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 // 글쓰기 화면의 form에서 보낸 값을 받는 클래스
@@ -19,6 +20,8 @@ public class PostCreateForm {
 	private String nickname;
 
 	// @Size(min, max): 글자 수 범위. 빈 값("")도 4자 미만이라 여기서 걸린다.
+	// 다만 칸이 아예 없는 요청(null)은 @Size를 통과해서, 사진을 S3에 올린 뒤 비밀번호 없이 저장하다 DB 오류(500, ERROR)가 났다 → @NotNull (JM-107)
+	@NotNull(message = "비밀번호는 4~20자로 입력해 주세요.")
 	@Size(min = 4, max = 20, message = "비밀번호는 4~20자로 입력해 주세요.")
 	private String password;
 
