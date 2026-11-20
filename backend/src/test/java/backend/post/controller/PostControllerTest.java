@@ -537,6 +537,20 @@ class PostControllerTest {
 				.andExpect(model().attributeHasFieldErrorCode("form", "image", ErrorCode.INVALID_IMAGE.name()));
 	}
 
+	@Test
+	void 펼치면_너무_큰_사진은_글쓰기_화면의_사진_칸에_메시지를_보여준다() throws Exception {
+		// 7071 × 7071 투명 PNG: 화소는 한도 안(4,999만)이지만 펼치면 약 2억 바이트라 머리만 읽고 거절한다 (JM-105)
+		MockMultipartFile bigPng = new MockMultipartFile("image", "big.png", "image/png",
+				TestImages.pngHeaderOnly(7071, 7071, 8, 6));
+
+		mockMvc.perform(multipart("/posts").file(bigPng)
+				.param("nickname", "테스터")
+				.param("password", "1234"))
+				.andExpect(status().isOk())
+				.andExpect(view().name("posts/new"))
+				.andExpect(model().attributeHasFieldErrorCode("form", "image", ErrorCode.IMAGE_DECODED_TOO_LARGE.name()));
+	}
+
 	// ---- 고쳐 쓰는 AI (JM-74) ----
 
 	@Test

@@ -2,12 +2,17 @@ package backend.image;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.Transparency;
+import java.awt.color.ColorSpace;
 import java.awt.image.BufferedImage;
+import java.awt.image.ComponentColorModel;
+import java.awt.image.DataBuffer;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.zip.CRC32;
 
 import javax.imageio.ImageIO;
 
@@ -31,6 +36,43 @@ public final class TestImages {
 	// 전체가 투명한 PNG 파일 내용
 	public static byte[] transparentPng(int width, int height) {
 		return write(new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB), "png");
+	}
+
+	// 전체가 투명한 16비트 PNG 파일 내용 (색 채널 하나가 16비트라, 펼치면 화소 하나가 8바이트다)
+	// ComponentColorModel: 화소를 채널(빨강, 초록, 파랑, 투명도)마다 숫자 하나로 담는 방식. TYPE_USHORT = 채널 하나에 16비트
+	public static byte[] transparentPng16(int width, int height) {
+		ComponentColorModel colorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB),
+				true, false, Transparency.TRANSLUCENT, DataBuffer.TYPE_USHORT);
+		BufferedImage image = new BufferedImage(colorModel, colorModel.createCompatibleWritableRaster(width, height),
+				false, null);
+		return write(image, "png");
+	}
+
+	// 머리 부분(IHDR)만 있고 그림 데이터가 없는 PNG 파일 내용
+	// 큰 사진을 실제로 만들지 않고도 "머리만 읽고 거절하는지"를 시험할 수 있다. 펼치려 하면 그림 데이터가 없어서 실패한다.
+	// PNG 파일 = 서명 8바이트 + 조각(chunk)들. 조각 하나 = 길이 4 + 종류 4 + 내용 + CRC 4 (종류와 내용으로 계산한 검사 값)
+	// IHDR 내용 13바이트: 가로 4, 세로 4, 채널 하나의 비트 수 1, 색 형식 1 (6 = 투명도가 있는 RGB), 압축, 필터, 인터레이스 각 1 (모두 0)
+	public static byte[] pngHeaderOnly(int width, int height, int bitDepth, int colorType) {
+		ByteBuffer header = ByteBuffer.allocate(13)
+				.putInt(width).putInt(height)
+				.put((byte) bitDepth).put((byte) colorType)
+				.put((byte) 0).put((byte) 0).put((byte) 0);
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		out.writeBytes(new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A});
+		writeChunk(out, "IHDR", header.array());
+		writeChunk(out, "IEND", new byte[0]);
+		return out.toByteArray();
+	}
+
+	private static void writeChunk(ByteArrayOutputStream out, String type, byte[] data) {
+		byte[] typeBytes = type.getBytes(StandardCharsets.US_ASCII);
+		CRC32 crc = new CRC32();
+		crc.update(typeBytes);
+		crc.update(data);
+		out.writeBytes(ByteBuffer.allocate(4).putInt(data.length).array());
+		out.writeBytes(typeBytes);
+		out.writeBytes(data);
+		out.writeBytes(ByteBuffer.allocate(4).putInt((int) crc.getValue()).array());
 	}
 
 	// JPEG에 EXIF 방향 정보(Orientation)를 넣는다. 휴대폰 카메라가 만드는 파일처럼 만들기 위해서다.
