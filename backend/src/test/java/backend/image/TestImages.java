@@ -2,12 +2,18 @@ package backend.image;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.Transparency;
+import java.awt.color.ColorSpace;
 import java.awt.image.BufferedImage;
+import java.awt.image.ComponentColorModel;
+import java.awt.image.DataBuffer;
+import java.awt.image.IndexColorModel;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.zip.CRC32;
 
 import javax.imageio.ImageIO;
 
@@ -31,6 +37,83 @@ public final class TestImages {
 	// 전체가 투명한 PNG 파일 내용
 	public static byte[] transparentPng(int width, int height) {
 		return write(new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB), "png");
+	}
+
+	// 전체가 투명한 16비트 PNG 파일 내용 (색 채널 하나가 16비트라, 펼치면 화소 하나가 8바이트다)
+	// ComponentColorModel: 화소를 채널(빨강, 초록, 파랑, 투명도)마다 숫자 하나로 담는 방식. TYPE_USHORT = 채널 하나에 16비트
+	public static byte[] transparentPng16(int width, int height) {
+		ComponentColorModel colorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB),
+				true, false, Transparency.TRANSLUCENT, DataBuffer.TYPE_USHORT);
+		BufferedImage image = new BufferedImage(colorModel, colorModel.createCompatibleWritableRaster(width, height),
+				false, null);
+		return write(image, "png");
+	}
+
+	// 투명도가 없는 RGB PNG 파일 내용 (색 형식 2). 자바는 화소당 3바이트(TYPE_3BYTE_BGR)로 펼친다
+	public static byte[] rgbPng(int width, int height) {
+		return write(new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png");
+	}
+
+	// RGB PNG에 투명색(tRNS) 조각을 끼워 넣는다. "이 색인 화소는 투명으로 본다"는 표시라,
+	// 자바는 이런 PNG를 투명도가 있는 화소당 4바이트 그림(TYPE_4BYTE_ABGR)으로 펼친다.
+	// tRNS는 그림 데이터(IDAT) 앞에 와야 한다 → IHDR 바로 뒤(서명 8바이트 + IHDR 조각 25바이트 = 33번째 바이트)에 넣는다
+	public static byte[] withTransparentColor(byte[] rgbPng) {
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		out.write(rgbPng, 0, 33);
+		// RGB 투명색: 빨강, 초록, 파랑을 각각 2바이트로
+		writeChunk(out, "tRNS", new byte[] {0, 1, 0, 2, 0, 3});
+		out.write(rgbPng, 33, rgbPng.length - 33);
+		return out.toByteArray();
+	}
+
+	// 회색 + 투명도 PNG 파일 내용 (색 형식 4). 자바는 화소당 2바이트의 TYPE_CUSTOM 그림으로 펼친다
+	public static byte[] grayAlphaPng(int width, int height) {
+		ComponentColorModel colorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_GRAY),
+				true, false, Transparency.TRANSLUCENT, DataBuffer.TYPE_BYTE);
+		BufferedImage image = new BufferedImage(colorModel, colorModel.createCompatibleWritableRaster(width, height),
+				false, null);
+		return write(image, "png");
+	}
+
+	// 1비트 팔레트 PNG 파일 내용 (색 형식 3, 두 색). 자바는 TYPE_BYTE_BINARY(화소 8개를 1바이트에 담는 그림)로 펼친다
+	// 두 색을 회색이 아닌 색으로 둬야 팔레트 PNG로 저장된다 (검정과 흰색이면 회색 PNG로 저장된다)
+	public static byte[] onebitPalettePng(int width, int height) {
+		IndexColorModel colors = new IndexColorModel(1, 2,
+				new byte[] {(byte) 200, 10}, new byte[] {(byte) 150, 20}, new byte[] {90, (byte) 250});
+		return write(new BufferedImage(width, height, BufferedImage.TYPE_BYTE_BINARY, colors), "png");
+	}
+
+	// 8비트 팔레트 PNG 파일 내용 (색 형식 3, 256색). 자바는 TYPE_BYTE_INDEXED(화소당 1바이트)로 펼친다
+	public static byte[] palettePng(int width, int height) {
+		return write(new BufferedImage(width, height, BufferedImage.TYPE_BYTE_INDEXED), "png");
+	}
+
+	// 머리 부분(IHDR)만 있고 그림 데이터가 없는 PNG 파일 내용
+	// 큰 사진을 실제로 만들지 않고도 "머리만 읽고 거절하는지"를 시험할 수 있다. 펼치려 하면 그림 데이터가 없어서 실패한다.
+	// PNG 파일 = 서명 8바이트 + 조각(chunk)들. 조각 하나 = 길이 4 + 종류 4 + 내용 + CRC 4 (종류와 내용으로 계산한 검사 값)
+	// IHDR 내용 13바이트: 가로 4, 세로 4, 채널 하나의 비트 수 1, 색 형식 1, 압축, 필터, 인터레이스 각 1 (모두 0)
+	// 색 형식: 0 회색, 2 RGB, 3 팔레트, 4 회색 + 투명도, 6 RGB + 투명도
+	public static byte[] pngHeaderOnly(int width, int height, int bitDepth, int colorType) {
+		ByteBuffer header = ByteBuffer.allocate(13)
+				.putInt(width).putInt(height)
+				.put((byte) bitDepth).put((byte) colorType)
+				.put((byte) 0).put((byte) 0).put((byte) 0);
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		out.writeBytes(new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A});
+		writeChunk(out, "IHDR", header.array());
+		writeChunk(out, "IEND", new byte[0]);
+		return out.toByteArray();
+	}
+
+	private static void writeChunk(ByteArrayOutputStream out, String type, byte[] data) {
+		byte[] typeBytes = type.getBytes(StandardCharsets.US_ASCII);
+		CRC32 crc = new CRC32();
+		crc.update(typeBytes);
+		crc.update(data);
+		out.writeBytes(ByteBuffer.allocate(4).putInt(data.length).array());
+		out.writeBytes(typeBytes);
+		out.writeBytes(data);
+		out.writeBytes(ByteBuffer.allocate(4).putInt((int) crc.getValue()).array());
 	}
 
 	// JPEG에 EXIF 방향 정보(Orientation)를 넣는다. 휴대폰 카메라가 만드는 파일처럼 만들기 위해서다.
