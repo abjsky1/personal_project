@@ -56,7 +56,8 @@ public class FeedbackService {
 	// 삭제된 글의 제목, 닉네임은 FeedbackSummary가 화면으로 넘기지 않는다. 상세(getDetail)는 지금처럼 404다
 	@Transactional(readOnly = true)
 	public FeedbackPage getPage(int requestedPage) {
-		Page<Feedback> page = loadPage(Math.max(1, requestedPage));
+		// 0이나 음수는 1쪽, 아주 큰 쪽 번호는 DB가 읽을 수 있는 가장 큰 쪽으로 (PageNav.readablePage, JM-107)
+		Page<Feedback> page = loadPage(PageNav.readablePage(requestedPage, PAGE_SIZE));
 		// 범위를 넘는 쪽 번호면 마지막 쪽을 다시 읽는다
 		if (!page.hasContent() && page.getTotalPages() > 0) {
 			page = loadPage(page.getTotalPages());

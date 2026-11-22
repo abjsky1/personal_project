@@ -26,4 +26,13 @@ public record PageNav(int page, int totalPages, boolean hasPrev, boolean hasNext
 		}
 		return new PageNav(page, totalPages, page > 1, page < totalPages, pages);
 	}
+
+	// 주소의 ?page= 값을 DB에서 읽을 수 있는 쪽 번호로 맞춘다 (JM-107)
+	// 0이나 음수는 1쪽. 아주 큰 값(?page=2147483647)은 건너뛸 글 수(앞 쪽들의 글 수 = (쪽 번호 - 1) x pageSize)가 int를 넘어서
+	// Spring Data JPA가 예외를 던진다(500, ERROR 로그). 그래서 넘지 않는 가장 큰 쪽으로 줄인다.
+	// 그런 쪽에는 글이 없으므로, 부른 쪽(PostService.getFeed 등)이 범위를 넘는 쪽과 똑같이 마지막 쪽을 다시 읽는다
+	public static int readablePage(int requestedPage, int pageSize) {
+		int largest = Integer.MAX_VALUE / pageSize;
+		return Math.max(1, Math.min(requestedPage, largest));
+	}
 }
