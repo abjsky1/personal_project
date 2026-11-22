@@ -426,7 +426,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 **배포 단계에서 (S4~)**
 - **JSON 구조화 로그**: 설정 한 줄(`logging.structured.format.console=ecs`)로 켠다. 로컬은 읽기 쉬운 글자 형식 유지 → 켬 (S4-6, 2026-11-04)
 - **로그 저장, 검색** (S4-6): app 컨테이너 로그를 Docker의 `awslogs` 드라이버로 CloudWatch Logs에 보낸다 (`deploy/compose.yaml`). 보는 법: AWS 콘솔 → CloudWatch → 로그 그룹 `/macros/server` → 스트림 `macros-app-1`. 검색은 **Logs Insights**에서, 예: `fields @timestamp, log.level, message | filter traceId = "9dff6979" | sort @timestamp` (사용자가 알려 준 traceId로 그 요청의 로그만 본다). 서버에서 바로 볼 때는 여전히 `docker compose logs app`
-- **에러 알림**: Sentry 대신 **CloudWatch 지표 필터 + SNS 메일**로 단순화 (S4-6, 2026-11-04 만듦). 로그 그룹의 지표 필터 `app-error`(패턴 `{ $.log.level = "ERROR" }`, 지표 `macros/AppErrors`, 값 1, 기본값 0) → 경보 `macros-app-error`(5분 합계 > 0, 누락 데이터는 양호) → SNS 주제 `macros-alerts` → 메일. 앱에서 ERROR가 한 번이라도 찍히면 5분 안에 메일이 온다. 도구를 더 들이지 않는다
+- **에러 알림**: Sentry 대신 **CloudWatch 지표 필터 + SNS 메일**로 단순화 (S4-6, 2026-11-04 만듦). 로그 그룹의 지표 필터 `app-error`(패턴 `{ $.log.level = "ERROR" }`, 지표 `macros/AppErrors`, 값 1, 기본값 0) → 경보 `macros-app-error`(5분 합계 > 0, 누락 데이터는 양호) → SNS 주제 `macros-alerts` → 메일. 앱에서 ERROR가 한 번이라도 찍히면 5분 안에 메일이 온다. 도구를 더 들이지 않는다. ERROR는 서버 문제에만 남긴다: 사용자가 보낸 요청이 잘못된 경우(깨진 주소 값, 아주 큰 쪽 번호 등)는 400번대와 WARN 한 줄이라 메일이 가지 않는다 (2026-11-20, JM-107, [트러블슈팅](troubleshooting/2026-11-20-bad-request-values-alarm.md))
 - **사진 검토 알림** (2026-11-16, JM-80): 에러 알림과 같은 방식이다. 지표 필터 `photo-held`(패턴 `{ $.message = "Post held for review*" }`, 지표 `macros/PhotoHeld`, 값 1, 기본값 0) → 경보 `macros-photo-held`(5분 합계 1 이상, 누락 데이터는 양호) → SNS 주제 `macros-alerts` → 메일. AI가 사진을 가리면 운영자가 관리자 화면에서 검토한다 (16절)
 - **다운 알림**: 외부 업타임 모니터가 `/actuator/health`를 확인, 응답 없으면 알림 → UptimeRobot 무료, 5분 간격, 메일 (S4-6, 2026-11-04)
 - **백업**: RDS 자동 백업 (10절). 복구 연습은 하지 않기로 했다(18절). 절차는 16절에 적어 두고 필요할 때 그대로 따른다
@@ -919,6 +919,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 ## 변경 이력
 
 - 2026-11-20 — 사용자 흐름 기록: 사람이 받은 화면과 글 올리기를 방문 단위로 `page_views`에 남긴다. 들어온 곳(앱 종류, 다른 사이트의 도메인, utm, 링크 표시의 이름)은 방문의 첫 줄에만. 보는 SQL은 `user-flow.md`. 지우지 않고 모두 보관한다. 저장은 화면 응답 밖의 일꾼 스레드가 INSERT 한 문장으로 한다 (재어 보니 요청 안의 JPA 저장은 사람 화면을 p50 8 ms 늦췄다, 성능 문서 8절). PR 전 검토로 고침: 이 방문이 올리거나 쓰거나 고친 글의 번호 빼기(새 글로 넘어간 화면이 번호를 남기고 있었다), 관리자 화면만 쓰고 로그아웃한 세션도 빼기, 깨진 주소 값에도 첫 줄 남기기, utm 글자 거르기, 하루 2만 줄 상한 (JM-92, 운영자 요청, 8절, 9절, 12절, 16절, 17절, 18절)
+- 2026-11-20 — 잘못된 요청(깨진 주소 값과 form 값, 아주 큰 쪽 번호, 주소의 `jsp_precompile`, JSON을 받지 않는 요청의 API 오류, PUT과 PATCH와 DELETE의 깨진 form, 모양이 잘못된 업로드, form 칸 이름의 대괄호와 점, 비밀번호 칸이 없는 form)과 사용자가 끊은 연결이 500이나 ERROR(에러 알림 메일)가 되던 것을 400번대와 WARN으로 고쳤다. 에러 알림은 서버 문제에만 울린다 (11절, JM-107, JM-92 PR 전 검토에서 찾음)
 - 2026-11-19 — 트러블슈팅 기록을 세 가지(겪은 문제, 찾은 문제, 미리 막은 문제)로 나누고 목록(`troubleshooting/README.md`)을 만들었다. JM-91 측정에서 찾은 문제 다섯 가지와, 사진, 서버 자원, 보안, 관측 영역에서 미리 막은 것을 적었다. 고치기 전의 보안 약점은 비공개 기록에 먼저 둔다 (11절, JM-91, 운영자 요청)
 - 2026-11-18 — 성능 측정 문서 `performance.md`를 만들었다: 무엇을 어디서 재는지, 기준선(밖에서 잰 응답 시간, 요청마다 쿼리 수, AI 분석 시간), 측정의 다음 조각, 개선 후보. 11절에서 가리키고 16절 ③에 숫자 파일 이름을 더했다 (JM-91, 운영자 요청)
 - 2026-11-18 — 16절 IP 위치 파일: 받는 주소의 연월을 `$(date +%Y-%m)`가 서버 날짜로 채워, 매달 바꿀 때도 연월을 고치지 않고 같은 명령으로 받는다 (노션 운영 노트와 맞춤, JM-86)

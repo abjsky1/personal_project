@@ -1,6 +1,7 @@
 package backend.comment.model.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 // 상세 화면의 댓글 입력 form에서 보낸 값을 받는 클래스 (PostCreateForm과 같은 방식)
@@ -11,6 +12,8 @@ public class CommentCreateForm {
 	@Size(max = 20, message = "닉네임은 20자까지 쓸 수 있어요.")
 	private String nickname;
 
+	// @Size는 칸이 아예 없는 요청(null)을 통과시켜서, 비밀번호 없이 저장하다 DB 오류(500, ERROR)가 났다 → @NotNull로 막는다 (JM-107)
+	@NotNull(message = "비밀번호는 4~20자로 입력해 주세요.")
 	@Size(min = 4, max = 20, message = "비밀번호는 4~20자로 입력해 주세요.")
 	private String password;
 
