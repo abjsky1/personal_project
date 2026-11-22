@@ -99,10 +99,11 @@ public class PostController {
 		try {
 			postId = postService.create(form);
 		} catch (BusinessException e) {
-			// 사진 검사에 걸린 경우(진짜 사진이 아님, 해상도가 너무 큼)는 에러 화면 대신 글쓰기 화면의 사진 칸 아래에 메시지를 보여 준다.
+			// 사진 검사에 걸린 경우(진짜 사진이 아님, 해상도가 너무 큼, 펼치면 너무 큼)는 에러 화면 대신 글쓰기 화면의 사진 칸 아래에 메시지를 보여 준다.
 			// 그 밖의 에러는 그대로 던져서 에러 화면으로 보낸다.
 			ErrorCode code = e.getErrorCode();
-			if (code != ErrorCode.INVALID_IMAGE && code != ErrorCode.IMAGE_TOO_LARGE) {
+			if (code != ErrorCode.INVALID_IMAGE && code != ErrorCode.IMAGE_TOO_LARGE
+					&& code != ErrorCode.IMAGE_DECODED_TOO_LARGE) {
 				throw e;
 			}
 			bindingResult.rejectValue("image", code.name(), code.getMessage());

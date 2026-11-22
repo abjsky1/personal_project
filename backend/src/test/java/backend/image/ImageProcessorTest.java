@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
@@ -13,6 +16,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.Instant;
 
+import javax.imageio.IIOException;
 import javax.imageio.ImageIO;
 
 import org.junit.jupiter.api.Test;
@@ -24,8 +28,8 @@ import backend.common.error.ErrorCode;
 // ImageProcessor 하나만 떼어서 검사하는 테스트 (단위 테스트 — Spring, DB 없이 빠르게 돈다)
 class ImageProcessorTest {
 
-	// 실제 설정과 같은 한도(5,000만 화소)
-	private final ImageProcessor processor = new ImageProcessor(50_000_000);
+	// 실제 설정과 같은 한도 (5,000만 화소, 펼친 크기 1억 5천만 바이트)
+	private final ImageProcessor processor = new ImageProcessor(50_000_000, 150_000_000);
 
 	@Test
 	void 큰_사진은_긴_변을_1280으로_줄이고_썸네일은_600_정사각형으로_만든다() throws IOException {
@@ -188,12 +192,141 @@ class ImageProcessorTest {
 	@Test
 	void 화소_수가_한도를_넘으면_IMAGE_TOO_LARGE로_거절한다() {
 		// 한도를 1만 화소로 낮춘 처리기로, 2만 화소(200 × 100) 사진을 올린다.
-		ImageProcessor strict = new ImageProcessor(10_000);
+		ImageProcessor strict = new ImageProcessor(10_000, 150_000_000);
 
 		assertThatThrownBy(() -> strict.process(upload(TestImages.jpeg(200, 100))))
 				.isInstanceOf(BusinessException.class)
 				.extracting(e -> ((BusinessException) e).getErrorCode())
 				.isEqualTo(ErrorCode.IMAGE_TOO_LARGE);
+	}
+
+	// ---- 펼친 크기 검사 (JM-105) ----
+
+	@Test
+	void 화소는_한도_안이어도_펼치면_너무_큰_PNG는_펼치지_않고_거절한다() throws IOException {
+		// 7071 × 7071 = 4,999만 화소라 화소 한도는 지나가지만, 투명 PNG는 화소당 4바이트라 펼치면 약 2억 바이트다.
+		// 머리만 있고 그림 데이터가 없는 파일이라, 펼치려 했다면 INVALID_IMAGE가 났을 것이다.
+		ImageProcessor watched = spy(processor);
+		byte[] png = TestImages.pngHeaderOnly(7071, 7071, 8, 6);
+
+		assertThatThrownBy(() -> watched.process(upload(png)))
+				.isInstanceOf(BusinessException.class)
+				.extracting(e -> ((BusinessException) e).getErrorCode())
+				.isEqualTo(ErrorCode.IMAGE_DECODED_TOO_LARGE);
+		// 펼치기(readUpright)는 부르지도 않았다
+		verify(watched, never()).readUpright(any(), anyInt());
+	}
+
+	@Test
+	void 화소_수가_같아도_JPEG는_화소당_3바이트_투명_PNG는_4바이트로_센다() throws IOException {
+		// 200 × 200 = 4만 화소. 펼친 크기가 JPEG는 12만 바이트, 투명 PNG는 16만 바이트 → 한도를 15만 바이트로 낮춰 둘을 가른다
+		ImageProcessor strict = new ImageProcessor(50_000_000, 150_000);
+
+		assertSize(strict.process(upload(TestImages.jpeg(200, 200))).main(), 200, 200);
+		assertThatThrownBy(() -> strict.process(upload(TestImages.transparentPng(200, 200))))
+				.isInstanceOf(BusinessException.class)
+				.extracting(e -> ((BusinessException) e).getErrorCode())
+				.isEqualTo(ErrorCode.IMAGE_DECODED_TOO_LARGE);
+	}
+
+	@Test
+	void 투명색이_있는_RGB_PNG는_자바가_펼치는_대로_화소당_4바이트로_센다() throws IOException {
+		// 100 × 100 = 1만 화소. 투명색(tRNS)이 없으면 3바이트(3만 바이트), 있으면 4바이트(4만 바이트)로 펼쳐진다 → 한도 3만 5천 바이트
+		// 펼치는 형식이 아니라 파일의 원래 형식(getRawImageType, RGB 3바이트)으로 세면 이 테스트가 실패한다
+		ImageProcessor strict = new ImageProcessor(50_000_000, 35_000);
+		byte[] rgb = TestImages.rgbPng(100, 100);
+
+		assertSize(strict.process(upload(rgb)).main(), 100, 100);
+		assertThatThrownBy(() -> strict.process(upload(TestImages.withTransparentColor(rgb))))
+				.isInstanceOf(BusinessException.class)
+				.extracting(e -> ((BusinessException) e).getErrorCode())
+				.isEqualTo(ErrorCode.IMAGE_DECODED_TOO_LARGE);
+	}
+
+	@Test
+	void 자바_그리기가_바로_줄이지_못하는_형식은_복사본_몫_8바이트를_더_센다() throws IOException {
+		// 100 × 100 = 1만 화소, 한도 5만 바이트
+		ImageProcessor strict = new ImageProcessor(50_000_000, 50_000);
+
+		// 바로 줄이는 형식: 투명 PNG 4바이트(4만), 8비트 팔레트 PNG 1바이트(1만) → 받는다
+		assertSize(strict.process(upload(TestImages.transparentPng(100, 100))).main(), 100, 100);
+		assertSize(strict.process(upload(TestImages.palettePng(100, 100))).main(), 100, 100);
+		// 바로 줄이지 못하는 형식: 16비트 투명 PNG 8 + 8(16만), 회색+투명 PNG 2 + 8(10만), 1비트 팔레트 PNG 1 + 8(9만) → 거절
+		for (byte[] png : new byte[][] {TestImages.transparentPng16(100, 100), TestImages.grayAlphaPng(100, 100),
+				TestImages.onebitPalettePng(100, 100)}) {
+			assertThatThrownBy(() -> strict.process(upload(png)))
+					.isInstanceOf(BusinessException.class)
+					.extracting(e -> ((BusinessException) e).getErrorCode())
+					.isEqualTo(ErrorCode.IMAGE_DECODED_TOO_LARGE);
+		}
+	}
+
+	@Test
+	void 한_변이_65535보다_긴_사진은_펼치지_않고_거절한다() {
+		// 65,536 × 1 = 화소 6만 남짓이라 화소와 펼친 크기는 한도 안이지만, 한 줄이 너무 길다
+		assertThatThrownBy(() -> processor.process(upload(TestImages.pngHeaderOnly(65_536, 1, 8, 6))))
+				.isInstanceOf(BusinessException.class)
+				.extracting(e -> ((BusinessException) e).getErrorCode())
+				.isEqualTo(ErrorCode.IMAGE_DECODED_TOO_LARGE);
+		// 65,535까지는 한 변 검사를 지나간다 (그림 데이터가 없는 파일이라 펼치는 단계에서 INVALID_IMAGE)
+		assertThatThrownBy(() -> processor.process(upload(TestImages.pngHeaderOnly(65_535, 1, 8, 6))))
+				.isInstanceOf(BusinessException.class)
+				.extracting(e -> ((BusinessException) e).getErrorCode())
+				.isEqualTo(ErrorCode.INVALID_IMAGE);
+	}
+
+	@Test
+	void 깨진_PNG는_색_형식과_상관없이_INVALID_IMAGE로_거절한다() {
+		// 머리만 있고 그림 데이터가 없는 PNG. 회색(0), RGB(2), 팔레트(3)는 형식을 정하려고 뒤의 조각까지 읽다가
+		// IOException이 아닌 예외(IndexOutOfBoundsException)가 난다. 그대로 새면 에러 화면(500)이 된다
+		for (int colorType : new int[] {0, 2, 3, 4, 6}) {
+			byte[] png = TestImages.pngHeaderOnly(100, 100, 8, colorType);
+
+			assertThatThrownBy(() -> processor.process(upload(png)))
+					.as("색 형식 %d", colorType)
+					.isInstanceOf(BusinessException.class)
+					.extracting(e -> ((BusinessException) e).getErrorCode())
+					.isEqualTo(ErrorCode.INVALID_IMAGE);
+		}
+	}
+
+	@Test
+	void PNG를_펼치다_메모리가_모자라면_읽을_수_없는_사진으로_바꾸지_않고_그대로_던진다() throws IOException {
+		// 자바의 PNG 읽기는 펼치다 메모리가 모자라면 OutOfMemoryError를 IIOException으로 감싸서 던진다 (JM-105에서 찾음).
+		// 진짜로 메모리를 다 쓰게 하는 대신, 펼치기(readUpright)가 그 예외를 던지게 바꿔 둔다.
+		ImageProcessor watched = spy(processor);
+		doThrow(new IIOException("Caught exception during read: ", new OutOfMemoryError("Java heap space")))
+				.when(watched).readUpright(any(), anyInt());
+
+		// 400(INVALID_IMAGE)이 아니라, JPEG에서 메모리가 모자랄 때처럼 OutOfMemoryError 그대로 나간다
+		assertThatThrownBy(() -> watched.process(upload(TestImages.transparentPng(100, 100))))
+				.isInstanceOf(OutOfMemoryError.class);
+	}
+
+	// ---- 아주 넓은 사진을 줄여 읽는 목표 (JM-105) ----
+
+	@Test
+	void 긴_변이_10240보다_짧으면_목표는_2560이고_그_이상이면_긴_변을_2의_거듭제곱으로_나눈_값이다() {
+		// 휴대폰 사진(긴 변 4032 ~ 8160)은 지금처럼 2560
+		assertThat(ImageProcessor.readTarget(4032)).isEqualTo(2560);
+		assertThat(ImageProcessor.readTarget(8160)).isEqualTo(2560);
+		assertThat(ImageProcessor.readTarget(10239)).isEqualTo(2560);
+		// 10240 이상 20480 미만은 4로 나눠 올린다: 10240 → 2560, 10241 → 2561 (2560.25), 12000 → 3000, 20479 → 5120
+		assertThat(ImageProcessor.readTarget(10240)).isEqualTo(2560);
+		assertThat(ImageProcessor.readTarget(10241)).isEqualTo(2561);
+		assertThat(ImageProcessor.readTarget(12000)).isEqualTo(3000);
+		assertThat(ImageProcessor.readTarget(20479)).isEqualTo(5120);
+		// 그보다 길면 8, 16으로 나눈다: 20481 → 2561 (2560.125), 50000 → 3125
+		assertThat(ImageProcessor.readTarget(20481)).isEqualTo(2561);
+		assertThat(ImageProcessor.readTarget(50000)).isEqualTo(3125);
+	}
+
+	@Test
+	void 긴_변이_10240_이상인_넓은_사진은_맞춘_목표로_줄여_읽는다() throws IOException {
+		// 긴 변 10241 → 목표 2561. 2560으로 읽으면 Thumbnailator가 원본만 한 임시 그림을 한 장 더 만든다
+		BufferedImage upright = processor.readUpright(TestImages.jpeg(10241, 100), 10241);
+
+		assertThat(upright.getWidth()).isEqualTo(2561);
 	}
 
 	private MockMultipartFile upload(byte[] data) {
