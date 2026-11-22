@@ -16,6 +16,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
@@ -37,6 +40,7 @@ import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
 import backend.post.model.repository.PostRepository;
 import backend.stats.model.dto.AdminStatsResponse;
+import backend.visit.web.PageFlowInterceptor;
 import jakarta.servlet.http.Cookie;
 
 // 관리자 화면(/admin)의 기기 등록, 로그인(등록한 브라우저와 비밀번호), 글 목록과 삭제를 확인하는 테스트 (JM-82)
@@ -64,6 +68,12 @@ class AdminPageTest {
 
 	@Autowired
 	private FoodAnalysisRepository foodAnalysisRepository;
+
+	@Autowired
+	private PageFlowInterceptor pageFlowInterceptor;
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	// 개발 DB에 등록해 둔 기기가 있어도 테스트마다 비우고 시작한다 (테스트가 끝나면 되돌아간다)
 	@BeforeEach
@@ -250,6 +260,34 @@ class AdminPageTest {
 				.andExpect(redirectedUrl("/admin/login"));
 		mockMvc.perform(get("/admin/posts").session(session))
 				.andExpect(redirectedUrl("/admin/login"));
+	}
+
+	// 관리자로 들어온 브라우저가 본 사용자 화면은 사용자 흐름(JM-92)에서 뺀다. 실제 로그인과 로그아웃으로:
+	// 관리자 화면만 쓰고 로그아웃한 뒤 같은 브라우저(세션)로 사용자 화면을 봐도 그 세션이 끝날 때까지 줄이 남지 않는다
+	@Test
+	void 관리자로_들어온_세션은_로그아웃한_뒤에도_사용자_흐름에_남지_않는다() throws Exception {
+		MockHttpSession session = loggedIn("10.2.0.11");
+		assertThat(AdminAuthService.isAdminSession(session)).isTrue();
+		assertThat(AdminAuthService.isAdminSession(new MockHttpSession())).isFalse();
+
+		mockMvc.perform(post("/admin/logout").session(session).param("_csrf", (String) session.getAttribute("admin.csrf")))
+				.andExpect(redirectedUrl("/admin/login"));
+		assertThat(AdminAuthService.isAdminSession(session)).isTrue();
+
+		long before = pageViews();
+		MockHttpServletRequest feed = new MockHttpServletRequest("GET", "/");
+		feed.addHeader("User-Agent", LAPTOP);
+		feed.setSession(session);
+		MockHttpServletResponse page = new MockHttpServletResponse();
+		page.setContentType("text/html;charset=UTF-8");
+		pageFlowInterceptor.afterCompletion(feed, page, new Object(), null);
+		assertThat(pageViews()).isEqualTo(before);
+	}
+
+	// 이 테스트의 트랜잭션에서 보이는 사용자 흐름 줄 수 (테스트 설정은 요청 스레드에서 바로 저장한다)
+	private long pageViews() {
+		Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM page_views", Long.class);
+		return count == null ? 0 : count;
 	}
 
 	// 처음 등록을 거쳐 노트북 브라우저의 기기 쿠키를 받는다

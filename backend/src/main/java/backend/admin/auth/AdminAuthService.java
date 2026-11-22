@@ -43,6 +43,9 @@ public class AdminAuthService {
 	static final String UNTIL = "admin.until";
 	static final String CSRF = "admin.csrf";
 	static final String PASSWORD_OK_UNTIL = "admin.passwordOkUntil";
+	// 관리자로 들어온 적이 있는 세션의 표시 (사용자 흐름 JM-92). 로그아웃해도 지우지 않아서, 관리자 화면만 쓰고 나간 뒤
+	// 같은 브라우저로 본 사용자 화면도 그 세션이 끝날 때까지 흐름에서 빠진다 (검토에서 찾음: 예전에는 로그아웃하면 다시 남았다)
+	public static final String SEEN = "admin.seen";
 
 	private static final int MAX_FAILURES = 5;
 	private static final Duration FAILURE_WINDOW = Duration.ofMinutes(15);
@@ -173,6 +176,12 @@ public class AdminAuthService {
 		return until != null && Instant.now().isBefore(until);
 	}
 
+	// 이 세션으로 관리자 화면에 들어온 적이 있는지. 2시간이 지나거나 로그아웃해도 그 세션이 끝날 때까지는 그렇다고 답한다 (SEEN).
+	// 사용자 흐름(JM-92)이 운영자가 같은 브라우저로 본 사용자 화면을 빼는 데 쓴다. 지금 들어와 있는지는 isLoggedIn이 따로 본다
+	public static boolean isAdminSession(HttpSession session) {
+		return session != null && session.getAttribute(SEEN) != null;
+	}
+
 	// 관리자 화면의 폼마다 숨겨 두는 값 (CSRF 방지). 다른 사이트가 몰래 보낸 요청에는 이 값이 없어서 막힌다
 	public String csrfToken(HttpSession session) {
 		return session == null ? null : (String) session.getAttribute(CSRF);
@@ -216,6 +225,7 @@ public class AdminAuthService {
 		request.changeSessionId();
 		HttpSession session = request.getSession();
 		session.setAttribute(UNTIL, Instant.now().plus(sessionLength));
+		session.setAttribute(SEEN, Boolean.TRUE);
 		byte[] token = new byte[24];
 		RANDOM.nextBytes(token);
 		session.setAttribute(CSRF, HexFormat.of().formatHex(token));
