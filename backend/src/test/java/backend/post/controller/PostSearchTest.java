@@ -91,6 +91,18 @@ class PostSearchTest {
 		assertThat(idsOf(search("현미밥" + mark))).containsExactly(post.getId());
 	}
 
+	// 띄어쓰기는 보지 않는다 (PR 전 검토): AI는 "치즈 떡볶이"처럼 띄어 쓰기도, 붙여 쓰기도 한다. 닉네임도 같다
+	@Test
+	void 띄어쓰기가_달라도_찾는다() throws Exception {
+		Post food = savePost("테스터", null);
+		saveDone(food, "치즈 떡볶이" + mark);
+		Post nick = savePost("먹는 사람" + mark, null);
+
+		assertThat(idsOf(search("치즈떡볶이" + mark))).containsExactly(food.getId());
+		assertThat(idsOf(search("치즈 떡 볶이" + mark))).containsExactly(food.getId());
+		assertThat(idsOf(search("먹는사람" + mark))).containsExactly(nick.getId());
+	}
+
 	// 운영자 결정 (11-23): 메모는 찾지 않는다. 음식 이름 칸만 보므로 JSON의 칸 이름(kcal)이나 확정 방식(TYPED)으로도 걸리지 않는다
 	@Test
 	void 메모와_JSON의_칸_이름으로는_찾지_않는다() throws Exception {
@@ -174,17 +186,23 @@ class PostSearchTest {
 				.andExpect(model().attribute("total", 1L));
 	}
 
+	// NBSP(U+00A0)와 전각 빈칸(U+3000)도 빈칸으로 본다. NBSP 하나로 빈칸이 든 이름이 모두 나오던 것 (PR 전 검토)
 	@Test
 	void 검색어가_없거나_빈칸뿐이면_피드로_보낸다() throws Exception {
 		mockMvc.perform(get("/search")).andExpect(redirectedUrl("/"));
 		mockMvc.perform(get("/search").param("q", "   ")).andExpect(redirectedUrl("/"));
+		mockMvc.perform(get("/search").param("q", " ")).andExpect(redirectedUrl("/"));
+		mockMvc.perform(get("/search").param("q", "　  ")).andExpect(redirectedUrl("/"));
 	}
 
 	@Test
 	void 검색어는_앞뒤_빈칸을_떼고_30자까지만_쓴다() {
 		assertThat(PostService.normalizeQuery(null)).isEmpty();
 		assertThat(PostService.normalizeQuery("  라면 ")).isEqualTo("라면");
+		assertThat(PostService.normalizeQuery(" 라면 국물 ")).isEqualTo("라면 국물");
 		assertThat(PostService.normalizeQuery("가".repeat(40))).hasSize(30);
+		// 30자에서 자른 끝이 빈칸이면 뗀다 (29자 + 빈칸 + 글자 → 29자)
+		assertThat(PostService.normalizeQuery("가".repeat(29) + " 나")).isEqualTo("가".repeat(29));
 		// 이모지는 두 칸(char 2개)을 쓰지만 한 글자로 센다. 반만 잘리지 않는다
 		String emoji = "🍜";
 		assertThat(PostService.normalizeQuery(emoji.repeat(31))).isEqualTo(emoji.repeat(30));

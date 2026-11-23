@@ -183,21 +183,25 @@ public class PostService {
 
 	// 주소의 ?q= 값을 검색어로 다듬는다: 앞뒤 빈칸을 떼고, 30자가 넘으면 30자까지만 (닉네임은 20자, 직접 적는 음식 이름은 30자까지라 그보다 길 일이 없다).
 	// 없거나 빈칸뿐이면 빈 글자 → Controller가 피드로 보낸다
+	// \p{Z}: 빈칸 종류(NBSP, 전각 빈칸 등)를 모두 보통 빈칸으로 바꾼 뒤 뗀다. strip()은 NBSP를 빈칸으로 보지 않아서,
+	//   NBSP 하나만 보내면 빈칸이 든 이름이 모두 나왔다 (JM-52 PR 전 검토)
 	// codePoints: 글자 수를 셀 때 이모지처럼 두 칸(char 2개)을 쓰는 글자도 한 글자로 센다 (반만 잘려 깨지지 않게)
+	// 30자에서 자른 끝이 빈칸이면 한 번 더 뗀다
 	public static String normalizeQuery(String raw) {
 		if (raw == null) {
 			return "";
 		}
-		String stripped = raw.strip();
+		String stripped = raw.replaceAll("\\p{Z}", " ").strip();
 		return stripped.codePoints().limit(MAX_QUERY_LENGTH)
-				.collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append).toString();
+				.collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append).toString().strip();
 	}
 
 	// LIKE에 넣을 모양: 앞뒤에 %(아무 글자나 몇 개든)를 붙여 "들어 있으면" 찾는다.
+	// 띄어쓰기는 보지 않는다: 검색어의 빈칸을 빼고, SQL도 이름의 빈칸을 빼고 견준다 ("치즈떡볶이"로 "치즈 떡볶이"를 찾는다)
 	// 검색어 안의 %와 _는 LIKE에서 "아무 글자"라는 뜻이라, 앞에 !를 붙여 그 글자 자체로 찾게 한다 (SQL의 ESCAPE '!').
 	// !도 그대로 찾으려면 !!로 적는다. 하지 않으면 "%"만 쳐도 모든 글이 나온다
 	static String likePattern(String query) {
-		String escaped = query.replace("!", "!!").replace("%", "!%").replace("_", "!_");
+		String escaped = query.replace(" ", "").replace("!", "!!").replace("%", "!%").replace("_", "!_");
 		return "%" + escaped + "%";
 	}
 

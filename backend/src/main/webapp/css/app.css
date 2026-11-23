@@ -1294,10 +1294,13 @@ a.notice-row:hover {
 }
 
 /* ---- 검색 칸 (JM-52): PC는 메뉴 링크와 같은 줄 오른쪽 끝, 휴대폰은 메뉴 링크 아래 한 줄 전체 ---- */
+/* min-width: 0: 검색 칸의 최소 폭(입력칸 220px + 버튼)이 오른쪽 칸을 왼쪽 칸보다 넓히지 않게 한다.
+   넓히면 양옆 칸의 폭이 달라져 한 줄 소개가 가운데에서 벗어난다 (PC 폭 769 ~ 880px, JM-52 PR 전 검토). 대신 입력칸이 줄어든다 */
 .top-menu .search {
 	grid-row: 2;
 	grid-column: 3;
 	justify-self: end;
+	min-width: 0;
 }
 
 /* align-items: stretch(기본값)로 입력칸과 버튼의 높이를 같게 한다 */
@@ -1331,10 +1334,12 @@ a.notice-row:hover {
 	white-space: nowrap;
 }
 
-/* 검색 결과 줄: '라면' 검색 결과 3개  전체 보기 */
+/* 검색 결과 줄: '라면' 검색 결과 3개  전체 보기
+   overflow-wrap: anywhere: 띄어쓰기 없는 긴 영어나 숫자 검색어도 줄을 바꾼다. 없으면 휴대폰에서 화면이 옆으로 밀린다 (JM-52 PR 전 검토) */
 .search-result {
 	margin: 0 0 16px;
 	color: #444;
+	overflow-wrap: anywhere;
 }
 
 .search-result a {
