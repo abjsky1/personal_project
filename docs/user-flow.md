@@ -12,6 +12,7 @@
 | screen | 주소 | target |
 |---|---|---|
 | `FEED` | `/`, `/?page=2` | 요청한 쪽 번호 (없거나 0 이하면 1. 마지막 쪽보다 큰 번호는 화면이 마지막 쪽을 보여 줘도 요청한 번호) |
+| `SEARCH` | `/search?q=라면`, `/search?q=라면&page=2` (2026-11-23, JM-52) | 요청한 쪽 번호 (`FEED`와 같은 규칙). 검색어는 남기지 않는다 |
 | `POST` | `/posts/{번호}` | 글 번호 |
 | `POST_NEW` | `/posts/new` | |
 | `UPLOAD` | `POST /posts`가 새 글로 넘어감 (302) | 비움 |
@@ -31,7 +32,7 @@
 
 ## 2. 남기지 않는 것, 빼는 것
 
-- **남기지 않는다**: IP, 세션 번호(JSESSIONID: 새면 남의 세션을 빌려 쓸 수 있다), User-Agent 전체, 주소 전체(다른 사이트는 도메인만, 검색어와 경로는 버린다. IP 주소와 localhost 같은 이름도 버린다), 이 방문이 쓰거나 고친 글의 번호, 링크 표시의 값
+- **남기지 않는다**: IP, 세션 번호(JSESSIONID: 새면 남의 세션을 빌려 쓸 수 있다), User-Agent 전체, 주소 전체(다른 사이트는 도메인만, 검색어와 경로는 버린다. IP 주소와 localhost 같은 이름도 버린다), 이 방문이 쓰거나 고친 글의 번호, 링크 표시의 값, 우리 검색 칸에 친 검색어(`SEARCH` 줄은 쪽 번호만, 2026-11-23 JM-52)
 - **utm 값은 정한 글자만**: 글자(한글 포함), 숫자, 빈칸, `._~+-`만 남기고 나머지(`<`, `>`, `"`, `=`, `@`, 보이지 않는 글자, 줄바꿈)는 지운 뒤 50자까지. 그래도 누구나 주소에 넣을 수 있는 값이라, 화면에 띄울 때는 반드시 `c:out`(JSP)이나 글자로만(자바스크립트 `textContent`) 넣고, 표 파일(CSV)로 내보낼 때는 맨 앞에 `'`를 붙인다
 - **시각으로는 이을 수 있다**: 줄마다 시각이 있어서, 올리기 줄과 그 무렵 쓴 글이나 댓글의 작성 시각을 맞춰 보면 하루 10건쯤인 지금은 누가 쓴 방문인지 짐작할 수 있다. 시각을 흐리게 하면 화면 사이의 시간을 볼 수 없어서 두고, 대신 **흐름 기록을 글쓴이를 찾는 데 쓰지 않는다** (운영 규칙). utm 링크를 만들 때도 사람 이름을 넣지 않는다 (모두 보관하므로)
 - **쿠키를 새로 만들지 않는다**. 같은 사람이 다른 날이나 다른 기기로 오면 다른 방문이다 (사람 수가 아니라 방문 수)
@@ -52,7 +53,7 @@ SQL
 ```
 
 - 기간은 SQL의 `INTERVAL 7 DAY`를 바꾼다. 시각은 UTC로 저장되어 있어 `UTC_TIMESTAMP()`와 견준다. 한국 시간으로 보려면 `viewed_at + INTERVAL 9 HOUR`
-- 기간은 "그 기간에 시작한 방문"으로 센다 (방문의 첫 줄이 기간 안). 다섯 SQL 모두 같은 기준이다
+- 기간은 "그 기간에 시작한 방문"으로 센다 (방문의 첫 줄이 기간 안). 4절의 SQL 모두 같은 기준이다
 - `--init-command`로 이 접속을 읽기 전용으로 연다: 실수로 바꾸는 SQL을 붙여도 DB가 거절한다
 - 배포한 뒤 한 번, 표와 인덱스가 생겼는지 본다: 위 상자에 `SHOW INDEX FROM page_views;`를 넣으면 `PRIMARY`, `uk_page_views_visit_seq`, `idx_page_views_viewed_at`이 보여야 한다
 
@@ -95,7 +96,7 @@ LIMIT 20;
 
 ### 4.3 자주 가는 이동 (바로 앞 화면 → 화면)
 
-같은 화면끼리(`FEED → FEED`)는 쪽 넘기기, `POST → POST`는 댓글을 달거나 확정한 뒤 다시 본 글이 대부분이다.
+같은 화면끼리(`FEED → FEED`)는 쪽 넘기기, `SEARCH → SEARCH`는 검색 결과의 쪽 넘기기나 다시 찾기, `POST → POST`는 댓글을 달거나 확정한 뒤 다시 본 글이 대부분이다.
 
 ```sql
 WITH visits AS (
@@ -144,13 +145,29 @@ SELECT COUNT(DISTINCT p.visit_key) AS visits,
 FROM page_views p JOIN visits v ON v.visit_key = p.visit_key;
 ```
 
+### 4.6 검색을 쓴 방문 (2026-11-23, JM-52)
+
+검색을 쓴 방문 수, 검색 결과 화면 수(쪽 넘기기 포함), 검색 결과에서 연 글 수. 검색어와 결과 수는 남기지 않아서 "찾은 글이 없던 검색"은 여기서 알 수 없다.
+
+```sql
+WITH visits AS (
+  SELECT visit_key FROM page_views
+  WHERE seq = 1 AND viewed_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+)
+SELECT COUNT(DISTINCT p.visit_key) AS visits,
+       COUNT(DISTINCT CASE WHEN p.screen = 'SEARCH' THEN p.visit_key END) AS searched,
+       SUM(p.screen = 'SEARCH') AS search_pages,
+       SUM(p.screen = 'POST' AND p.prev_screen = 'SEARCH') AS posts_from_search
+FROM page_views p JOIN visits v ON v.visit_key = p.visit_key;
+```
+
 ## 5. 한계
 
 - **뒤로 가기**: 브라우저가 앞 화면을 저장해 두었다가 다시 보여 주면 서버에 요청이 오지 않아 줄이 없다. 그래서 순서(`seq`)만으로 이으면 "글 → 피드"가 빠질 수 있고, 바로 앞 화면(`prev_screen`)은 실제로 누른 화면을 보여 준다
 - **새로고침**도 한 줄로 남는다 (구별하지 않는다)
 - **바로 앞 화면과 다른 사이트의 도메인**은 브라우저가 Referer를 보낼 때만 안다. 다른 사이트로 넘어올 때 브라우저는 보통 도메인까지만 보낸다. 카카오톡 대화방의 링크는 출처를 보내지 않아 앱 종류(`KAKAOTALK`)로만 안다
 - **방문 = 세션**: 30분 넘게 쉬었다 오면 새 방문이다 (4.1의 `continued`). 세션은 서버 메모리에 있어서 **배포할 때마다 모든 세션이 끊긴다**: 그때 보고 있던 방문은 둘로 나뉜다 (방문당 화면 수가 줄고, 글쓰기와 올리기가 다른 방문으로 갈 수 있다). 1주일 숫자를 남길 때 그 사이의 배포 시각을 함께 적는다
-- **첫 줄이 없는 방문**: 줄이 가득 차거나 저장이 실패하면 그 줄의 순서 번호만 쓰이고 줄은 없다. 첫 줄(`seq = 1`)을 잃은 방문은 4.1, 4.2, 4.4, 4.5에서 빠진다. 1주일 숫자를 남길 때 몇 개인지 함께 본다:
+- **첫 줄이 없는 방문**: 줄이 가득 차거나 저장이 실패하면 그 줄의 순서 번호만 쓰이고 줄은 없다. 첫 줄(`seq = 1`)을 잃은 방문은 4.1, 4.2, 4.4, 4.5, 4.6에서 빠진다. 1주일 숫자를 남길 때 몇 개인지 함께 본다:
 
 ```sql
 SELECT COUNT(*) AS visits_without_first_row
