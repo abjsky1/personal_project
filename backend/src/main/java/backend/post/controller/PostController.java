@@ -1,6 +1,8 @@
 package backend.post.controller;
 
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -29,6 +31,7 @@ import backend.common.error.ErrorCode;
 import backend.common.web.Visitors;
 import backend.post.model.dto.PostCreateForm;
 import backend.post.model.dto.PostMemoForm;
+import backend.post.model.dto.SearchResult;
 import backend.post.service.PostService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -70,6 +73,24 @@ public class PostController {
 	@GetMapping("/")
 	public String list(@RequestParam(defaultValue = "1") int page, Model model) {
 		model.addAttribute("feed", postService.getFeed(page));
+		return "posts/list";
+	}
+
+	// 검색 (JM-52): 닉네임이나 음식 이름으로 찾은 글. 화면은 피드와 같은 posts/list.jsp를 쓰고, query가 있으면 검색 결과로 그린다.
+	// 주소를 피드(/)와 나눈 이유: 방문 기록(JM-92)과 nginx 기록에서 검색을 피드와 따로 셀 수 있다 (화면 이름 SEARCH)
+	// - 검색어가 없거나 빈칸뿐이면 피드로 보낸다 (검색 칸을 비운 채 찾기를 누른 경우)
+	// - searchParam: 쪽 번호 줄의 주소에 넣을 검색어. URL 글자로 바꿔 둔다 (라면 → %EB%9D%BC%EB%A9%B4, 빈칸 → +)
+	@GetMapping("/search")
+	public String search(@RequestParam(required = false) String q, @RequestParam(defaultValue = "1") int page, Model model) {
+		String query = PostService.normalizeQuery(q);
+		if (query.isEmpty()) {
+			return "redirect:/";
+		}
+		SearchResult result = postService.search(query, page);
+		model.addAttribute("feed", result.feed());
+		model.addAttribute("total", result.total());
+		model.addAttribute("query", query);
+		model.addAttribute("searchParam", URLEncoder.encode(query, StandardCharsets.UTF_8));
 		return "posts/list";
 	}
 

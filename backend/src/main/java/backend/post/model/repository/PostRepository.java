@@ -28,6 +28,41 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	// 처음엔 "더 보기" 커서 방식(id < 마지막 번호)이었는데, 화면에 "이전"이 없어 앞 쪽으로 돌아가기 어렵다는 의견으로 바꿨다.
 	Page<Post> findByStatus(PostStatus status, Pageable pageable);
 
+	// ---- 검색 (JM-52): 닉네임이나 음식 이름에 검색어가 들어 있는 글 ----
+	// 피드백 6번과 11번의 요청. 메모는 찾지 않는다 (운영자 결정, 11-23).
+	//
+	// 음식 이름은 posts가 아니라 food_analyses에 JSON 글자로 있다: items(AI의 첫 답)와 confirmed_items(글쓴이가 확정한 값, JM-74).
+	//   [{"name":"라면","amountG":500.0,"kcal":...}, ...]
+	// 그래서 JPQL이 아니라 MySQL의 SQL을 직접 쓴다 (nativeQuery). JSON_TABLE이 JSON 배열을 "음식 하나 = 한 줄"의 표로 펼쳐 주고,
+	// 그 표의 name 칸에서 찾는다. 글자 전체에 LIKE를 걸면 "kcal", "TYPED" 같은 칸 이름과 값까지 걸리므로 이름 칸만 본다.
+	// - JSON_MERGE_PRESERVE: 두 배열을 하나로 잇는다 (AI의 이름과 확정한 이름을 한 번에 본다)
+	// - CASE WHEN JSON_VALID: 값이 없거나(분석 중, 실패, 확정 전) 깨진 글자면 빈 배열로 본다. 깨진 글자를 JSON_TABLE에 넣으면 쿼리 전체가 실패한다
+	// - CHARACTER SET, COLLATE: 펼친 칸의 글자 규칙을 직접 정한다. 적지 않으면 접속의 규칙을 따라서(로컬 mysql 명령은 latin1) 한글이 깨질 수 있다.
+	//   utf8mb4_0900_ai_ci는 posts.nickname과 같은 규칙이라 대소문자를 가리지 않는다 (pizza로 Pizza를 찾는다)
+	// - ESCAPE '!': 검색어의 %와 _는 "아무 글자"가 아니라 그 글자 자체로 찾는다. PostService.likePattern이 앞에 !를 붙여 둔다
+	// 글이 수백 개인 지금은 글마다 JSON을 펼쳐도 빠르다. 숫자는 docs/performance.md, 글이 많아지면 음식 이름을 따로 칸에 두는 쪽으로 (기획서 18절)
+	String SEARCH_WHERE = """
+			from posts p
+			where p.status = :status
+			  and (p.nickname like :pattern escape '!'
+			       or exists (
+			         select 1
+			         from food_analyses a,
+			              json_table(
+			                json_merge_preserve(
+			                  case when json_valid(a.items) then a.items else '[]' end,
+			                  case when json_valid(a.confirmed_items) then a.confirmed_items else '[]' end),
+			                '$[*]' columns (name varchar(500) character set utf8mb4 collate utf8mb4_0900_ai_ci path '$.name')) f
+			         where a.post_id = p.id and f.name like :pattern escape '!'))
+			""";
+
+	// 최신 글(번호 큰 순)부터 한 쪽. countQuery: 전체 쪽 수를 알려고 같은 조건으로 한 번 더 센다 (피드의 findByStatus와 같다)
+	// 정렬은 SQL에 직접 적는다 (네이티브 쿼리에 Pageable의 정렬을 맡기지 않는다). 넘기는 Pageable에는 쪽 번호와 크기만 담는다
+	@Query(value = "select p.* " + SEARCH_WHERE + " order by p.id desc",
+			countQuery = "select count(*) " + SEARCH_WHERE,
+			nativeQuery = true)
+	Page<Post> search(@Param("status") String status, @Param("pattern") String pattern, Pageable pageable);
+
 	// 어느 시각 이후에 올라온 글 수 (상태와 상관없이, 지운 글도 센다) → SELECT COUNT(*) FROM posts WHERE created_at >= ?
 	// 업로드 하루 전체 상한에 쓴다 (UploadLimiter, JM-79). DB에서 세므로 서버를 다시 켜도 0으로 돌아가지 않는다
 	long countByCreatedAtGreaterThanEqual(Instant since);

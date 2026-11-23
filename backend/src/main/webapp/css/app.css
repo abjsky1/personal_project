@@ -1286,10 +1286,67 @@ a.notice-row:hover {
 	justify-self: end;
 }
 
-/* 메뉴 링크: 둘째 줄 왼쪽 */
+/* 메뉴 링크: 둘째 줄 왼쪽. 오른쪽 끝 칸은 검색 칸(피드)이 쓰므로 앞의 두 칸까지만 */
 .top-menu .site-nav {
-	grid-column: 1 / -1;
+	grid-column: 1 / 3;
 	justify-self: start;
+	align-self: center;
+}
+
+/* ---- 검색 칸 (JM-52): PC는 메뉴 링크와 같은 줄 오른쪽 끝, 휴대폰은 메뉴 링크 아래 한 줄 전체 ---- */
+.top-menu .search {
+	grid-row: 2;
+	grid-column: 3;
+	justify-self: end;
+}
+
+/* align-items: stretch(기본값)로 입력칸과 버튼의 높이를 같게 한다 */
+.search {
+	display: flex;
+	gap: 6px;
+	align-items: stretch;
+}
+
+/* 글자 크기 1rem(16px): 아이폰은 이보다 작은 입력칸을 누르면 화면을 확대한다 */
+.search input[type="search"] {
+	width: 220px;
+	min-width: 0;
+	padding: 7px 10px;
+	border: 1px solid #ccc;
+	border-radius: 8px;
+	font-size: 1rem;
+}
+
+.search input[type="search"]:focus {
+	border-color: #2f7d32;
+	outline: none;
+}
+
+/* 글쓰기 form의 공통 규칙(form button: 한 줄 전체, 위 여백 24px)을 검색 칸에서는 끈다.
+   그대로 두면 휴대폰에서 버튼이 한 줄을 다 차지해 입력칸이 좁은 막대가 되고, PC에서는 버튼이 아래로 처진다 (draft1에서 겪음) */
+.search button {
+	width: auto;
+	margin-top: 0;
+	padding: 7px 14px;
+	white-space: nowrap;
+}
+
+/* 검색 결과 줄: '라면' 검색 결과 3개  전체 보기 */
+.search-result {
+	margin: 0 0 16px;
+	color: #444;
+}
+
+.search-result a {
+	margin-left: 8px;
+	font-weight: 600;
+	text-decoration: none;
+}
+
+/* 찾은 글이 없을 때의 안내: 휴대폰에서 "보세 / 요"처럼 낱말 가운데서 끊기지 않게 낱말 단위로만 줄을 바꾼다 (draft1에서 겪음) */
+.search-empty {
+	word-break: keep-all;
+	color: #666;
 }
 
 /* 한 줄 소개: 큰 글자 + 작은 설명 (11-05) */
@@ -1329,7 +1386,20 @@ a.notice-row:hover {
 
 	/* 가운데 정렬한 한 줄 소개 아래라서 메뉴 링크도 가운데 */
 	.top-menu .site-nav {
+		grid-column: 1 / -1;
 		justify-self: center;
+	}
+
+	/* 검색 칸: 메뉴 링크 아래 한 줄 전체. 입력칸이 남는 폭을 다 쓰고 버튼은 글자 폭만 */
+	.top-menu .search {
+		grid-row: auto;
+		grid-column: 1 / -1;
+		justify-self: stretch;
+	}
+
+	.search input[type="search"] {
+		flex: 1;
+		width: auto;
 	}
 }
 

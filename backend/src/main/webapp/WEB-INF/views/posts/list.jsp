@@ -1,4 +1,4 @@
-<%-- 게시글 목록 (첫 화면) --%>
+<%-- 게시글 목록 (첫 화면). 검색 결과(/search?q=, JM-52)도 이 화면으로 그린다: query가 있으면 검색 결과다 --%>
 <%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 <%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
@@ -7,7 +7,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>찍먹</title>
+<c:choose>
+	<%-- 검색어는 사용자가 친 값이라 c:out으로 출력한다 (XSS 방지) --%>
+	<c:when test="${not empty query}"><title>'<c:out value="${query}" />' 검색 - 찍먹</title>
+	<%-- 검색 결과 화면은 검색 엔진에 올리지 않는다 (검색어마다 비슷한 화면이 끝없이 생긴다) --%>
+	<meta name="robots" content="noindex"></c:when>
+	<c:otherwise><title>찍먹</title></c:otherwise>
+</c:choose>
 <%-- 모든 화면이 함께 쓰는 스타일 (src/main/webapp/css/app.css) --%>
 <%-- c:url: 배포 서버에서는 주소 뒤에 파일 내용의 지문이 붙는다 (/css/app-3f2a….css). 개발 PC에서는 그대로 /css/app.css --%>
 <link rel="stylesheet" href="<c:url value='/css/app.css' />">
@@ -24,15 +30,33 @@
 		<%-- 메뉴 링크: 피드(이 화면), 공지(JM-65), 피드백 게시판. 피드백은 무엇을 하는 곳인지 바로 알게 "개발자에게 피드백 보내기"로 적는다.
 		     지금 화면 링크에는 active(초록 굵은 글자, app.css)와 aria-current="page"(화면 읽기 프로그램이 "지금 화면"이라고 읽는다)를 단다 (JM-63) --%>
 		<nav class="site-nav">
-			<a href="/" class="active" aria-current="page">피드</a>
+			<%-- 검색 결과도 피드 안에서 찾은 것이라 "피드"를 초록으로 둔다. 다만 지금 화면이 피드 그 자체는 아니라서 aria-current는 피드에만 --%>
+			<a href="/" class="active"<c:if test="${empty query}"> aria-current="page"</c:if>>피드</a>
 			<a href="/notice">공지</a>
 			<a href="/feedback">개발자에게 피드백 보내기</a>
 		</nav>
+		<%-- 검색 칸 (JM-52, 피드백 6번과 11번): 닉네임이나 음식 이름으로 찾는다. 메모는 찾지 않는다.
+		     PC는 메뉴 링크와 같은 줄 오른쪽, 휴대폰은 메뉴 링크 아래 한 줄 전체 (자리는 app.css의 .top-menu .search)
+		     method="get": 검색어가 주소(/search?q=라면)에 남아서 뒤로 가기, 새로 고침, 주소 공유가 된다
+		     type="search": 휴대폰 자판의 "검색" 버튼으로 바로 보내고, 칸 안의 지우기(x)가 생긴다
+		     maxlength="30": 서버도 30자까지만 쓴다 (PostService.MAX_QUERY_LENGTH) --%>
+		<form class="search" action="/search" method="get" role="search">
+			<input type="search" name="q" value="<c:out value='${query}' />" maxlength="30" placeholder="닉네임이나 음식 이름" aria-label="검색어 (닉네임이나 음식 이름)">
+			<button type="submit">찾기</button>
+		</form>
 	</header>
+
+	<%-- 검색 결과 줄 (JM-52): 무엇으로 찾았는지, 몇 개인지, 피드로 돌아가는 링크 --%>
+	<c:if test="${not empty query}">
+		<p class="search-result">'<strong><c:out value="${query}" /></strong>' 검색 결과 ${total}개 <a href="/">전체 보기</a></p>
+	</c:if>
 
 	<%-- empty: 목록이 비어 있으면 true --%>
 	<c:if test="${empty feed.posts}">
-		<p class="empty">아직 올라온 사진이 없어요.</p>
+		<c:choose>
+			<c:when test="${not empty query}"><p class="empty search-empty">찾은 글이 없어요.<br>음식 이름의 일부만 쳐 보세요 (예: 찌개)</p></c:when>
+			<c:otherwise><p class="empty">아직 올라온 사진이 없어요.</p></c:otherwise>
+		</c:choose>
 	</c:if>
 
 	<%-- 카드 격자: PC에서는 한 줄에 여러 장, 휴대폰에서는 한 줄에 세 장 (칸 수는 app.css의 .feed가 화면 폭을 보고 정한다. 세 장은 지인 피드백 3번, JM-50) --%>
@@ -84,7 +108,11 @@
 
 	<%-- 쪽 번호 줄: 이전 1 2 3 다음 (JM-57). 2쪽 이상일 때만 보인다. 그리는 법은 common/pager.jspf --%>
 	<c:set var="nav" value="${feed.nav}" />
-	<c:set var="pagerBase" value="/?page=" />
+	<%-- 검색 결과는 쪽을 넘겨도 같은 검색어로 (/search?q=라면&page=2). &amp;는 HTML 안의 & (브라우저가 &로 읽는다) --%>
+	<c:choose>
+		<c:when test="${not empty query}"><c:set var="pagerBase" value="/search?q=${searchParam}&amp;page=" /></c:when>
+		<c:otherwise><c:set var="pagerBase" value="/?page=" /></c:otherwise>
+	</c:choose>
 	<%@ include file="/WEB-INF/views/common/pager.jspf" %>
 
 	<%-- 공통 바닥글 (개인정보처리방침 링크) --%>

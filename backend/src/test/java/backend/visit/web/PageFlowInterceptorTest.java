@@ -189,6 +189,22 @@ class PageFlowInterceptorTest {
 		assertThat(saved).extracting(PageView::getTarget).containsExactly(1L, 3L, 1L, 1L);
 	}
 
+	// 검색 결과(JM-52)는 SEARCH로, 피드처럼 쪽 번호를 남긴다. 검색어는 어느 칸에도 남지 않는다 (PageView에 그런 칸이 없다).
+	// 검색 결과에서 연 글의 바로 앞 화면은 SEARCH (Referer의 경로로 찾는다, 주소의 ?q= 는 보지 않는다)
+	@Test
+	void 검색_결과는_SEARCH로_쪽_번호와_함께_남고_검색어는_남지_않는다() {
+		MockHttpSession session = new MockHttpSession();
+		MockHttpServletRequest search = page("/search", "http://localhost/", IPHONE, session);
+		search.setParameter("q", "라면");
+		search.setParameter("page", "2");
+		run(search, html(200));
+		run(page("/posts/7", "http://localhost/search?q=%EB%9D%BC%EB%A9%B4&page=2", IPHONE, session), html(200));
+
+		assertThat(saved).extracting(PageView::getScreen).containsExactly(Screen.SEARCH, Screen.POST);
+		assertThat(saved).extracting(PageView::getTarget).containsExactly(2L, 7L);
+		assertThat(saved).extracting(PageView::getPrevScreen).containsExactly(Screen.FEED, Screen.SEARCH);
+	}
+
 	// Referer는 아무 값이나 보낼 수 있다. 모양이 틀려도 화면은 남기고 그 값만 버린다
 	@Test
 	void 잘못된_Referer는_없는_것으로_본다() {
