@@ -157,10 +157,10 @@ public class PageFlowInterceptor implements HandlerInterceptor {
 		return match == null ? null : match.screen();
 	}
 
-	// 피드는 요청한 쪽 번호 (없거나 비면 1쪽, 0이나 음수도 1쪽. 마지막 쪽보다 큰 번호는 화면이 마지막 쪽을 보여 줘도 요청한 번호 그대로).
+	// 피드와 검색 결과(JM-52)는 요청한 쪽 번호 (없거나 비면 1쪽, 0이나 음수도 1쪽. 마지막 쪽보다 큰 번호는 화면이 마지막 쪽을 보여 줘도 요청한 번호 그대로).
 	// 글 상세와 공지 글과 피드백 글은 주소의 번호
 	static Long targetOf(HttpServletRequest request, Screen.Match screen) {
-		if (screen.screen() != Screen.FEED) {
+		if (screen.screen() != Screen.FEED && screen.screen() != Screen.SEARCH) {
 			return screen.id();
 		}
 		String page = parameterOf(request, "page");

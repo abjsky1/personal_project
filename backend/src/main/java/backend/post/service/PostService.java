@@ -34,6 +34,7 @@ import backend.location.model.vo.GeoPoint;
 import backend.post.model.dto.FeedPage;
 import backend.post.model.dto.PostCreateForm;
 import backend.post.model.dto.PostSummary;
+import backend.post.model.dto.SearchResult;
 import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
 import backend.post.model.repository.PostRepository;
@@ -54,6 +55,9 @@ public class PostService {
 
 	// 목록 한 쪽에 보여 줄 글 수. 24 = PC 4칸, 휴대폰 3칸 어디서든 줄이 딱 맞는 수 (JM-57)
 	private static final int PAGE_SIZE = 24;
+
+	// 검색어 길이 상한 (JM-52). 화면의 입력칸(maxlength)과 같다
+	public static final int MAX_QUERY_LENGTH = 30;
 
 	private final PostRepository postRepository;
 	private final PostLocationRepository postLocationRepository;
@@ -162,6 +166,47 @@ public class PostService {
 		}
 		// 화면의 쪽 번호는 1부터, Spring Data의 getNumber()는 0부터 세므로 1을 더한다
 		return new FeedPage(summariesOf(page.getContent()), PageNav.of(page.getNumber() + 1, page.getTotalPages()));
+	}
+
+	// 검색 (JM-52): 닉네임이나 음식 이름(AI의 이름, 확정한 이름)에 검색어가 들어 있는 글, 최신순으로 한 쪽.
+	// query는 normalizeQuery를 거친 값(앞뒤 빈칸을 뗀 30자 이하, 비어 있지 않음)이어야 한다. 쪽 번호는 피드와 같은 규칙으로 맞춘다
+	@Transactional(readOnly = true)
+	public SearchResult search(String query, int requestedPage) {
+		String pattern = likePattern(query);
+		Page<Post> page = loadSearch(pattern, PageNav.readablePage(requestedPage, PAGE_SIZE));
+		if (!page.hasContent() && page.getTotalPages() > 0) {
+			page = loadSearch(pattern, page.getTotalPages());
+		}
+		FeedPage feed = new FeedPage(summariesOf(page.getContent()), PageNav.of(page.getNumber() + 1, page.getTotalPages()));
+		return new SearchResult(feed, page.getTotalElements());
+	}
+
+	// 주소의 ?q= 값을 검색어로 다듬는다: 앞뒤 빈칸을 떼고, 30자가 넘으면 30자까지만 (닉네임은 20자, 직접 적는 음식 이름은 30자까지라 그보다 길 일이 없다).
+	// 없거나 빈칸뿐이면 빈 글자 → Controller가 피드로 보낸다
+	// \p{Z}: 빈칸 종류(NBSP, 전각 빈칸 등)를 모두 보통 빈칸으로 바꾼 뒤 뗀다. strip()은 NBSP를 빈칸으로 보지 않아서,
+	//   NBSP 하나만 보내면 빈칸이 든 이름이 모두 나왔다 (JM-52 PR 전 검토)
+	// codePoints: 글자 수를 셀 때 이모지처럼 두 칸(char 2개)을 쓰는 글자도 한 글자로 센다 (반만 잘려 깨지지 않게)
+	// 30자에서 자른 끝이 빈칸이면 한 번 더 뗀다
+	public static String normalizeQuery(String raw) {
+		if (raw == null) {
+			return "";
+		}
+		String stripped = raw.replaceAll("\\p{Z}", " ").strip();
+		return stripped.codePoints().limit(MAX_QUERY_LENGTH)
+				.collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append).toString().strip();
+	}
+
+	// LIKE에 넣을 모양: 앞뒤에 %(아무 글자나 몇 개든)를 붙여 "들어 있으면" 찾는다.
+	// 띄어쓰기는 보지 않는다: 검색어의 빈칸을 빼고, SQL도 이름의 빈칸을 빼고 견준다 ("치즈떡볶이"로 "치즈 떡볶이"를 찾는다)
+	// 검색어 안의 %와 _는 LIKE에서 "아무 글자"라는 뜻이라, 앞에 !를 붙여 그 글자 자체로 찾게 한다 (SQL의 ESCAPE '!').
+	// !도 그대로 찾으려면 !!로 적는다. 하지 않으면 "%"만 쳐도 모든 글이 나온다
+	static String likePattern(String query) {
+		String escaped = query.replace(" ", "").replace("!", "!!").replace("%", "!%").replace("_", "!_");
+		return "%" + escaped + "%";
+	}
+
+	private Page<Post> loadSearch(String pattern, int pageNumber) {
+		return postRepository.search(PostStatus.ACTIVE.name(), pattern, PageRequest.of(pageNumber - 1, PAGE_SIZE));
 	}
 
 	// 관리자 화면 첫 쪽 위의 "검토할 사진" (JM-80): 사진을 가린 글 전부, 최신순. 쌓일 일이 드물어 쪽을 나누지 않는다

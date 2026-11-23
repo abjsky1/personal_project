@@ -9,6 +9,8 @@ import java.util.regex.Pattern;
 public enum Screen {
 
 	FEED("/"),
+	// 검색 결과 (JM-52). 검색어는 남기지 않는다: 화면 이름과 쪽 번호만
+	SEARCH("/search"),
 	POST("/posts/(\\d{1,18})"),
 	POST_NEW("/posts/new"),
 	UPLOAD(null),

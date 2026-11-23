@@ -9,7 +9,7 @@
 
 <%-- 목록으로 돌아가기 (JM-71, 피드백 10번 "목록으로 돌아가면 첫 쪽으로만 간다")
      글을 보다가 "← 목록"을 누르면 보고 있던 쪽, 보고 있던 위치로 돌아가게 한다. 바닥글은 모든 화면에 들어가므로 여기 한 곳에만 둔다.
-     - 목록 화면(피드 "/", 피드백 "/feedback", 공지 "/notice"): 지금 쪽의 주소와, 떠날 때의 스크롤 위치를 브라우저에 적어 둔다.
+     - 목록 화면(피드 "/", 피드의 검색 결과 "/search", 피드백 "/feedback", 공지 "/notice"): 지금 쪽의 주소와, 떠날 때의 스크롤 위치를 브라우저에 적어 둔다.
      - 그 밖의 화면: data-back이 붙은 돌아가기 링크의 주소를 적어 둔 쪽으로 바꾼다. 적어 둔 것이 없으면 원래 주소(첫 쪽) 그대로다.
      - 적어 두는 곳은 sessionStorage: 탭마다 따로이고 탭을 닫으면 사라진다. 서버로 보내지 않고 쿠키도 아니다.
      주소에 쪽 번호를 싣지 않은 이유: 댓글을 쓰거나 지우면 서버가 상세 화면을 새로 열어 주는데, 그때마다 쪽 번호를 들고 다녀야 한다.
@@ -26,26 +26,34 @@
 		return;
 	}
 
-	const LISTS = ['/', '/feedback', '/notice'];
+	// 목록 화면의 주소 → 그 목록으로 돌아가는 링크의 주소(적어 두는 이름)
+	// 검색 결과(/search, JM-52)는 피드 안에서 찾은 목록이라 피드와 같은 이름에 적는다.
+	// 그래서 검색 결과에서 글을 열고 "← 목록"을 누르면 피드 첫 쪽이 아니라 그 검색 결과로 돌아간다
+	const LISTS = new Map([['/', '/'], ['/search', '/'], ['/feedback', '/feedback'], ['/notice', '/notice']]);
 	const path = location.pathname;
-	// 쪽 번호까지 포함한 지금 주소. 예: /?page=2
+	// 쪽 번호까지 포함한 지금 주소. 예: /?page=2, /search?q=%EB%9D%BC%EB%A9%B4&page=2
 	const here = path + location.search;
 
-	if (LISTS.includes(path)) {
+	// 에러 화면(common/error.jsp)은 목록 주소로 왔어도(/?page=abc, /search?q=라면&page=abc) 목록으로 적지 않는다.
+	// 적으면 그 뒤 "← 목록"이 다시 에러 화면으로 데려간다 (JM-52 PR 전 검토에서 찾음, 피드는 전부터 그랬다)
+	const isErrorPage = document.querySelector('main.error-page') !== null;
+
+	if (LISTS.has(path) && !isErrorPage) {
+		const list = LISTS.get(path);
 		// 목록 화면 ① 지금 쪽을 적어 둔다
-		store.setItem('back:url:' + path, here);
+		store.setItem('back:url:' + list, here);
 
 		// ② 돌아가기 링크를 눌러서 방금(10초 안) 온 것이면, 떠날 때 보던 위치로 내린다
 		//    카드 사진은 불러오기 전에도 자리를 차지하므로(app.css의 aspect-ratio) 바로 내려도 위치가 맞는다
 		const restore = (store.getItem('back:restore') || '').split(' ');
 		store.removeItem('back:restore');
 		if (restore[1] === here && Date.now() - Number(restore[0]) < 10000) {
-			window.scrollTo(0, Number(store.getItem('back:y:' + path)) || 0);
+			window.scrollTo(0, Number(store.getItem('back:y:' + list)) || 0);
 		}
 
 		// ③ 이 화면을 떠날 때 스크롤 위치를 적어 둔다 (pagehide: 다른 화면으로 넘어가기 직전에 실행된다)
 		window.addEventListener('pagehide', function () {
-			store.setItem('back:y:' + path, String(Math.round(window.scrollY)));
+			store.setItem('back:y:' + list, String(Math.round(window.scrollY)));
 		});
 		return;
 	}
@@ -69,8 +77,15 @@
 		}
 
 		const remembered = store.getItem('back:url:' + base);
-		// 우리가 적은 모양(첫 쪽 주소 그대로이거나 뒤에 ?page=… 가 붙은 것)일 때만 쓴다
-		if (!remembered || (remembered !== base && !remembered.startsWith(base + '?'))) {
+		// 적어 둔 것이 없으면(새 탭에서 글을 바로 열었거나, 글을 막 올렸으면) 원래 주소 그대로 둔다.
+		// 이 확인을 아래의 startsWith보다 먼저 해야 한다: 거꾸로 두면 null.startsWith로 오류가 나서 이 화면의 다른 돌아가기 링크까지 건너뛴다 (JM-52 PR 전 검토)
+		if (!remembered) {
+			return;
+		}
+		// 우리가 적은 모양일 때만 쓴다: 첫 쪽 주소 그대로이거나 뒤에 ?page=… 가 붙은 것, 피드라면 검색 결과(/search?q=…)도
+		const ours = remembered === base || remembered.startsWith(base + '?')
+				|| (base === '/' && remembered.startsWith('/search?'));
+		if (!ours) {
 			return;
 		}
 		link.setAttribute('href', remembered);

@@ -172,7 +172,7 @@ class PageFlowTest {
 				userPages.add(sample);
 			}
 		}
-		assertThat(userPages).contains("/", "/posts/1", "/posts/new", "/notice", "/feedback", "/privacy", "/terms")
+		assertThat(userPages).contains("/", "/search", "/posts/1", "/posts/new", "/notice", "/feedback", "/privacy", "/terms")
 				.allSatisfy(path -> assertThat(Screen.match(path)).as(path).isNotNull());
 
 		assertThat(interceptors("POST", "/posts")).anyMatch(PageFlowInterceptor.class::isInstance);
