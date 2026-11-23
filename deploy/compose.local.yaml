@@ -1,12 +1,37 @@
 # 내 PC에서 배포 구성을 미리 시험할 때만 compose.yaml 위에 덧씌우는 설정
 # 내 PC에는 RDS도 S3 권한도 없으므로 대신할 것을 붙인다:
 #   - RDS 대신: mysql 컨테이너 (같은 MySQL 8.4)
-#   - S3 대신: 컨테이너 안 폴더에 사진 저장 (컨테이너를 지우면 사진도 사라진다)
+#   - S3 대신: 이름 있는 볼륨 uploads에 사진 저장 (app1, app2가 같이 쓴다. down -v 를 하면 지워진다)
 #
-# 실행 (deploy 폴더에서, 루트의 .env 비밀번호를 그대로 쓴다):
-#   docker compose --env-file ../.env -f compose.yaml -f compose.local.yaml up -d --build
-# 끄기 (DB까지 지우려면 끝에 -v):
+# app은 app1, app2 두 자리다 (무중단 배포, JM-62). 서비스 이름 없이 up -d 를 하면 둘 다 켜지므로 이름을 붙인다.
+# 실행 (deploy 폴더에서, 루트의 .env 비밀번호를 그대로 쓴다): nginx와 mysql을 켠 뒤 app1 하나
+#   docker compose --env-file ../.env -f compose.yaml -f compose.local.yaml up -d nginx mysql app1
+#   (지금 코드로 이미지를 만들려면 끝에 --build. GHCR의 운영 이미지를 쓰려면 앞에 APP1_TAG=<SHA>)
+# deploy.sh로 바꿔치기까지 시험할 때(리허설): deploy 폴더에 루트 .env를 .env로 복사하고
+#   COMPOSE_FILE=compose.yaml:compose.local.yaml COMPOSE_PATH_SEPARATOR=: NGINX_DIR=nginx-local DEPLOY_PRUNE=0 DEPLOY_SERVICES=nginx bash deploy.sh <SHA>
+#   (끝나면 deploy/.env를 지운다)
+# 끄기 (DB와 사진까지 지우려면 끝에 -v):
 #   docker compose --env-file ../.env -f compose.yaml -f compose.local.yaml down
+
+# app1, app2에 똑같이 덧씌우는 설정. compose.yaml의 x-app처럼 한 번만 적는다 (&이름표, *가져다 쓰기)
+x-app-local: &app-local
+  environment:
+    APP_IMAGE_STORAGE: local
+    APP_UPLOAD_DIR: /app/uploads
+  # 사진 폴더를 두 자리가 같이 쓴다: 운영에서 두 app이 같은 S3를 보듯, 바꿔치기한 뒤에도 앞서 올린 사진이 보이게 한다
+  volumes:
+    - uploads:/app/uploads
+  # 내 PC에는 AWS 권한이 없으므로 CloudWatch 대신 서버 안 파일로 (compose.yaml의 awslogs를 통째로 덮어쓴다)
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+  depends_on:
+    # MySQL이 접속을 받을 준비가 된 뒤에 켠다 (안 그러면 DB 연결 실패로 켜지자마자 꺼진다)
+    mysql:
+      condition: service_healthy
+
 services:
   # 내 PC에는 인증서가 없으므로 http만 있는 설정 폴더로 바꿔 끼운다 (같은 자리에 붙이면 compose.yaml의 nginx/ 대신 쓰인다)
   nginx:
@@ -17,20 +42,9 @@ services:
   certbot:
     profiles: ["server-only"]
 
-  app:
-    environment:
-      APP_IMAGE_STORAGE: local
-      APP_UPLOAD_DIR: /app/uploads
-    # 내 PC에는 AWS 권한이 없으므로 CloudWatch 대신 서버 안 파일로 (compose.yaml의 awslogs를 통째로 덮어쓴다)
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    depends_on:
-      # MySQL이 접속을 받을 준비가 된 뒤에 켠다 (안 그러면 DB 연결 실패로 켜지자마자 꺼진다)
-      mysql:
-        condition: service_healthy
+  # app1과 app2에 같은 덧씌우기를 한다 (아래 x-app-local 묶음, JM-62)
+  app1: *app-local
+  app2: *app-local
 
   # RDS 대신 쓰는 MySQL. compose.yaml의 DB_HOST 기본값(mysql)이 이 컨테이너를 가리킨다.
   mysql:
@@ -50,3 +64,4 @@ services:
 
 volumes:
   mysql-data:
+  uploads:

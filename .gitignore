@@ -17,3 +17,6 @@ records/
 deploy/nginx/ssl/
 # IP 위치 파일 (JM-86, DB-IP 무료판 약 121MB). 서버에만 둔다
 deploy/geoip/
+# nginx가 지금 보는 app 자리 (JM-62 무중단 배포). deploy.sh가 서버에서 쓰는 상태 파일이라 Git에 올리지 않는다 (.bak은 바꾸기 전 사본)
+deploy/nginx/active-app.inc*
+deploy/nginx-local/active-app.inc*
