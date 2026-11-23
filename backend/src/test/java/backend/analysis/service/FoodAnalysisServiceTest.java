@@ -72,6 +72,37 @@ class FoodAnalysisServiceTest {
 		analysis = new FoodAnalysis(new Post("테스터", "hash", null, IMAGE_KEY, "thumb.jpg", null));
 		when(repository.findById(POST_ID)).thenReturn(Optional.of(analysis));
 		when(storage.load(IMAGE_KEY)).thenReturn(Optional.of(jpeg));
+		// 분석을 시작할 때 이 글을 맡는다 (JM-110). 아래 테스트들은 맡기에 성공한 경우다
+		when(repository.claimAnalysis(eq(POST_ID), any(), any())).thenReturn(1);
+	}
+
+	// ---- 맡기 (JM-110) ----
+
+	@Test
+	void 다른_일꾼이_맡았거나_끝난_글이면_AI를_부르지_않고_아무것도_저장하지_않는다() {
+		when(repository.claimAnalysis(eq(POST_ID), any(), any())).thenReturn(0);
+
+		service.analyze(POST_ID, IMAGE_KEY);
+
+		verify(analyzer, never()).analyze(any());
+		verify(analyzer, never()).analyzeCandidates(any());
+		verify(repository, never()).findById(any());
+		verify(repository, never()).save(any());
+	}
+
+	@Test
+	void 맡은_지_3분이_넘은_PENDING만_다시_맡을_수_있게_기준_시각을_넘긴다() {
+		aiAnswers(new FoodAnalysisResult(false, List.of(), "low", "음식 아님"));
+		Instant before = Instant.now();
+
+		service.analyze(POST_ID, IMAGE_KEY);
+
+		ArgumentCaptor<Instant> now = ArgumentCaptor.forClass(Instant.class);
+		ArgumentCaptor<Instant> staleBefore = ArgumentCaptor.forClass(Instant.class);
+		verify(repository).claimAnalysis(eq(POST_ID), now.capture(), staleBefore.capture());
+		assertThat(now.getValue()).isAfterOrEqualTo(before);
+		assertThat(staleBefore.getValue()).isEqualTo(now.getValue().minus(FoodAnalysisService.CLAIM_STALE_AFTER));
+		assertThat(FoodAnalysisService.CLAIM_STALE_AFTER).hasMinutes(3);
 	}
 
 	@Test

@@ -1,6 +1,7 @@
 package backend.analysis.service;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -63,6 +64,10 @@ public class FoodAnalysisService {
 	private static final String PICK_REMOVED = "-1";
 	// 직접 적는 음식 이름의 길이 (detail.jsp의 maxlength와 같다)
 	private static final int MAX_TYPED_NAME_LENGTH = 30;
+	// 맡은 지 이보다 오래됐는데 아직 PENDING이면, 맡은 일꾼의 app이 분석 중에 꺼지거나 죽은 것으로 보고 다시 맡을 수 있게 한다 (JM-110).
+	// 분석 한 번은 길어야 35초쯤이다 (AI 연결 5초 + 읽기 30초, GeminiConfig). 맡는 때는 일꾼이 줄에서 꺼내 시작할 때라서 줄에서 기다린 시간은 들지 않는다.
+	// 끌 때 Spring이 기다리는 시간(30초)이 지나면 하던 분석이 끊기는데, 그 글은 맡은 채로 PENDING이 된다 → 3분(35초의 5배쯤) 뒤 다시 맡는다
+	public static final Duration CLAIM_STALE_AFTER = Duration.ofMinutes(3);
 
 	private final FoodAnalysisRepository foodAnalysisRepository;
 	private final FoodAnalyzer foodAnalyzer;
@@ -95,6 +100,13 @@ public class FoodAnalysisService {
 	// 분석 한 번을 끝까지 처리한다. 무슨 일이 있어도 PENDING으로 남겨 두지 않고 결과나 실패를 저장한다.
 	// @Transactional을 붙이지 않는다: AI 응답을 기다리는 몇 초 동안 DB 연결을 붙잡고 있지 않게 한다. (사진 처리와 같은 이유)
 	public void analyze(Long postId, String imageKey) {
+		// 먼저 이 글을 맡는다 (JM-110). 같은 글이 두 줄에 들어가도(다시 넣기, 무중단 배포로 app 둘이 잠깐 같이 떠 있을 때) AI는 한 번만 부른다.
+		// 맡지 못하면(다른 일꾼이 맡았거나 이미 끝난 글) 아무것도 하지 않는다. 맡은 뒤에 읽어야 저장할 때 맡은 시각이 지워지지 않는다
+		Instant now = Instant.now();
+		if (foodAnalysisRepository.claimAnalysis(postId, now, now.minus(CLAIM_STALE_AFTER)) == 0) {
+			log.info("Food analysis skipped, already claimed or finished: postId={}", postId);
+			return;
+		}
 		FoodAnalysis analysis = foodAnalysisRepository.findById(postId).orElse(null);
 		if (analysis == null) {
 			log.warn("Food analysis row not found: postId={}", postId);

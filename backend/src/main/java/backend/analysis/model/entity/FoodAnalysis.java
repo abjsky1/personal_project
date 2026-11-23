@@ -91,6 +91,11 @@ public class FoodAnalysis {
 	// AI 호출이 끝난 시각. 하루 분석 횟수를 셀 때도 쓴다. AI를 부르지 않았으면(PENDING, LIMIT_EXCEEDED) 비어 있다.
 	private Instant completedAt;
 
+	// 분석을 맡은 시각 (JM-110). 일꾼이 분석을 시작할 때 FoodAnalysisRepository.claimAnalysis가 UPDATE 한 번으로 채운다.
+	// 같은 글이 두 줄에 들어가도(무중단 배포로 app 둘이 잠깐 같이 떠 있을 때, 다시 넣기와 겹칠 때) 한 일꾼만 AI를 부르게 하는 표시다.
+	// 비어 있으면 아직 아무도 분석을 시작하지 않은 것이다. 비워 둘 수 있는 칸이라 이 칸을 모르는 옛 코드와도 같이 쓸 수 있다 (기획서 10절)
+	private Instant claimedAt;
+
 	// ---- 고쳐 쓰는 AI (JM-74) ----
 	// 글을 올릴 때 고른 확정 방식. @ColumnDefault: 이미 있는 글들은 컬럼을 더할 때 AUTO(처음부터 있던 방식)로 채워진다.
 	@Enumerated(EnumType.STRING)
