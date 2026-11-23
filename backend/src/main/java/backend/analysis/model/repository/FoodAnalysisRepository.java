@@ -2,14 +2,19 @@ package backend.analysis.model.repository;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import backend.analysis.model.dto.PendingAnalysis;
+import backend.analysis.model.entity.AnalysisStatus;
 import backend.analysis.model.entity.FoodAnalysis;
 import backend.post.model.entity.PostStatus;
 
@@ -69,4 +74,84 @@ public interface FoodAnalysisRepository extends JpaRepository<FoodAnalysis, Long
 	int confirmOnce(@Param("postId") Long postId, @Param("items") String items, @Param("kcal") BigDecimal kcal,
 			@Param("carbs") BigDecimal carbs, @Param("protein") BigDecimal protein, @Param("fat") BigDecimal fat,
 			@Param("mismatch") boolean mismatch, @Param("now") Instant now);
+
+	// ---- 분석 맡기와 다시 넣기 (JM-110) ----
+	// 분석 줄은 app의 메모리에만 있어서, app을 끌 때(배포) 줄에서 기다리던 분석은 버려지고 그 글은 PENDING으로 남는다.
+	// PendingAnalysisRequeuer가 그런 글을 찾아 다시 줄에 넣는다. 그러면 같은 글이 두 줄에 들어갈 수 있으므로
+	// (무중단 배포로 app 둘이 잠깐 같이 떠 있을 때), 분석을 시작할 때 아래 UPDATE로 그 글을 "맡아서" AI는 한 번만 부른다.
+	// 맡은 시각(claimedAt)은 그 일꾼의 표시이기도 하다: 결과를 저장하기 전에 아직 그 시각 그대로인지 보고, 다른 일꾼이 다시 맡았으면 저장하지 않는다.
+
+	// 분석 한 번을 맡는다: 아직 PENDING이고, 맡은 횟수가 maxClaims보다 적고, 아무도 맡지 않았거나 맡은 지 오래된(그 일꾼의 app이 꺼졌다고 보는)
+	// 글일 때만 시각을 적고 횟수를 1 올린다. AI를 부르기 "전에" 실행한다 → 위의 claimTyped와 같은 방식.
+	// 1이면 내가 맡은 것, 0이면 다른 일꾼이 맡았거나, 이미 끝났거나, 맡을 수 있는 횟수를 다 쓴 글이다.
+	@Transactional
+	@Modifying(clearAutomatically = true)
+	@Query("""
+			update FoodAnalysis a set a.claimedAt = :now, a.claimCount = a.claimCount + 1
+			where a.postId = :postId and a.status = :pending and a.claimCount < :maxClaims
+			  and (a.claimedAt is null or a.claimedAt < :staleBefore)
+			""")
+	int claimAnalysis(@Param("postId") Long postId, @Param("now") Instant now, @Param("staleBefore") Instant staleBefore,
+			@Param("pending") AnalysisStatus pending, @Param("maxClaims") int maxClaims);
+
+	default int claimAnalysis(Long postId, Instant now, Instant staleBefore) {
+		return claimAnalysis(postId, now, staleBefore, AnalysisStatus.PENDING, FoodAnalysis.MAX_CLAIMS);
+	}
+
+	// 아직 내가 맡은 PENDING인가: 맡은 시각이 내가 적은 값 그대로면 그렇다. 결과를 저장하기 직전에 본다
+	// (분석이 아주 오래 걸려 다른 일꾼이 다시 맡았거나 먼저 끝냈으면, 늦게 끝난 쪽의 결과로 덮어쓰지 않게)
+	boolean existsByPostIdAndStatusAndClaimedAt(Long postId, AnalysisStatus status, Instant claimedAt);
+
+	// 실패를 적는다: 엔티티를 저장하지 않고 UPDATE 한 번으로. 엔티티에 저장할 수 없는 값이 들어 있어도(결과 저장이 실패한 경우) 실패는 꼭 남고,
+	// 끝난 시각(completedAt)도 적혀 하루 분석 횟수에 센다. 아직 내가 맡은 PENDING일 때만 바꾼다 (다른 일꾼이 다시 맡았으면 그쪽을 덮지 않는다)
+	@Transactional
+	@Modifying(clearAutomatically = true)
+	@Query("""
+			update FoodAnalysis a
+			set a.status = :failed, a.errorMessage = :reason, a.attemptCount = a.attemptCount + 1, a.latencyMs = :latencyMs, a.completedAt = :now
+			where a.postId = :postId and a.status = :pending and a.claimedAt = :claim
+			""")
+	int markFailedIfClaimed(@Param("postId") Long postId, @Param("reason") String reason, @Param("latencyMs") long latencyMs,
+			@Param("now") Instant now, @Param("claim") Instant claim, @Param("failed") AnalysisStatus failed,
+			@Param("pending") AnalysisStatus pending);
+
+	default int markFailedIfClaimed(Long postId, String reason, long latencyMs, Instant now, Instant claim) {
+		return markFailedIfClaimed(postId, reason, latencyMs, now, claim, AnalysisStatus.FAILED, AnalysisStatus.PENDING);
+	}
+
+	// 맡을 수 있는 횟수를 다 쓰고도 PENDING인 글을 실패(STUCK)로 끝낸다. 마지막으로 맡은 지 staleBefore보다 오래된 것만
+	// (그 마지막 분석이 아직 도는 중일 수 있어서). AI를 부른 것이 아니라서 끝난 시각은 적지 않는다 (하루 분석 횟수에 세지 않는다)
+	@Transactional
+	@Modifying(clearAutomatically = true)
+	@Query("""
+			update FoodAnalysis a set a.status = :failed, a.errorMessage = 'STUCK'
+			where a.status = :pending and a.claimCount >= :maxClaims and a.claimedAt < :staleBefore
+			""")
+	int failExhausted(@Param("staleBefore") Instant staleBefore, @Param("failed") AnalysisStatus failed,
+			@Param("pending") AnalysisStatus pending, @Param("maxClaims") int maxClaims);
+
+	default int failExhausted(Instant staleBefore) {
+		return failExhausted(staleBefore, AnalysisStatus.FAILED, AnalysisStatus.PENDING, FoodAnalysis.MAX_CLAIMS);
+	}
+
+	// 다시 줄에 넣을 분석: PENDING인 채로 createdAfter와 createdBefore 사이에 만들어졌고, 맡은 횟수가 남았고,
+	// 아무도 맡지 않았거나 맡은 지 오래됐고(staleBefore보다 전), 글이 지워지지 않은 것. 오래된 것부터 limit개까지.
+	// createdAfter: 너무 오래된 PENDING(이 기능이 생기기 전부터 남은 것)은 다시 넣지 않는다 (몇 주 전 글을 갑자기 분석하지 않게).
+	// 분석에 필요한 글 번호와 사진 키를 함께 가져온다 (select new: 그 record로 바로 만든다)
+	@Query("""
+			select new backend.analysis.model.dto.PendingAnalysis(a.postId, p.imageKey)
+			from FoodAnalysis a join a.post p
+			where a.status = :pending and p.status = :active and a.claimCount < :maxClaims
+			  and a.createdAt > :createdAfter and a.createdAt < :createdBefore
+			  and (a.claimedAt is null or a.claimedAt < :staleBefore)
+			order by a.createdAt
+			""")
+	List<PendingAnalysis> findStalePending(@Param("pending") AnalysisStatus pending, @Param("active") PostStatus active,
+			@Param("maxClaims") int maxClaims, @Param("createdAfter") Instant createdAfter, @Param("createdBefore") Instant createdBefore,
+			@Param("staleBefore") Instant staleBefore, Pageable pageable);
+
+	default List<PendingAnalysis> findStalePending(Instant createdAfter, Instant createdBefore, Instant staleBefore, int limit) {
+		return findStalePending(AnalysisStatus.PENDING, PostStatus.ACTIVE, FoodAnalysis.MAX_CLAIMS, createdAfter, createdBefore,
+				staleBefore, PageRequest.of(0, limit));
+	}
 }

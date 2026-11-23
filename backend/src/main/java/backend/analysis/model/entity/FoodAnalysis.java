@@ -28,6 +28,8 @@ import jakarta.persistence.Table;
 public class FoodAnalysis {
 
 	private static final int MAX_COMMENT_LENGTH = 500;
+	// 한 글의 분석을 맡을 수 있는 최대 횟수 (JM-110): 처음 한 번 + 다시 넣기 두 번
+	public static final int MAX_CLAIMS = 3;
 
 	// 기본 키 = 게시글 번호 (post_locations와 같은 방식)
 	@Id
@@ -77,7 +79,7 @@ public class FoodAnalysis {
 
 	private Long latencyMs;
 
-	// AI를 부른 횟수 (지금은 다시 시도하지 않아서 0 또는 1이다)
+	// 결과를 남긴 AI 호출 횟수. 보통 0 또는 1이고, 끌 때 끊겨 다시 넣은 분석(JM-110)이 실패로 끝나면 더 커질 수 있다
 	@Column(nullable = false)
 	private int attemptCount;
 
@@ -90,6 +92,19 @@ public class FoodAnalysis {
 
 	// AI 호출이 끝난 시각. 하루 분석 횟수를 셀 때도 쓴다. AI를 부르지 않았으면(PENDING, LIMIT_EXCEEDED) 비어 있다.
 	private Instant completedAt;
+
+	// 분석을 맡은 시각 (JM-110). 일꾼이 분석을 시작할 때 FoodAnalysisRepository.claimAnalysis가 UPDATE 한 번으로 채운다.
+	// 같은 글이 두 줄에 들어가도(무중단 배포로 app 둘이 잠깐 같이 떠 있을 때, 다시 넣기와 겹칠 때) 한 일꾼만 AI를 부르게 하는 표시다.
+	// 비어 있으면 아직 아무도 분석을 시작하지 않은 것이다. 비워 둘 수 있는 칸이라 이 칸을 모르는 옛 코드와도 같이 쓸 수 있다 (기획서 10절)
+	private Instant claimedAt;
+
+	// 분석을 맡은 횟수 (JM-110). 맡을 때마다 claimAnalysis가 1씩 올리고, MAX_CLAIMS번을 다 쓴 글은 더 맡지 않는다.
+	// 분석이 같은 자리에서 계속 끊기면(결과를 저장할 수 없거나 app이 죽는 경우) 다시 넣기가 AI를 끝없이 부르는 것을 막는다.
+	// 다 쓴 글은 PendingAnalysisRequeuer가 FAILED(STUCK)로 끝낸다.
+	// @ColumnDefault: 칸을 더할 때 이미 있는 글은 0으로 채워지고, 이 칸을 모르는 옛 코드가 글을 저장해도 0이 들어간다 (기획서 10절)
+	@ColumnDefault("0")
+	@Column(nullable = false)
+	private int claimCount;
 
 	// ---- 고쳐 쓰는 AI (JM-74) ----
 	// 글을 올릴 때 고른 확정 방식. @ColumnDefault: 이미 있는 글들은 컬럼을 더할 때 AUTO(처음부터 있던 방식)로 채워진다.
@@ -293,6 +308,14 @@ public class FoodAnalysis {
 
 	public Instant getCompletedAt() {
 		return completedAt;
+	}
+
+	public Instant getClaimedAt() {
+		return claimedAt;
+	}
+
+	public int getClaimCount() {
+		return claimCount;
 	}
 
 	public ConfirmMode getConfirmMode() {

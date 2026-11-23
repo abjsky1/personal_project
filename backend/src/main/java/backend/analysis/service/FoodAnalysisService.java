@@ -1,9 +1,11 @@
 package backend.analysis.service;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -63,6 +65,12 @@ public class FoodAnalysisService {
 	private static final String PICK_REMOVED = "-1";
 	// 직접 적는 음식 이름의 길이 (detail.jsp의 maxlength와 같다)
 	private static final int MAX_TYPED_NAME_LENGTH = 30;
+	// 맡은 지 이보다 오래됐는데 아직 PENDING이면, 맡은 일꾼의 app이 분석 중에 꺼지거나 죽은 것으로 보고 다시 맡을 수 있게 한다 (JM-110).
+	// AI 호출은 길어야 35초쯤이다 (연결 5초 + 읽기 30초, GeminiConfig). 사진 읽기(S3)는 SDK의 다시 시도까지 1~2분 걸릴 수 있다.
+	// 맡는 때는 일꾼이 줄에서 꺼내 시작할 때라서 줄에서 기다린 시간은 들지 않는다.
+	// 끌 때 Spring이 기다리는 시간(30초)이 지나면 하던 분석이 끊기는데, 그 글은 맡은 채로 PENDING이 된다 → 3분 뒤 다시 맡는다.
+	// 그보다 오래 걸린 분석과 다른 일꾼이 겹쳐도, 결과를 저장하기 직전에 아직 내가 맡은 글인지 보므로 늦게 끝난 쪽은 버려진다
+	public static final Duration CLAIM_STALE_AFTER = Duration.ofMinutes(3);
 
 	private final FoodAnalysisRepository foodAnalysisRepository;
 	private final FoodAnalyzer foodAnalyzer;
@@ -92,9 +100,18 @@ public class FoodAnalysisService {
 		analyze(postId, imageKey);
 	}
 
-	// 분석 한 번을 끝까지 처리한다. 무슨 일이 있어도 PENDING으로 남겨 두지 않고 결과나 실패를 저장한다.
+	// 분석 한 번을 끝까지 처리한다. 맡은 글은 PENDING으로 남겨 두지 않고 결과나 실패를 저장한다
+	// (맡지 못한 글은 그대로 둔다: 다른 일꾼이 맡았거나 이미 끝난 글이다).
 	// @Transactional을 붙이지 않는다: AI 응답을 기다리는 몇 초 동안 DB 연결을 붙잡고 있지 않게 한다. (사진 처리와 같은 이유)
 	public void analyze(Long postId, String imageKey) {
+		// 먼저 이 글을 맡는다 (JM-110). 같은 글이 두 줄에 들어가도(다시 넣기, 무중단 배포로 app 둘이 잠깐 같이 떠 있을 때) AI는 한 번만 부른다.
+		// 맡지 못하면 아무것도 하지 않는다. 맡은 뒤에 읽어야 저장할 때 맡은 시각과 횟수가 지워지지 않는다.
+		// 맡은 시각은 마이크로초까지로 자른다: DB 칸(DATETIME(6))에 그대로 들어가야 저장하기 전에 "아직 내가 맡은 글인지" 같은지 비교할 수 있다
+		Instant claim = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		if (foodAnalysisRepository.claimAnalysis(postId, claim, claim.minus(CLAIM_STALE_AFTER)) == 0) {
+			log.info("Food analysis skipped, already claimed or finished: postId={}", postId);
+			return;
+		}
 		FoodAnalysis analysis = foodAnalysisRepository.findById(postId).orElse(null);
 		if (analysis == null) {
 			log.warn("Food analysis row not found: postId={}", postId);
@@ -114,17 +131,17 @@ public class FoodAnalysisService {
 			if (analysis.getConfirmMode() == ConfirmMode.USER) {
 				// "내가 보고 확정"으로 올린 글: 음식마다 후보를 받는다 (JM-74)
 				FoodCandidatesResponse response = foodAnalyzer.analyzeCandidates(jpeg);
-				saveCandidates(analysis, response, System.currentTimeMillis() - startedAt);
+				saveCandidates(postId, analysis, response, System.currentTimeMillis() - startedAt, claim);
 			} else {
 				FoodAnalyzerResponse response = foodAnalyzer.analyze(jpeg);
-				saveResult(analysis, response, System.currentTimeMillis() - startedAt);
+				saveResult(postId, analysis, response, System.currentTimeMillis() - startedAt, claim);
 			}
 		} catch (FoodAnalysisException e) {
-			saveFailure(analysis, e.getMessage(), startedAt);
+			saveFailure(postId, e.getMessage(), startedAt, claim);
 		} catch (RuntimeException e) {
-			// 예상하지 못한 오류. 뒤에서 도는 작업이라 여기서 안 잡으면 사용자 화면 없이 글이 계속 "분석 중"으로 남는다.
+			// 예상하지 못한 오류(결과 저장의 실패도 여기로 온다). 뒤에서 도는 작업이라 여기서 안 잡으면 사용자 화면 없이 글이 계속 "분석 중"으로 남는다.
 			log.error("Unexpected food analysis error: postId={}", postId, e);
-			saveFailure(analysis, "UNEXPECTED", startedAt);
+			saveFailure(postId, "UNEXPECTED", startedAt, claim);
 		}
 	}
 
@@ -147,22 +164,38 @@ public class FoodAnalysisService {
 		return dailyLimit;
 	}
 
-	private void saveResult(FoodAnalysis analysis, FoodAnalyzerResponse response, long latencyMs) {
+	private void saveResult(Long postId, FoodAnalysis analysis, FoodAnalyzerResponse response, long latencyMs, Instant claim) {
 		markFinished(analysis, response, latencyMs);
+		if (!stillClaimed(postId, claim)) {
+			return;
+		}
 		foodAnalysisRepository.save(analysis);
 		logFinished(analysis, response, latencyMs);
+	}
+
+	// 아직 내가 맡은 글인가 (JM-110). 아니면 결과를 버린다: 분석이 아주 오래 걸려 다른 일꾼이 다시 맡았거나 먼저 끝낸 글이라,
+	// 여기서 저장하면 그쪽의 결과나 사용자의 확정을 덮어쓴다. 확인과 저장 사이는 몇 ms라서, 3분을 넘겨 다시 맡는 일과 겹칠 일은 사실상 없다
+	private boolean stillClaimed(Long postId, Instant claim) {
+		if (foodAnalysisRepository.existsByPostIdAndStatusAndClaimedAt(postId, AnalysisStatus.PENDING, claim)) {
+			return true;
+		}
+		log.warn("Food analysis result dropped, claimed again by another worker or already finished: postId={}", postId);
+		return false;
 	}
 
 	// 후보 분석의 결과를 저장한다 (JM-74).
 	// 음식마다 첫 번째 후보를 "AI의 첫 답"으로 삼아 지금까지와 같은 자리(합계, 음식 목록)에 저장하고,
 	// 후보 전체는 따로 보관해 두었다가 사용자가 확정할 때 꺼내 쓴다. AI의 첫 답은 확정해도 덮어쓰지 않는다.
-	private void saveCandidates(FoodAnalysis analysis, FoodCandidatesResponse response, long latencyMs) {
+	private void saveCandidates(Long postId, FoodAnalysis analysis, FoodCandidatesResponse response, long latencyMs, Instant claim) {
 		FoodCandidates candidates = clean(response.result());
 		FoodAnalyzerResponse first = new FoodAnalyzerResponse(
 				candidates.firstAnswer(), response.model(), response.inputTokens(), response.outputTokens());
 		markFinished(analysis, first, latencyMs);
 		if (analysis.getStatus() == AnalysisStatus.DONE) {
 			analysis.keepCandidates(jsonMapper.writeValueAsString(candidates.items()));
+		}
+		if (!stillClaimed(postId, claim)) {
+			return;
 		}
 		foodAnalysisRepository.save(analysis);
 		logFinished(analysis, first, latencyMs);
@@ -189,11 +222,13 @@ public class FoodAnalysisService {
 		}
 	}
 
-	private void saveFailure(FoodAnalysis analysis, String reason, long startedAt) {
+	// 실패를 적는다. 엔티티를 저장하지 않고 UPDATE 한 번으로 (JM-110): 결과 저장이 실패해서 여기로 왔다면 엔티티에 저장할 수 없는 값이 들어 있다.
+	// 엔티티로 다시 저장하면 또 실패해서 글이 PENDING으로 남고, 다시 넣기가 AI를 또 부르게 된다. 아직 내가 맡은 글일 때만 바뀐다
+	private void saveFailure(Long postId, String reason, long startedAt, Instant claim) {
 		long latencyMs = System.currentTimeMillis() - startedAt;
-		analysis.markFailed(reason, latencyMs);
-		foodAnalysisRepository.save(analysis);
-		log.warn("Food analysis failed: postId={}, reason={}, latencyMs={}", analysis.getPostId(), reason, latencyMs);
+		int updated = foodAnalysisRepository.markFailedIfClaimed(postId, reason, latencyMs, Instant.now(), claim);
+		log.warn("Food analysis failed: postId={}, reason={}, latencyMs={}{}", postId, reason, latencyMs,
+				updated == 0 ? ", not recorded: claimed again by another worker or already finished" : "");
 	}
 
 	// 응답의 모양은 responseSchema가 강제하지만, 값이 맞는지는 보장하지 않는다. 그래서 저장하기 전에 믿어도 되는 값인지 확인한다.
