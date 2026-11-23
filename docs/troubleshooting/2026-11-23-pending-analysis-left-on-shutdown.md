@@ -24,32 +24,47 @@
 
 ## 해결 (JM-110)
 
-1. **분석을 시작할 때 그 글을 맡는다**: `food_analyses`에 `claimed_at` 칸(비워 둘 수 있음)을 더했다. 일꾼이 분석을 시작할 때 "PENDING이고, 아무도 맡지 않았거나 맡은 지 3분이 넘은" 글일 때만 시각을 적는 UPDATE 한 번(`FoodAnalysisRepository.claimAnalysis`)으로 맡는다. 맡지 못하면 아무것도 하지 않는다. 같은 글이 두 줄에 들어가도 AI는 한 번만 부른다 (직접 적기의 `claimTyped`와 같은 방식)
-2. **5분마다 다시 넣는다**: `PendingAnalysisRequeuer`가 켜진 지 2분 뒤부터 5분마다, 만든 지 3분이 넘은 PENDING 가운데 아무도 맡지 않았거나 맡은 지 3분이 넘은 것을(글이 지워지지 않았으면) 오래된 것부터 한 번에 10개까지 다시 줄에 넣는다. 줄이 가득 차면 멈추고 다음 차례로 미룬다. 줄이 가득 차서 남은 글도 이것으로 풀린다
-3. 켤 때 한 번만 찾지 않는다: 무중단 배포에서는 새 app이 먼저 켜지고, 옛 app이 1분쯤 뒤에 꺼지면서 줄의 일을 버린다
-4. "맡은 지 3분"인 까닭: 분석 한 번은 길어야 35초다(AI 연결 5초 + 읽기 30초). 끌 때 Spring이 기다리는 30초가 지나면 하던 분석이 끊기는데, 그 글은 맡은 채로 PENDING이 된다. 처음에는 10분으로 했다가, 아래 재현에서 그런 글이 3분 안에 풀리지 않아 3분으로 줄였다
-5. 하루 분석 한도는 분석이 시작될 때 그대로 검사한다 (넘으면 LIMIT_EXCEEDED)
+1. **분석을 시작할 때 그 글을 맡는다**: `food_analyses`에 `claimed_at`(맡은 시각, 비워 둘 수 있음)과 `claim_count`(맡은 횟수, DB 기본값 0)를 더했다. 일꾼이 분석을 시작할 때 "PENDING이고, 맡은 횟수가 3보다 적고, 아무도 맡지 않았거나 맡은 지 3분이 넘은" 글일 때만 시각을 적고 횟수를 1 올리는 UPDATE 한 번(`FoodAnalysisRepository.claimAnalysis`)으로 맡는다. 맡지 못하면 AI를 부르지 않는다. 같은 글이 두 줄에 들어가도 AI는 한 번만 부른다 (직접 적기의 `claimTyped`와 같은 방식)
+2. **결과를 저장하기 직전에 아직 내가 맡은 글인지 본다**: 맡은 시각(마이크로초까지로 자른 값)이 그대로일 때만 저장한다. 분석이 아주 오래 걸려 다른 일꾼이 다시 맡았거나 먼저 끝냈으면, 늦게 끝난 쪽의 결과는 버린다 (다른 결과나 사용자의 확정을 덮지 않게)
+3. **실패는 UPDATE 한 번으로 적는다**: 엔티티를 저장하지 않고 `markFailedIfClaimed`로 상태, 이유, 끝난 시각을 적는다. 결과에 저장할 수 없는 값이 들어 있어 저장이 실패한 경우에도 실패는 남고, 끝난 시각이 적혀 하루 분석 횟수에 센다
+4. **5분마다 다시 넣는다**: `PendingAnalysisRequeuer`가 켜진 지 2분 뒤부터 5분마다, 만든 지 3분이 넘고 하루가 안 된 PENDING 가운데 아무도 맡지 않았거나 맡은 지 3분이 넘은 것을(맡은 횟수가 남았고 글이 지워지지 않았으면) 오래된 것부터 한 번에 10개까지 다시 줄에 넣는다. 줄이 가득 차면 멈추고 다음 차례로 미룬다. 줄이 가득 차서 남은 글도 이것으로 풀린다. 넣은 글 번호와 실행마다의 traceId를 로그에 남긴다
+5. **끝없이 다시 부르지 않는다**: 3번을 맡고도 PENDING인 글은 다시 넣기가 `FAILED`(`STUCK`)로 끝낸다. 하루가 넘은 PENDING(이 기능 전부터 남은 글)은 다시 넣지 않는다: 몇 주 전 글이 갑자기 분석되어 사진이 가려지거나(JM-80) 하루 한도를 쓰지 않게. 그런 글은 아래 SQL로 보고 운영자가 정한다
+6. 켤 때 한 번만 찾지 않는다: 무중단 배포에서는 새 app이 먼저 켜지고, 옛 app이 1분쯤 뒤에 꺼지면서 줄의 일을 버린다
+7. "맡은 지 3분"인 까닭: AI 호출은 길어야 35초다(연결 5초 + 읽기 30초). 끌 때 Spring이 기다리는 30초가 지나면 하던 분석이 끊기는데, 그 글은 맡은 채로 PENDING이 된다. 처음에는 10분으로 했다가, 재현에서 그런 글이 3분 안에 풀리지 않아 3분으로 줄였다. 그보다 오래 걸린 분석과 겹쳐도 2번이 늦게 끝난 쪽을 버린다
+8. 하루 분석 한도는 분석이 시작될 때 그대로 검사한다 (넘으면 LIMIT_EXCEEDED)
 
-| 내 PC 재현 (위와 같은 방법, 다시 넣기만 시험용으로 20초마다) | 바꾸기 전 | 고친 뒤 |
+| 내 PC 재현 (위와 같은 방법) | 바꾸기 전 | 고친 뒤 |
 |---|---|---|
-| 끄고 다시 켜기: 다시 켜고 3분 뒤 | PENDING 4 그대로 | 20초 뒤 맡은 적 없는 둘, 3분 뒤 끊긴 둘이 다시 들어가 **PENDING 0** |
-| 무중단 배포(`bash deploy.sh current`)로 옛 app이 줄을 버림 | (같은 문제) | 배포가 끝나고 1초 뒤 **PENDING 0** |
-| 같은 글을 AI가 부른 횟수 | | 6개 모두 1번. 옛 app은 같은 글을 네 번 꺼냈지만 모두 "already claimed"로 건너뜀 |
+| 끄고 다시 켜기 | 다시 켜고 3분 뒤에도 PENDING 4 그대로 | 맡은 적 없는 둘은 20초 뒤, 끊긴 둘은 맡은 지 3분 뒤 다시 들어가 PENDING 0 (다시 켠 뒤 약 3분) |
+| 무중단 배포(`bash deploy.sh current`)로 옛 app이 줄을 버림 | (같은 문제) | 배포가 끝나고 1초 뒤 PENDING 0. 글마다 AI 한 번 (옛 app은 같은 글 둘을 두 번씩, 모두 네 번 꺼냈지만 모두 "already claimed"로 건너뜀) |
+| 운영의 첫 배포와 같게: 옛 코드 app에서 새 코드로 | (같은 문제) | 옛 app이 사이트를 맡은 채로 칸 둘이 붙고(옛 글의 `claim_count`는 0), 배포가 끝나고 3초 뒤 PENDING 0. 옛 app이 맡지 않은 채 분석하던 두 글은 AI를 두 번 불렀다 (아래) |
 
-테스트: 맡기는 한 번만, 맡은 지 오래된 PENDING은 다시 맡기, 끝난 분석은 못 맡기, 다시 넣을 분석 고르기(오래됨, 맡지 않음 또는 오래 맡음, 지워진 글 빼기, 끝난 분석 빼기, 순서와 개수)는 실제 DB로(`FoodAnalysisRepositoryTest`), 맡지 못하면 AI를 부르지 않기는 `FoodAnalysisServiceTest`, 다시 넣기와 줄이 찼을 때 멈추기는 `PendingAnalysisRequeuerTest`. 전체 361개 통과.
+- **재현은 시험용 시간으로 했다**: 다시 넣기를 켠 뒤 20초부터 20초마다, 만든 지 30초 넘은 글로 짧게 했다. 운영 값(2분 뒤부터 5분마다, 만든 지 3분)이면 같은 경우가 다시 켠 뒤 약 7분, 배포 뒤 약 6분에 0이 되고, 버려진 글은 길어야 약 8분(3분 + 5분) 안에 다시 처리된다. "맡은 지 3분"은 코드의 상수라 운영과 같다
+- **첫 배포 때만의 경우**: 옛 app은 맡기를 몰라서, 그 순간 줄에 오래 밀려 있던 글을 새 app이 다시 넣으면 AI를 두 번 부를 수 있다. 운영 값에서는 옛 app이 새 app의 첫 다시 넣기(2분 뒤)보다 먼저 꺼지므로, 배포 순간 줄이 3분 넘게 밀려 있을 때만 생긴다 (한가한 때 배포)
+- **끌 때 AI 호출 도중에 끊긴 글**은 다시 분석되므로 그 글은 AI를 한 번 더 부른다
+
+**PR 전 검토** (에이전트 넷: 맡기와 다시 넣기의 정확성, DB와 AI 비용과 운영, 테스트와 문서, 넷째가 고친 것을 반박 확인): 셋이 같이 찾은 것은 결과 저장이 계속 실패하는 글이 맡은 채 PENDING으로 남아 5분마다 AI를 다시 부르고, 끝난 시각이 적히지 않아 하루 한도에도 세지 않는 것이었다 (실제 DB로 재현). 위의 3번과 5번으로 막았다. 늦게 끝난 일꾼이 다른 쪽 결과나 사용자의 확정을 덮는 것(재현)은 2번, 기능 전부터 남은 글이 첫 배포에 한꺼번에 분석되는 것은 5번의 하루 기준으로 막았다. 테스트는 저장 순서와 만든 시각의 순서를 다르게, 기준 시각 셋을 서로 다르게 해서(바꿔 넘기는 실수도 걸리게), 설정으로 일정이 올라가는지(`PendingAnalysisRequeuerScheduleTest`)까지 확인한다. 넷째 반박 확인은 고친 코드를 옛 표에서 새 표로 바꾼 실제 MySQL에서 깨 보려 했다: 저장이 계속 실패하는 글은 AI 한 번 뒤 FAILED, 분석이 Error로 계속 죽는 글은 AI 세 번 뒤 STUCK, 늦게 끝난 일꾼의 결과는 버려지고 사용자의 확정은 남았다. 거기서 새로 찾은 것 셋도 고쳤다: DB 연결 자체를 못 얻을 때의 예외(`CannotCreateTransactionException`)는 경고로 받지 못해 RDS 점검 때 5분마다 에러 경보가 울릴 수 있었다, 일정 테스트가 끝난 뒤에도 실제 일정이 살아 있어 느린 컴퓨터에서는 개발 DB의 글을 건드렸다(`@DirtiesContext`), "내가 보고 확정" 글의 저장 전 확인이 테스트되지 않았다.
+
+테스트: 맡기는 한 번만, 맡은 지 오래된 PENDING은 다시 맡기, 맡기 횟수, 끝난 분석은 못 맡기, 아직 내가 맡은 글인지, 실패 UPDATE와 하루 횟수, STUCK, 다시 넣을 분석 고르기(기간, 오래됨, 맡지 않음 또는 오래 맡음, 지워진 글, 끝난 분석, 횟수를 다 쓴 글, 순서와 개수)는 실제 DB로(`FoodAnalysisRepositoryTest`), 맡지 못하면 AI를 부르지 않기와 저장 전 확인과 저장 실패는 `FoodAnalysisServiceTest`, 다시 넣기는 `PendingAnalysisRequeuerTest`. 전체 374개 통과.
 
 ## 재발 방지
 
-- 새 기능이 일꾼 줄에 일을 넣을 때는 "줄은 메모리에만 있다"를 전제로, 끝나지 못한 일을 DB 상태로 다시 찾을 수 있게 한다
-- 운영에서 PENDING이 오래 남는지는 다시 넣기 로그(`Pending analyses requeued: found=..., queued=...`)와 아래 SQL로 본다
+- 새 기능이 일꾼 줄에 일을 넣을 때는 "줄은 메모리에만 있다"를 전제로, 끝나지 못한 일을 DB 상태로 다시 찾을 수 있게 하고, 다시 하는 횟수에 끝을 둔다
+- 운영에서 PENDING이 오래 남는지는 다시 넣기 로그(`Pending analyses requeued: found=..., queued=..., postIds=[...]`, `given up ... STUCK`)와 아래 SQL로 본다
 
 ## 재는 법
 
 - 내 PC: 위 재현 (기록 저장소 `update_picture/JM-110/tools/before_pending.sh`, `after_pending.sh`)
-- 운영: 서버에서 `food_analyses`의 PENDING 수와 가장 오래된 것의 시각 (기획서 16절의 SQL 방식)
+- 운영: SSH로 서버에 들어가 `cd ~/personal_project/deploy` 다음, 아래 명령(읽기만 한다). 10분 넘게 PENDING인 글이 0이면 정상이다. DB의 시각은 UTC라서 9시간을 더해 보여 준다
+
+```
+docker run --rm --env-file .env mysql:8.4 sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -h "$DB_HOST" -u macros macros -e "select a.post_id, a.created_at + interval 9 hour as created_kst, a.claim_count, a.confirm_mode from food_analyses a join posts p on p.id = a.post_id where a.status = \"PENDING\" and p.status = \"ACTIVE\" and a.created_at < utc_timestamp(6) - interval 10 minute order by a.created_at;"'
+```
+
+- 하루가 넘어 다시 넣지 않는 오래된 PENDING도 같은 명령으로 보인다. 다시 분석할지(그 글만 `claimed_at`, `claim_count`를 비우는 것으로는 안 되고 만든 시각이 하루 안이어야 한다), 실패로 둘지는 운영자가 정한다
 
 ## 기록
 
 - [2026-11-23-await-termination-closed-db-first](2026-11-23-await-termination-closed-db-first.md) (끄는 순서)
-- 비공개 기록 저장소 `update_picture/JM-110/` (`before-behavior.txt`, `draft1-behavior.txt`)
+- 비공개 기록 저장소 `update_picture/JM-110/` (`before-behavior.txt`, `draft1-behavior.txt`, `draft1-run1-10min-claim.log`, `draft2-behavior.txt`)
 - Jira JM-110, JM-62 댓글 10095
