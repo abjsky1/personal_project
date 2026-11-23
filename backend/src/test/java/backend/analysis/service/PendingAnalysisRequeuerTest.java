@@ -24,6 +24,7 @@ import org.mockito.ArgumentCaptor;
 import org.slf4j.MDC;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.transaction.CannotCreateTransactionException;
 
 import backend.analysis.model.dto.PendingAnalysis;
 import backend.analysis.model.repository.FoodAnalysisRepository;
@@ -107,9 +108,18 @@ class PendingAnalysisRequeuerTest {
 	}
 
 	@Test
-	void DB가_잠깐_안_되면_예외를_밖으로_던지지_않는다() {
+	void 쿼리가_실패하면_예외를_밖으로_던지지_않는다() {
 		// 던지면 Spring이 일정 작업의 오류를 ERROR로 남겨, DB 점검 때마다 에러 경보가 울린다. 다음 차례에 다시 하면 된다
 		when(repository.failExhausted(any())).thenThrow(new DataAccessResourceFailureException("db down"));
+
+		assertThatCode(requeuer::requeue).doesNotThrowAnyException();
+		verify(service, never()).analyzeInBackground(anyLong(), anyString());
+	}
+
+	@Test
+	void DB_연결을_아예_못_얻어도_예외를_밖으로_던지지_않는다() {
+		// DB가 꺼져 있으면 트랜잭션을 시작할 때 CannotCreateTransactionException이 난다 (DataAccessException이 아니다. 반박 확인에서 DB를 끄고 재현)
+		when(repository.failExhausted(any())).thenThrow(new CannotCreateTransactionException("Could not open JPA EntityManager"));
 
 		assertThatCode(requeuer::requeue).doesNotThrowAnyException();
 		verify(service, never()).analyzeInBackground(anyLong(), anyString());

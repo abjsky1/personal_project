@@ -330,6 +330,20 @@ class FoodAnalysisServiceTest {
 	}
 
 	@Test
+	void 내가_보고_확정으로_올린_글도_저장하기_전에_다른_일꾼이_다시_맡았으면_후보를_버린다() {
+		// 후보 저장(saveCandidates)도 결과 저장과 같은 확인을 거친다 (JM-110, 반박 확인에서 이 길이 시험되지 않은 것을 찾음)
+		userMode();
+		aiOffers(twoFoods());
+		when(repository.existsByPostIdAndStatusAndClaimedAt(eq(POST_ID), eq(AnalysisStatus.PENDING), any())).thenReturn(false);
+
+		service.analyze(POST_ID, IMAGE_KEY);
+
+		verify(analyzer).analyzeCandidates(jpeg);
+		verify(repository, never()).save(any());
+		verify(repository, never()).markFailedIfClaimed(any(), any(), anyLong(), any(), any());
+	}
+
+	@Test
 	void AI가_바로_확정으로_올린_글은_후보_분석을_부르지_않는다() {
 		aiAnswers(new FoodAnalysisResult(true, List.of(new FoodItem("공기밥", 210, 310, 68, 5, 1)), "HIGH", "1공기"));
 

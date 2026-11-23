@@ -10,13 +10,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.scheduling.config.FixedDelayTask;
 import org.springframework.scheduling.config.ScheduledTask;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.util.ReflectionTestUtils;
 
 // 다시 넣기(JM-110)가 application.properties의 값으로 일정에 올라가는지 확인하는 테스트.
 // 다른 테스트에서는 꺼 두므로(test 설정의 app.analysis.requeue.enabled=false) 여기서만 켠다.
 // 설정 이름에 오타가 있으면 운영 서버에서 켜질 때 처음 드러나므로, 여기서 미리 잡는다.
-// 처음 실행은 켜진 지 2분 뒤라서, 이 테스트가 끝나기 전에 실제로 돌지는 않는다
+// 처음 실행은 켜진 지 2분 뒤라서, 이 테스트가 끝나기 전에 실제로 돌지는 않는다.
+// @DirtiesContext: 이 테스트가 끝나면 이 컨텍스트를 닫아 일정도 멈춘다. 안 그러면 Spring이 컨텍스트를 남겨 두어,
+// 다른 테스트가 도는 동안 2분 뒤 실제 다시 넣기가 개발 DB의 글을 건드린다 (반박 확인에서 재현)
 @SpringBootTest(properties = "app.analysis.requeue.enabled=true")
+@DirtiesContext
 class PendingAnalysisRequeuerScheduleTest {
 
 	@Autowired

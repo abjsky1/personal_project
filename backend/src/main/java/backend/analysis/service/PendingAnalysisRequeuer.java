@@ -12,6 +12,7 @@ import org.springframework.core.task.TaskRejectedException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.TransactionException;
 
 import backend.analysis.model.dto.PendingAnalysis;
 import backend.analysis.model.entity.FoodAnalysis;
@@ -89,8 +90,9 @@ public class PendingAnalysisRequeuer {
 			}
 			log.info("Pending analyses requeued: found={}, queued={}, postIds={}", targets.size(), queued,
 					targets.stream().map(PendingAnalysis::postId).toList());
-		} catch (DataAccessException e) {
-			// DB가 잠깐 안 될 때(RDS 점검 등). 다음 차례에 다시 하므로 경고만 남긴다 (에러 경보를 울리지 않게)
+		} catch (DataAccessException | TransactionException e) {
+			// DB가 잠깐 안 될 때(RDS 점검 등). 다음 차례에 다시 하므로 경고만 남긴다 (에러 경보를 울리지 않게).
+			// 연결 자체를 못 얻으면 DataAccessException이 아니라 TransactionException(CannotCreateTransactionException)이 난다
 			log.warn("Pending analysis requeue skipped, DB error: {}", e.getClass().getSimpleName());
 		} finally {
 			MDC.remove(TraceIdFilter.TRACE_ID_KEY);
