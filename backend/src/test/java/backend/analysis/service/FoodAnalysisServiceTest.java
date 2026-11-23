@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -72,8 +74,10 @@ class FoodAnalysisServiceTest {
 		analysis = new FoodAnalysis(new Post("테스터", "hash", null, IMAGE_KEY, "thumb.jpg", null));
 		when(repository.findById(POST_ID)).thenReturn(Optional.of(analysis));
 		when(storage.load(IMAGE_KEY)).thenReturn(Optional.of(jpeg));
-		// 분석을 시작할 때 이 글을 맡는다 (JM-110). 아래 테스트들은 맡기에 성공한 경우다
+		// 분석을 시작할 때 이 글을 맡는다 (JM-110). 아래 테스트들은 맡기에 성공하고, 저장하기 전에도 아직 내가 맡은 글인 경우다
 		when(repository.claimAnalysis(eq(POST_ID), any(), any())).thenReturn(1);
+		when(repository.existsByPostIdAndStatusAndClaimedAt(eq(POST_ID), eq(AnalysisStatus.PENDING), any())).thenReturn(true);
+		when(repository.markFailedIfClaimed(eq(POST_ID), any(), anyLong(), any(), any())).thenReturn(1);
 	}
 
 	// ---- 맡기 (JM-110) ----
@@ -84,6 +88,7 @@ class FoodAnalysisServiceTest {
 
 		service.analyze(POST_ID, IMAGE_KEY);
 
+		verify(repository).claimAnalysis(eq(POST_ID), any(), any());
 		verify(analyzer, never()).analyze(any());
 		verify(analyzer, never()).analyzeCandidates(any());
 		verify(repository, never()).findById(any());
@@ -91,9 +96,49 @@ class FoodAnalysisServiceTest {
 	}
 
 	@Test
+	void 맡은_시각은_마이크로초까지로_잘라_맡고_저장하기_전에_같은_값으로_아직_내가_맡은_글인지_본다() {
+		aiAnswers(new FoodAnalysisResult(false, List.of(), "low", "음식 아님"));
+
+		service.analyze(POST_ID, IMAGE_KEY);
+
+		ArgumentCaptor<Instant> claim = ArgumentCaptor.forClass(Instant.class);
+		verify(repository).claimAnalysis(eq(POST_ID), claim.capture(), any());
+		// DB 칸(DATETIME(6))은 마이크로초까지라서, 그보다 잘게 적으면 다시 읽은 값과 같지 않다
+		assertThat(claim.getValue().getNano() % 1_000).isZero();
+		verify(repository).existsByPostIdAndStatusAndClaimedAt(POST_ID, AnalysisStatus.PENDING, claim.getValue());
+		verify(repository).save(analysis);
+	}
+
+	@Test
+	void 저장하기_전에_다른_일꾼이_다시_맡았거나_끝냈으면_결과를_버린다() {
+		aiAnswers(new FoodAnalysisResult(true, List.of(new FoodItem("밥", 210, 300, 65, 5, 1)), "high", "밥"));
+		when(repository.existsByPostIdAndStatusAndClaimedAt(eq(POST_ID), eq(AnalysisStatus.PENDING), any())).thenReturn(false);
+
+		service.analyze(POST_ID, IMAGE_KEY);
+
+		verify(analyzer, times(1)).analyze(jpeg);
+		verify(repository, never()).save(any());
+		verify(repository, never()).markFailedIfClaimed(any(), any(), anyLong(), any(), any());
+	}
+
+	@Test
+	void 결과_저장이_실패하면_엔티티가_아니라_UPDATE_한_번으로_실패를_적어_PENDING으로_남기지_않는다() {
+		// 예: 저장할 수 없는 값(칸보다 긴 글자). 엔티티로 실패를 다시 저장하면 같은 이유로 또 실패해 PENDING으로 남고, 다시 넣기가 AI를 또 부른다
+		aiAnswers(new FoodAnalysisResult(true, List.of(new FoodItem("밥", 210, 300, 65, 5, 1)), "high", "밥"));
+		when(repository.save(any())).thenThrow(new DataIntegrityViolationException("Data too long"));
+
+		service.analyze(POST_ID, IMAGE_KEY);
+
+		ArgumentCaptor<Instant> claim = ArgumentCaptor.forClass(Instant.class);
+		verify(repository).claimAnalysis(eq(POST_ID), claim.capture(), any());
+		verify(repository).markFailedIfClaimed(eq(POST_ID), eq("UNEXPECTED"), anyLong(), any(), eq(claim.getValue()));
+	}
+
+	@Test
 	void 맡은_지_3분이_넘은_PENDING만_다시_맡을_수_있게_기준_시각을_넘긴다() {
 		aiAnswers(new FoodAnalysisResult(false, List.of(), "low", "음식 아님"));
-		Instant before = Instant.now();
+		// 맡는 시각은 마이크로초까지로 잘라서 적으므로 비교하는 값도 같게 자른다
+		Instant before = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
 
 		service.analyze(POST_ID, IMAGE_KEY);
 
@@ -253,11 +298,12 @@ class FoodAnalysisServiceTest {
 		when(analyzer.analyze(jpeg)).thenReturn(new FoodAnalyzerResponse(result, "test-model", 1300, 100));
 	}
 
+	// 실패는 엔티티를 저장하지 않고 UPDATE 한 번(markFailedIfClaimed)으로 적는다 (JM-110). 맡을 때 적은 시각으로만 바뀐다
 	private void assertThatFailed(String reason) {
-		assertThat(analysis.getStatus()).isEqualTo(AnalysisStatus.FAILED);
-		assertThat(analysis.getErrorMessage()).isEqualTo(reason);
-		assertThat(analysis.getAttemptCount()).isEqualTo(1);
-		verify(repository).save(analysis);
+		ArgumentCaptor<Instant> claim = ArgumentCaptor.forClass(Instant.class);
+		verify(repository).claimAnalysis(eq(POST_ID), claim.capture(), any());
+		verify(repository).markFailedIfClaimed(eq(POST_ID), eq(reason), anyLong(), any(), eq(claim.getValue()));
+		verify(repository, never()).save(any());
 	}
 
 	// ---- 고쳐 쓰는 AI (JM-74): "내가 보고 확정"으로 올린 글 ----
