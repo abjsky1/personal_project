@@ -6,8 +6,10 @@
 # DB는 이 파일에 없다: AWS가 관리하는 RDS를 쓰고, app이 .env의 DB_HOST(RDS 주소)로 접속한다.
 # 평소 배포: main에 push하면 GitHub Actions가 이미지를 만들고 서버에서 deploy.sh를 실행한다 (사람이 할 일 없음)
 # 주의: 서비스 이름 없이 docker compose up -d 를 하면 app1과 app2가 둘 다 켜진다 (자바 둘, 메모리 약 1GB).
-#   서버에서 직접 켤 때는 이름을 붙인다: docker compose up -d nginx certbot  /  app은 deploy.sh로
-# 처음 올리거나 비상시(GHCR 장애 등, 서버에서 직접 빌드, 끊김 있음): deploy 폴더에서  docker compose up -d --build nginx certbot app1
+#   서버에서 직접 켤 때는 이름을 붙인다: docker compose up -d nginx certbot  /  app은 deploy.sh로 (.env를 바꾼 뒤에는 bash deploy.sh current)
+# nginx/active-app.inc를 지우지 않는다: 없으면 nginx는 app1을 본다
+# 처음 올릴 때(새 서버): deploy 폴더에서  docker compose up -d nginx certbot  다음  bash deploy.sh <SHA>
+# 비상시(GHCR 장애이고 서버에도 이미지가 없을 때, 서버에서 빌드): APP1_TAG=local-<SHA> docker compose build app1 && bash deploy.sh local-<SHA>
 # 비밀값은 같은 폴더의 .env에서 읽는다 (.env.example을 복사해서 채운다. Git에는 올라가지 않는다)
 # 인증서: 서비스에는 가비아에서 산 인증서를 쓴다 (JM-67. 파일은 서버의 nginx/ssl 폴더에만 있고 Git에는 없다).
 #         certbot의 Let's Encrypt 인증서는 예비. 설명은 기획서 10절 "HTTPS", 교체 순서는 16절 "인증서 교체"
@@ -42,7 +44,7 @@ x-logging-cloud: &logging-cloud
 # 주의: 서비스 쪽에 이 묶음과 같은 칸(environment 등)을 다시 적으면 그 칸은 합쳐지지 않고 통째로 바뀐다.
 # *logging-cloud를 가리키므로 x-logging-cloud보다 아래에 있어야 한다.
 x-app: &app
-  # build는 내 PC 시험용, 비상용으로 남겨 둔다: docker compose up -d --build app1 을 하면 서버에서 직접 만든다
+  # build는 내 PC 시험용, 비상용으로 남겨 둔다: APP1_TAG=local-<SHA> docker compose build app1 으로 서버에서 만든 뒤 bash deploy.sh local-<SHA> (맨 위 주석)
   build: ../backend
   restart: unless-stopped
   # ports가 없다: app은 밖에 열지 않고, 같은 Compose 안의 nginx만 접속할 수 있다.
@@ -73,9 +75,9 @@ x-app: &app
     - ./geoip:/app/geoip:ro
   # 컨테이너 전체 메모리 한도 (힙 512MB + 자바 자체가 쓰는 메모리). 넘으면 이 컨테이너만 꺼졌다가 다시 켜진다.
   mem_limit: 1g
-  # 끌 때 기다려 주는 시간. 그동안 Spring이 받던 요청과 뒤에서 하던 AI 분석을 마저 끝낸다 (application.properties, 최대 30초).
-  # Docker의 기본값은 10초라서, 그 뒤에는 하던 일이 있어도 강제로 끈다 (JM-62)
-  stop_grace_period: 40s
+  # 끌 때 기다려 주는 시간. 그동안 Spring이 끄는 단계마다(최대 30초씩) 받던 요청과 뒤에서 하던 AI 분석(한 번에 최대 35초)을 마저 끝낸다.
+  # Docker의 기본값은 10초라서, 그 뒤에는 하던 일이 있어도 강제로 끈다 (JM-62). 하던 일이 없으면 1초 안에 꺼진다
+  stop_grace_period: 60s
   # 상태 검사: 서버가 요청을 받을 수 있는지 30초마다 확인한다 (docker ps에 healthy로 표시)
   # 배포 때 새 app이 켜졌는지는 deploy.sh가 nginx 컨테이너에서 /actuator/health를 직접 불러 확인한다 (30초를 기다리지 않게)
   healthcheck:
