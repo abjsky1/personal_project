@@ -29,6 +29,8 @@ import backend.comment.service.CommentService;
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
 import backend.common.web.Visitors;
+import backend.post.model.dto.FeedFilter;
+import backend.post.model.dto.FilterView;
 import backend.post.model.dto.PostCreateForm;
 import backend.post.model.dto.PostMemoForm;
 import backend.post.model.dto.SearchResult;
@@ -70,28 +72,61 @@ public class PostController {
 	// 첫 화면 = 게시글 목록 (쪽 번호 방식, JM-57)
 	// @RequestParam(defaultValue = "1"): 주소의 ?page=값 을 받는다. 없으면 1쪽. 숫자가 아니면 400 에러 화면
 	// Model: JSP로 넘겨줄 값을 담는 상자. 여기서 넣은 "feed"를 JSP에서 ${feed}로 꺼낸다.
+	// 피드 필터 (JM-83): ?tag=KOREAN&tag=SPICY&kcalMin=400&kcalMax=800 처럼 고른 태그와 칼로리 범위. 없으면 지금까지의 피드 그대로다.
+	// tag는 List로 받는다 (같은 이름이 여러 번 온다). 모르는 값은 FeedFilter가 버린다
 	@GetMapping("/")
-	public String list(@RequestParam(defaultValue = "1") int page, Model model) {
-		model.addAttribute("feed", postService.getFeed(page));
+	public String list(@RequestParam(defaultValue = "1") int page,
+			@RequestParam(required = false) List<String> tag,
+			@RequestParam(required = false) String kcalMin,
+			@RequestParam(required = false) String kcalMax,
+			Model model) {
+		FeedFilter filter = FeedFilter.of(tag, kcalMin, kcalMax);
+		if (filter.isEmpty()) {
+			model.addAttribute("feed", postService.getFeed(page));
+		} else {
+			SearchResult result = postService.getFilteredFeed(filter, page);
+			model.addAttribute("feed", result.feed());
+			model.addAttribute("total", result.total());
+		}
+		addFilter(model, filter, "/?");
 		return "posts/list";
 	}
 
 	// 검색 (JM-52): 닉네임이나 음식 이름으로 찾은 글. 화면은 피드와 같은 posts/list.jsp를 쓰고, query가 있으면 검색 결과로 그린다.
 	// 주소를 피드(/)와 나눈 이유: 방문 기록(JM-92)과 nginx 기록에서 검색을 피드와 따로 셀 수 있다 (화면 이름 SEARCH)
-	// - 검색어가 없거나 빈칸뿐이면 피드로 보낸다 (검색 칸을 비운 채 찾기를 누른 경우)
-	// - searchParam: 쪽 번호 줄의 주소에 넣을 검색어. URL 글자로 바꿔 둔다 (라면 → %EB%9D%BC%EB%A9%B4, 빈칸 → +)
+	// - 검색어가 없거나 빈칸뿐이면 피드로 보낸다 (검색 칸을 비운 채 찾기를 누른 경우). 고른 필터는 그대로 싣는다
+	// - searchParam: 주소에 넣을 검색어. URL 글자로 바꿔 둔다 (라면 → %EB%9D%BC%EB%A9%B4, 빈칸 → +)
+	// - 필터(JM-83)도 함께 받는다: 검색어와 필터가 모두 맞는 글
 	@GetMapping("/search")
-	public String search(@RequestParam(required = false) String q, @RequestParam(defaultValue = "1") int page, Model model) {
+	public String search(@RequestParam(required = false) String q, @RequestParam(defaultValue = "1") int page,
+			@RequestParam(required = false) List<String> tag,
+			@RequestParam(required = false) String kcalMin,
+			@RequestParam(required = false) String kcalMax,
+			Model model) {
+		FeedFilter filter = FeedFilter.of(tag, kcalMin, kcalMax);
 		String query = PostService.normalizeQuery(q);
 		if (query.isEmpty()) {
-			return "redirect:/";
+			return filter.isEmpty() ? "redirect:/" : "redirect:/?" + filter.query();
 		}
-		SearchResult result = postService.search(query, page);
+		SearchResult result = postService.search(query, filter, page);
+		String searchParam = URLEncoder.encode(query, StandardCharsets.UTF_8);
 		model.addAttribute("feed", result.feed());
 		model.addAttribute("total", result.total());
 		model.addAttribute("query", query);
-		model.addAttribute("searchParam", URLEncoder.encode(query, StandardCharsets.UTF_8));
+		model.addAttribute("searchParam", searchParam);
+		addFilter(model, filter, "/search?q=" + searchParam + "&");
 		return "posts/list";
+	}
+
+	// 필터 창의 재료, 고른 필터, 쪽 번호 줄의 주소 앞부분 (pagerBase: HTML 안에 그대로 넣으므로 &를 &amp;로 적는다)
+	// clearFilterUrl: 결과 줄의 "필터 지우기" (검색이면 검색어만 남긴 주소, 피드면 첫 화면)
+	private void addFilter(Model model, FeedFilter filter, String base) {
+		String query = filter.query();
+		String pagerBase = (base + (query.isEmpty() ? "" : query + "&") + "page=").replace("&", "&amp;");
+		model.addAttribute("filter", FilterView.of(filter));
+		model.addAttribute("filtered", !filter.isEmpty());
+		model.addAttribute("pagerBase", pagerBase);
+		model.addAttribute("clearFilterUrl", base.equals("/?") ? "/" : base.substring(0, base.length() - 1));
 	}
 
 	// 글쓰기 화면
