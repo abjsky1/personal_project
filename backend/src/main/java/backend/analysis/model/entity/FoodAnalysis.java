@@ -30,6 +30,8 @@ public class FoodAnalysis {
 	private static final int MAX_COMMENT_LENGTH = 500;
 	// 한 글의 분석을 맡을 수 있는 최대 횟수 (JM-110): 처음 한 번 + 다시 넣기 두 번
 	public static final int MAX_CLAIMS = 3;
+	// 태그 채우기가 한 글을 맡을 수 있는 최대 횟수 (JM-83)
+	public static final int MAX_TAG_ATTEMPTS = 3;
 
 	// 기본 키 = 게시글 번호 (post_locations와 같은 방식)
 	@Id
@@ -158,6 +160,25 @@ public class FoodAnalysis {
 	// 확정한 음식 가운데, 직접 적은 것을 AI가 "사진과 맞지 않는다"고 본 것이 있는지. 확정하기 전에는 비어 있다.
 	// 맞지 않아도 확정은 받는다 (글쓴이가 사진보다 잘 안다). 나중에 통계나 학습 데이터에서 걸러 낼 수 있게 남기는 표시다.
 	private Boolean typedMismatch;
+
+	// ---- 태그 (JM-83, 음식 카테고리) ----
+	// 태그 자체는 post_tags에 한 줄씩 있다 (PostTag). 여기에는 "채웠는지"와 "채우려고 AI를 몇 번, 언제 불렀는지"만 둔다.
+	// 세 칸 모두 Repository의 UPDATE(PostTagRepository와 FoodAnalysisRepository)가 채운다. 엔티티로 저장하는 분석 결과가 덮어쓰지 않게
+	// insertable, updatable을 false로 둔다 (분석 결과를 저장할 때 이 칸들은 SQL에 들어가지 않는다)
+
+	// 태그를 저장한 시각. 비어 있으면 아직 태그가 없는 글이다 (태그 채우기 PostTagFiller가 찾는다)
+	@Column(insertable = false, updatable = false)
+	private Instant taggedAt;
+
+	// 태그 채우기가 이 글을 맡은 횟수. MAX_TAG_ATTEMPTS번까지만 맡아서, 실패하는 글에 AI를 끝없이 부르지 않는다.
+	// @ColumnDefault: 칸을 더할 때 있는 글은 0으로 채워지고, 이 칸을 모르는 옛 코드가 글을 저장해도 0이 들어간다 (무중단 배포, 기획서 10절)
+	@ColumnDefault("0")
+	@Column(nullable = false, insertable = false, updatable = false)
+	private int tagAttempts;
+
+	// 태그 채우기가 마지막으로 AI를 부른 시각. 하루 분석 횟수(countToday)에 함께 센다 (분석과 같은 AI 비용이라서)
+	@Column(insertable = false, updatable = false)
+	private Instant tagCalledAt;
 
 	protected FoodAnalysis() {
 	}
@@ -368,5 +389,17 @@ public class FoodAnalysis {
 
 	public Boolean getTypedMismatch() {
 		return typedMismatch;
+	}
+
+	public Instant getTaggedAt() {
+		return taggedAt;
+	}
+
+	public int getTagAttempts() {
+		return tagAttempts;
+	}
+
+	public Instant getTagCalledAt() {
+		return tagCalledAt;
 	}
 }

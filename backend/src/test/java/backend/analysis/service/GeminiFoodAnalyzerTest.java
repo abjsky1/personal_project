@@ -23,7 +23,9 @@ import org.springframework.web.client.RestClient;
 
 import backend.analysis.model.dto.FoodAnalyzerResponse;
 import backend.analysis.model.dto.FoodCandidatesResponse;
+import backend.analysis.model.dto.FoodTagsResponse;
 import backend.analysis.model.dto.TypedEstimatesResponse;
+import backend.analysis.model.entity.FoodTag;
 import tools.jackson.databind.json.JsonMapper;
 
 // Gemini로 보내는 요청과 응답 처리를 확인하는 테스트. 실제 Gemini는 부르지 않는다.
@@ -191,6 +193,74 @@ class GeminiFoodAnalyzerTest {
 		assertThat(response.result().items().get(0).matchesPhoto()).isTrue();
 		assertThat(response.result().items().get(0).kcalPer100g()).isEqualTo(150);
 		assertThat(response.result().items().get(1).isFood()).isFalse();
+		assertThat(response.model()).isEqualTo("test-model");
+		assertThat(response.inputTokens()).isEqualTo(1300);
+		assertThat(response.outputTokens()).isEqualTo(100);
+	}
+
+	// ---- 태그 (JM-83) ----
+
+	// 두 분석의 응답 형식에 태그 칸이 들고, 값 목록은 FoodTag에서 온다. 답의 태그를 읽는다
+	@Test
+	void 분석의_응답_형식에_태그가_들고_답의_태그를_읽는다() {
+		String result = """
+				{"isFood":true,
+				 "items":[{"name":"쌀국수","amountG":600,"kcal":450,"carbsG":70,"proteinG":25,"fatG":8}],
+				 "confidence":"HIGH","comment":"1인분 기준",
+				 "tags":{"kind":"MEAL","cuisine":"ASIAN","staples":["NOODLE"],"ingredients":["MEAT"],"spicy":false,"temperature":"HOT"}}
+				""";
+		server.expect(requestTo(URL))
+				.andExpect(jsonPath("$.contents[0].parts[0].text").value(containsString("ASIAN(한식, 중식, 일식을 뺀 아시아")))
+				.andExpect(jsonPath("$.generationConfig.responseSchema.required[4]").value("tags"))
+				.andExpect(jsonPath("$.generationConfig.responseSchema.properties.tags.properties.kind.enum[0]").value("MEAL"))
+				.andExpect(jsonPath("$.generationConfig.responseSchema.properties.tags.properties.cuisine.enum[5]").value("OTHER"))
+				.andExpect(jsonPath("$.generationConfig.responseSchema.properties.tags.properties.staples.items.enum[3]").value("RICE_CAKE"))
+				.andExpect(jsonPath("$.generationConfig.responseSchema.properties.tags.properties.spicy.type").value("BOOLEAN"))
+				.andExpect(jsonPath("$.generationConfig.responseSchema.properties.tags.properties.temperature.enum[2]").value("NEUTRAL"))
+				.andRespond(withSuccess(geminiResponse(result), MediaType.APPLICATION_JSON));
+
+		FoodAnalyzerResponse response = analyzer.analyze(jpeg);
+
+		server.verify();
+		assertThat(response.result().tags().toTags()).containsExactly(
+				FoodTag.MEAL, FoodTag.ASIAN, FoodTag.NOODLE, FoodTag.MEAT, FoodTag.NOT_SPICY, FoodTag.HOT);
+	}
+
+	@Test
+	void 후보_분석도_태그를_읽고_AI의_첫_답에_넘긴다() {
+		String result = """
+				{"isFood":true,
+				 "items":[{"amountG":400,"candidates":[{"name":"김치찌개","kcalPer100g":55,"carbsPer100g":3,"proteinPer100g":4.5,"fatPer100g":2.5}]}],
+				 "confidence":"MEDIUM","comment":"1인분 기준",
+				 "tags":{"kind":"MEAL","cuisine":"KOREAN","staples":["RICE"],"ingredients":["MEAT"],"spicy":true,"temperature":"HOT"}}
+				""";
+		server.expect(requestTo(URL))
+				.andExpect(jsonPath("$.generationConfig.responseSchema.properties.tags.properties.ingredients.items.enum[1]").value("SEAFOOD"))
+				.andRespond(withSuccess(geminiResponse(result), MediaType.APPLICATION_JSON));
+
+		FoodCandidatesResponse response = analyzer.analyzeCandidates(jpeg);
+
+		assertThat(response.result().tags().kind()).isEqualTo("MEAL");
+		assertThat(response.result().firstAnswer().tags().toTags()).contains(FoodTag.KOREAN, FoodTag.SPICY);
+	}
+
+	// 지난 글 채우기: 태그만 묻고(응답 형식이 태그 하나), 사진을 함께 보낸다
+	@Test
+	void 태그만_물을_때는_태그_형식을_보내고_태그를_읽는다() {
+		String result = """
+				{"kind":"DRINK","cuisine":"WESTERN","staples":[],"ingredients":[],"spicy":false,"temperature":"COLD"}
+				""";
+		server.expect(requestTo(URL))
+				.andExpect(jsonPath("$.contents[0].parts[0].text").value(containsString("분류 도우미")))
+				.andExpect(jsonPath("$.contents[0].parts[1].inline_data.data").value("AQID"))
+				.andExpect(jsonPath("$.generationConfig.responseSchema.properties.kind.enum[2]").value("DRINK"))
+				.andExpect(jsonPath("$.generationConfig.responseSchema.required[0]").value("kind"))
+				.andRespond(withSuccess(geminiResponse(result), MediaType.APPLICATION_JSON));
+
+		FoodTagsResponse response = analyzer.classify(jpeg);
+
+		server.verify();
+		assertThat(response.tags().toTags()).containsExactly(FoodTag.DRINK, FoodTag.WESTERN, FoodTag.NOT_SPICY, FoodTag.COLD);
 		assertThat(response.model()).isEqualTo("test-model");
 		assertThat(response.inputTokens()).isEqualTo(1300);
 		assertThat(response.outputTokens()).isEqualTo(100);

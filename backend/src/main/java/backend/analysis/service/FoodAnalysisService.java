@@ -9,6 +9,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -29,11 +30,13 @@ import backend.analysis.model.dto.FoodCandidates;
 import backend.analysis.model.dto.FoodCandidates.Candidate;
 import backend.analysis.model.dto.FoodCandidates.CandidateItem;
 import backend.analysis.model.dto.FoodCandidatesResponse;
+import backend.analysis.model.dto.FoodTags;
 import backend.analysis.model.dto.TypedEstimates.TypedEstimate;
 import backend.analysis.model.dto.TypedEstimatesResponse;
 import backend.analysis.model.entity.AnalysisStatus;
 import backend.analysis.model.entity.ConfirmMode;
 import backend.analysis.model.entity.FoodAnalysis;
+import backend.analysis.model.entity.FoodTag;
 import backend.analysis.model.repository.FoodAnalysisRepository;
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
@@ -76,6 +79,8 @@ public class FoodAnalysisService {
 	private final FoodAnalyzer foodAnalyzer;
 	private final ImageStorage imageStorage;
 	private final JsonMapper jsonMapper;
+	// 분석의 답에 함께 온 태그를 저장한다 (JM-83)
+	private final PostTagService postTagService;
 	// 전체 하루 분석 횟수 상한 (application.properties의 app.analysis.daily-limit)
 	private final int dailyLimit;
 
@@ -84,11 +89,13 @@ public class FoodAnalysisService {
 			FoodAnalyzer foodAnalyzer,
 			ImageStorage imageStorage,
 			JsonMapper jsonMapper,
+			PostTagService postTagService,
 			@Value("${app.analysis.daily-limit}") int dailyLimit) {
 		this.foodAnalysisRepository = foodAnalysisRepository;
 		this.foodAnalyzer = foodAnalyzer;
 		this.imageStorage = imageStorage;
 		this.jsonMapper = jsonMapper;
+		this.postTagService = postTagService;
 		this.dailyLimit = dailyLimit;
 	}
 
@@ -148,16 +155,19 @@ public class FoodAnalysisService {
 	// 오늘(한국 시간 자정부터) AI 호출이 몇 번 끝났는지 DB에서 센다.
 	// 메모리가 아니라 DB에서 세는 이유: 배포로 서버를 다시 켜도 오늘 횟수가 0으로 돌아가지 않는다.
 	// 일꾼 2명이 동시에 분석하면 상한을 1~2건 넘을 수 있지만, 비용을 막는 장치라 그 정도는 괜찮다.
-	private boolean isDailyLimitReached() {
+	// 태그 채우기(PostTagFiller, JM-83)도 AI를 부르기 전에 이것을 본다
+	public boolean isDailyLimitReached() {
 		return countToday() >= dailyLimit;
 	}
 
 	// 오늘(한국 시간 자정부터) AI를 부른 횟수. 상한 검사와 운영자 통계가 같은 숫자를 본다.
 	// 글을 올릴 때의 분석과, 직접 적은 음식을 계산한 호출(JM-74)을 더한다. 둘 다 AI를 한 번씩 부른 것이다.
+	// 지난 글의 태그를 채우려고 사진을 다시 보낸 호출(JM-83, PostTagFiller)도 더한다 (분석에 함께 오는 태그는 따로 부르지 않아서 세지 않는다)
 	public long countToday() {
 		Instant startOfToday = LocalDate.now(KOREA).atStartOfDay(KOREA).toInstant();
 		return foodAnalysisRepository.countByCompletedAtGreaterThanEqual(startOfToday)
-				+ foodAnalysisRepository.countByTypedCalledAtGreaterThanEqual(startOfToday);
+				+ foodAnalysisRepository.countByTypedCalledAtGreaterThanEqual(startOfToday)
+				+ foodAnalysisRepository.countByTagCalledAtGreaterThanEqual(startOfToday);
 	}
 
 	public int getDailyLimit() {
@@ -171,6 +181,26 @@ public class FoodAnalysisService {
 		}
 		foodAnalysisRepository.save(analysis);
 		logFinished(analysis, response, latencyMs);
+		saveTags(postId, analysis, response.result().tags());
+	}
+
+	// 분석의 답에 함께 온 태그를 저장한다 (JM-83). 음식으로 본 글(DONE)만.
+	// 태그는 덤이라 여기서 실패해도 분석 결과는 그대로 두고 경고만 남긴다. 태그가 없는 글은 태그 채우기(PostTagFiller)가 나중에 채운다.
+	// 예외를 밖으로 던지지 않는 이유: analyze의 catch가 받으면, 이미 DONE으로 저장한 글을 실패로 적으려 하고 에러 경보가 울린다
+	private void saveTags(Long postId, FoodAnalysis analysis, FoodTags tags) {
+		if (analysis.getStatus() != AnalysisStatus.DONE) {
+			return;
+		}
+		Set<FoodTag> foodTags = tags == null ? Set.of() : tags.toTags();
+		if (foodTags.isEmpty()) {
+			log.warn("Food analysis came without tags, left for the tag filler: postId={}", postId);
+			return;
+		}
+		try {
+			postTagService.replace(postId, foodTags);
+		} catch (RuntimeException e) {
+			log.warn("Post tags not saved, left for the tag filler: postId={}, error={}", postId, e.getClass().getSimpleName());
+		}
 	}
 
 	// 아직 내가 맡은 글인가 (JM-110). 아니면 결과를 버린다: 분석이 아주 오래 걸려 다른 일꾼이 다시 맡았거나 먼저 끝낸 글이라,
@@ -199,6 +229,7 @@ public class FoodAnalysisService {
 		}
 		foodAnalysisRepository.save(analysis);
 		logFinished(analysis, first, latencyMs);
+		saveTags(postId, analysis, candidates.tags());
 	}
 
 	private void markFinished(FoodAnalysis analysis, FoodAnalyzerResponse response, long latencyMs) {
@@ -263,7 +294,7 @@ public class FoodAnalysisService {
 			throw new FoodAnalysisException("EMPTY_ITEMS");
 		}
 		List<CandidateItem> items = raw.items().stream().map(this::cleanItem).toList();
-		return new FoodCandidates(true, items, raw.confidence(), raw.comment());
+		return new FoodCandidates(true, items, raw.confidence(), raw.comment(), raw.tags());
 	}
 
 	private CandidateItem cleanItem(CandidateItem item) {

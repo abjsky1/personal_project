@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -18,6 +19,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,12 +39,14 @@ import backend.analysis.model.dto.FoodCandidates;
 import backend.analysis.model.dto.FoodCandidates.Candidate;
 import backend.analysis.model.dto.FoodCandidates.CandidateItem;
 import backend.analysis.model.dto.FoodCandidatesResponse;
+import backend.analysis.model.dto.FoodTags;
 import backend.analysis.model.dto.TypedEstimates;
 import backend.analysis.model.dto.TypedEstimates.TypedEstimate;
 import backend.analysis.model.dto.TypedEstimatesResponse;
 import backend.analysis.model.entity.AnalysisStatus;
 import backend.analysis.model.entity.ConfirmMode;
 import backend.analysis.model.entity.FoodAnalysis;
+import backend.analysis.model.entity.FoodTag;
 import backend.analysis.model.repository.FoodAnalysisRepository;
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
@@ -65,7 +69,9 @@ class FoodAnalysisServiceTest {
 	private final ImageStorage storage = mock(ImageStorage.class);
 	private final byte[] jpeg = {1, 2, 3};
 
-	private final FoodAnalysisService service = new FoodAnalysisService(repository, analyzer, storage, JsonMapper.builder().build(), DAILY_LIMIT);
+	private final PostTagService tagService = mock(PostTagService.class);
+
+	private final FoodAnalysisService service = new FoodAnalysisService(repository, analyzer, storage, JsonMapper.builder().build(), tagService, DAILY_LIMIT);
 
 	private FoodAnalysis analysis;
 
@@ -287,11 +293,69 @@ class FoodAnalysisServiceTest {
 	}
 
 	@Test
-	void 오늘_횟수에는_직접_적은_음식을_계산한_호출도_센다() {
+	void 오늘_횟수에는_직접_적은_음식을_계산한_호출과_태그를_채운_호출도_센다() {
 		when(repository.countByCompletedAtGreaterThanEqual(any())).thenReturn(3L);
 		when(repository.countByTypedCalledAtGreaterThanEqual(any())).thenReturn(2L);
+		when(repository.countByTagCalledAtGreaterThanEqual(any())).thenReturn(4L);
 
-		assertThat(service.countToday()).isEqualTo(5);
+		assertThat(service.countToday()).isEqualTo(9);
+	}
+
+	// ---- 태그 (JM-83) ----
+
+	@Test
+	void 분석의_답에_함께_온_태그를_저장한다() {
+		aiAnswers(new FoodAnalysisResult(true, List.of(new FoodItem("김치찌개", 400, 320, 12, 22, 20)), "MEDIUM", "1인분",
+				new FoodTags("MEAL", "KOREAN", List.of("RICE"), List.of("MEAT"), true, "HOT")));
+
+		service.analyze(POST_ID, IMAGE_KEY);
+
+		assertThat(analysis.getStatus()).isEqualTo(AnalysisStatus.DONE);
+		verify(tagService).replace(POST_ID, Set.of(FoodTag.MEAL, FoodTag.KOREAN, FoodTag.RICE, FoodTag.MEAT, FoodTag.SPICY, FoodTag.HOT));
+	}
+
+	@Test
+	void 후보_분석의_답에_함께_온_태그도_저장한다() {
+		userMode();
+		FoodCandidates two = twoFoods();
+		aiOffers(new FoodCandidates(true, two.items(), two.confidence(), two.comment(),
+				new FoodTags("MEAL", "KOREAN", List.of("RICE"), List.of(), false, "HOT")));
+
+		service.analyze(POST_ID, IMAGE_KEY);
+
+		verify(tagService).replace(POST_ID, Set.of(FoodTag.MEAL, FoodTag.KOREAN, FoodTag.RICE, FoodTag.NOT_SPICY, FoodTag.HOT));
+	}
+
+	// 음식이 아닌 글은 태그를 두지 않고, 태그 없이 온 답은 태그 채우기(PostTagFiller)가 나중에 채운다
+	@Test
+	void 음식이_아니거나_태그가_없으면_태그를_저장하지_않는다(CapturedOutput output) {
+		aiAnswers(new FoodAnalysisResult(false, List.of(), "HIGH", "음식이 아니에요",
+				new FoodTags("MEAL", "KOREAN", List.of(), List.of(), false, "HOT")));
+		service.analyze(POST_ID, IMAGE_KEY);
+
+		analysis = new FoodAnalysis(new Post("테스터", "hash", null, IMAGE_KEY, "thumb.jpg", null));
+		when(repository.findById(POST_ID)).thenReturn(Optional.of(analysis));
+		aiAnswers(new FoodAnalysisResult(true, List.of(new FoodItem("공기밥", 210, 310, 68, 5, 1)), "HIGH", "1공기"));
+		service.analyze(POST_ID, IMAGE_KEY);
+
+		verify(tagService, never()).replace(any(), any());
+		assertThat(output).contains("Food analysis came without tags, left for the tag filler: postId=1");
+	}
+
+	// 태그는 덤이라, 저장에 실패해도 분석은 DONE 그대로이고 실패로 적지 않는다 (에러 경보도 울리지 않는다)
+	@Test
+	void 태그_저장이_실패해도_분석은_DONE으로_남고_경고만_남긴다(CapturedOutput output) {
+		aiAnswers(new FoodAnalysisResult(true, List.of(new FoodItem("공기밥", 210, 310, 68, 5, 1)), "HIGH", "1공기",
+				new FoodTags("MEAL", "KOREAN", List.of("RICE"), List.of(), false, "HOT")));
+		doThrow(new DataIntegrityViolationException("boom")).when(tagService).replace(any(), any());
+
+		service.analyze(POST_ID, IMAGE_KEY);
+
+		assertThat(analysis.getStatus()).isEqualTo(AnalysisStatus.DONE);
+		verify(repository).save(analysis);
+		verify(repository, never()).markFailedIfClaimed(any(), any(), anyLong(), any(), any());
+		assertThat(output).contains("Post tags not saved, left for the tag filler: postId=1, error=DataIntegrityViolationException")
+				.doesNotContain("Unexpected food analysis error");
 	}
 
 	private void aiAnswers(FoodAnalysisResult result) {

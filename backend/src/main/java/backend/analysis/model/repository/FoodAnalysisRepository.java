@@ -14,6 +14,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 import backend.analysis.model.dto.PendingAnalysis;
+import backend.analysis.model.dto.UntaggedPost;
 import backend.analysis.model.entity.AnalysisStatus;
 import backend.analysis.model.entity.FoodAnalysis;
 import backend.post.model.entity.PostStatus;
@@ -154,4 +155,49 @@ public interface FoodAnalysisRepository extends JpaRepository<FoodAnalysis, Long
 		return findStalePending(AnalysisStatus.PENDING, PostStatus.ACTIVE, FoodAnalysis.MAX_CLAIMS, createdAfter, createdBefore,
 				staleBefore, PageRequest.of(0, limit));
 	}
+
+	// ---- 태그 (JM-83) ----
+
+	// 태그를 채웠다고 적는다 (PostTagService.replace가 태그를 넣는 같은 트랜잭션 안에서 부른다)
+	// flushAutomatically: 이 UPDATE 전에, 앞에서 넣은 태그(아직 DB로 보내지 않은 INSERT)를 먼저 보낸다.
+	// 없으면 clearAutomatically가 JPA의 기억을 비우면서 보내지 않은 태그를 버린다 (태그가 하나도 저장되지 않았다, PostTagFillerTest에서 겪음)
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("update FoodAnalysis a set a.taggedAt = :now where a.postId = :postId")
+	int markTagged(@Param("postId") Long postId, @Param("now") Instant now);
+
+	// 태그를 채울 글: 분석이 끝났고(DONE) 글이 지워지지 않았는데 아직 태그가 없고, 맡은 횟수가 남았고,
+	// 아무도 맡지 않았거나 맡은 지 오래된(staleBefore보다 전) 것. 최신 글부터 limit개까지
+	// (분석 때 태그 저장에 실패한 새 글을 먼저, 태그가 생기기 전의 지난 글은 그다음에)
+	@Query("""
+			select new backend.analysis.model.dto.UntaggedPost(a.postId, p.imageKey)
+			from FoodAnalysis a join a.post p
+			where a.status = :done and p.status = :active and a.taggedAt is null and a.tagAttempts < :maxAttempts
+			  and (a.tagCalledAt is null or a.tagCalledAt < :staleBefore)
+			order by a.postId desc
+			""")
+	List<UntaggedPost> findUntagged(@Param("done") AnalysisStatus done, @Param("active") PostStatus active,
+			@Param("maxAttempts") int maxAttempts, @Param("staleBefore") Instant staleBefore, Pageable pageable);
+
+	default List<UntaggedPost> findUntagged(Instant staleBefore, int limit) {
+		return findUntagged(AnalysisStatus.DONE, PostStatus.ACTIVE, FoodAnalysis.MAX_TAG_ATTEMPTS, staleBefore, PageRequest.of(0, limit));
+	}
+
+	// 태그 채우기가 이 글을 맡는다: 아직 태그가 없고, 횟수가 남았고, 아무도 맡지 않았거나 맡은 지 오래됐을 때만.
+	// AI를 부르기 "전에" 실행한다 → 무중단 배포로 app 둘이 잠깐 같이 떠 있어도 한 글에 AI는 한 번만 불린다 (claimAnalysis와 같은 방식)
+	@Transactional
+	@Modifying(clearAutomatically = true)
+	@Query("""
+			update FoodAnalysis a set a.tagAttempts = a.tagAttempts + 1, a.tagCalledAt = :now
+			where a.postId = :postId and a.taggedAt is null and a.tagAttempts < :maxAttempts
+			  and (a.tagCalledAt is null or a.tagCalledAt < :staleBefore)
+			""")
+	int claimTagging(@Param("postId") Long postId, @Param("now") Instant now, @Param("staleBefore") Instant staleBefore,
+			@Param("maxAttempts") int maxAttempts);
+
+	default int claimTagging(Long postId, Instant now, Instant staleBefore) {
+		return claimTagging(postId, now, staleBefore, FoodAnalysis.MAX_TAG_ATTEMPTS);
+	}
+
+	// 태그 채우기가 어느 시각 이후에 AI를 부른 글 수 (하루 분석 횟수에 더한다, FoodAnalysisService.countToday)
+	long countByTagCalledAtGreaterThanEqual(Instant since);
 }

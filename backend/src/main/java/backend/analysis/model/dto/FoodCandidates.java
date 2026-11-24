@@ -11,7 +11,13 @@ import backend.analysis.model.dto.FoodAnalysisResult.FoodItem;
 // - 음식마다 이름 하나가 아니라 후보 여러 개를 받는다 (가능성이 높은 순서)
 // - 영양을 "사진 속 양"이 아니라 "100g당" 값으로 받는다
 //   → 사용자가 다른 후보를 고르거나 양을 고쳐도, AI를 다시 부르지 않고 서버가 곱해서 계산할 수 있다
-public record FoodCandidates(boolean isFood, List<CandidateItem> items, String confidence, String comment) {
+// tags: 사진 전체의 태그 (JM-83, FoodAnalysisResult와 같다)
+public record FoodCandidates(boolean isFood, List<CandidateItem> items, String confidence, String comment, FoodTags tags) {
+
+	// 태그 없이 만든다 (태그가 생기기 전부터 쓰던 모양)
+	public FoodCandidates(boolean isFood, List<CandidateItem> items, String confidence, String comment) {
+		this(isFood, items, confidence, comment, null);
+	}
 
 	// 사진 속 음식 하나: 추정한 양(g)과, 그 음식일 가능성이 높은 순서로 놓인 후보들
 	public record CandidateItem(double amountG, List<Candidate> candidates) {
@@ -40,6 +46,6 @@ public record FoodCandidates(boolean isFood, List<CandidateItem> items, String c
 		List<FoodItem> first = items.stream()
 				.map(item -> item.candidates().get(0).toItem(item.amountG()))
 				.toList();
-		return new FoodAnalysisResult(isFood, first, confidence, comment);
+		return new FoodAnalysisResult(isFood, first, confidence, comment, tags);
 	}
 }
