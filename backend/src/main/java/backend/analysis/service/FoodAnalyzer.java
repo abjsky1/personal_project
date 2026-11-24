@@ -4,6 +4,7 @@ import java.util.List;
 
 import backend.analysis.model.dto.FoodAnalyzerResponse;
 import backend.analysis.model.dto.FoodCandidatesResponse;
+import backend.analysis.model.dto.FoodTagsResponse;
 import backend.analysis.model.dto.TypedEstimatesResponse;
 
 // 사진을 보고 음식과 칼로리를 추정하는 기능의 "규격" (ImageStorage와 같은 방식)
@@ -19,4 +20,8 @@ public interface FoodAnalyzer {
 	// 사용자가 직접 적은 음식 이름마다, 사진과 이름을 함께 보고 100g당 영양을 추정한다 (JM-74).
 	// names: 직접 적은 이름들 (한 줄짜리 글자). 답은 names와 같은 순서로 온다. 분석하지 못하면 FoodAnalysisException을 던진다.
 	TypedEstimatesResponse estimateTyped(byte[] jpeg, List<String> names);
+
+	// 사진 전체의 태그만 고른다 (JM-83). 태그가 생기기 전에 분석한 글을 채울 때 쓴다 (PostTagFiller).
+	// 분석하지 못하면 FoodAnalysisException을 던진다.
+	FoodTagsResponse classify(byte[] jpeg);
 }

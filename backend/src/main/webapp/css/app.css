@@ -1342,7 +1342,9 @@ a.notice-row:hover {
 	overflow-wrap: anywhere;
 }
 
+/* 링크(필터 지우기, 전체 보기)는 낱말 가운데서 줄을 바꾸지 않는다 (줄의 overflow-wrap: anywhere가 "필터 지우 / 기"로 끊었다, JM-83 draft2) */
 .search-result a {
+	white-space: nowrap;
 	margin-left: 8px;
 	font-weight: 600;
 	text-decoration: none;
@@ -1352,6 +1354,210 @@ a.notice-row:hover {
 .search-empty {
 	word-break: keep-all;
 	color: #666;
+}
+
+/* ---- 음식 필터 (JM-83): 찾기 옆의 [필터] 단추와, 누르면 피드 위에 겹쳐 뜨는 필터 창 ---- */
+/* [필터]: 슬라이더 모양 아이콘 단추 (draft3). 찾기(초록 바탕)와 같은 높이, 같은 모서리이고 흰 바탕에 테두리.
+   고른 조건이 있으면 초록 테두리와 초록으로 채운 손잡이, 오른쪽 위에 그 수 */
+.search .filter-open {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 7px 10px;
+	border: 1px solid #ccc;
+	background: #fff;
+	color: #444;
+}
+
+.search .filter-open.on {
+	border-color: #2f7d32;
+	color: #2f7d32;
+}
+
+/* 아이콘: 줄은 글자색, 손잡이 속은 흰색(빈 손잡이). 고르면 손잡이 속을 글자색으로 채운다 */
+.filter-icon {
+	width: 22px;
+	height: 22px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+}
+
+.filter-icon circle {
+	fill: #fff;
+}
+
+.filter-open.on .filter-icon circle {
+	fill: currentColor;
+}
+
+.filter-count {
+	position: absolute;
+	top: -7px;
+	right: -7px;
+	min-width: 18px;
+	padding: 0 5px;
+	border-radius: 9px;
+	background: #2f7d32;
+	color: #fff;
+	font-size: 0.75rem;
+	font-weight: 700;
+	line-height: 18px;
+	text-align: center;
+}
+
+/* 필터 창 (dialog). PC는 가운데, 휴대폰은 아래에서 올라오는 판 (아래 좁은 화면 규칙). 창 안이 길면 가운데 칸만 스크롤 */
+.filter-sheet {
+	width: min(520px, calc(100% - 32px));
+	max-height: 85vh;
+	padding: 0;
+	border: 0;
+	border-radius: 12px;
+	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+/* dialog를 모르는 옛 브라우저에서도 열기 전에는 숨긴다 (아는 브라우저는 원래 숨긴다) */
+.filter-sheet:not([open]) {
+	display: none;
+}
+
+.filter-sheet::backdrop {
+	background: rgba(0, 0, 0, 0.35);
+}
+
+.filter-form {
+	display: flex;
+	flex-direction: column;
+	max-height: 85vh;
+}
+
+/* 글쓰기 form의 공통 규칙(form button: 한 줄 전체, 위 여백 24px)을 필터 창의 단추에서는 끈다 */
+.filter-form button {
+	width: auto;
+	margin-top: 0;
+}
+
+.sheet-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 14px 16px;
+	border-bottom: 1px solid #eee;
+}
+
+.sheet-head h2 {
+	margin: 0;
+	font-size: 1.1rem;
+}
+
+/* 닫기 단추는 손가락으로 누르기 쉽게 44px 칸 (PR 전 검토: 30 x 32px였다) */
+.sheet-close {
+	min-width: 44px;
+	min-height: 44px;
+	padding: 4px 8px;
+	background: none;
+	color: #666;
+	font-size: 1.1rem;
+}
+
+.sheet-body {
+	display: grid;
+	gap: 14px;
+	padding: 14px 16px;
+	overflow-y: auto;
+}
+
+/* 묶음: 이름 한 줄, 그 아래 칩 */
+.filter-group {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.filter-group legend {
+	padding: 0;
+	margin-bottom: 6px;
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: #666;
+}
+
+.filter-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+/* 칩 = 체크 상자. 상자는 숨기고 글자 칸을 칩처럼 그린다. 고르면 초록 바탕 흰 글자.
+   얇은 테두리와 작은 둥근 모서리 (메뉴의 알약 모양 버튼은 너무 둥글고 두껍다는 운영자 의견이 있었다, JM-60).
+   공통 label 규칙(한 줄 전체, 위 여백, 굵게)은 끈다 */
+.chip-check {
+	display: inline-block;
+	position: relative;
+	margin: 0;
+	font-weight: 400;
+}
+
+.chip-check input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+}
+
+.chip-check span {
+	display: inline-block;
+	padding: 6px 12px;
+	border: 1px solid #d0d0d0;
+	border-radius: 6px;
+	background: #fff;
+	color: #333;
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.chip-check input:checked + span {
+	border-color: #2f7d32;
+	background: #2f7d32;
+	color: #fff;
+}
+
+/* 자판으로 옮겨 다닐 때 지금 칩이 보이게 */
+.chip-check input:focus-visible + span {
+	outline: 2px solid #2f7d32;
+	outline-offset: 2px;
+}
+
+/* 칼로리: [최소] ~ [최대] kcal 한 줄 */
+.kcal-range {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.kcal-range select {
+	padding: 6px 8px;
+	border: 1px solid #ccc;
+	border-radius: 6px;
+	background: #fff;
+	font-size: 1rem;
+}
+
+/* 아래 단추 줄: [초기화] [적용] */
+.sheet-foot {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 12px 16px;
+	border-top: 1px solid #eee;
+}
+
+.sheet-clear {
+	border: 1px solid #ccc;
+	background: #fff;
+	color: #333;
 }
 
 /* 한 줄 소개: 큰 글자 + 작은 설명 (11-05) */
@@ -1405,6 +1611,24 @@ a.notice-row:hover {
 	.search input[type="search"] {
 		flex: 1;
 		width: auto;
+	}
+
+	/* 필터 창: 화면 아래에 붙어 올라오는 판 (가로 전체, 위 모서리만 둥글게) */
+	.filter-sheet {
+		width: 100%;
+		max-width: 100%;
+		margin: auto 0 0;
+		border-radius: 14px 14px 0 0;
+	}
+
+	/* 휴대폰은 [초기화] [적용]을 반씩 */
+	.sheet-foot button {
+		flex: 1;
+	}
+
+	/* 창이 열려 있는 동안 뒤의 피드가 같이 스크롤되지 않게 (PR 전 검토. PC는 스크롤 막대가 사라져 화면이 흔들려서 휴대폰만) */
+	body:has(.filter-sheet[open]) {
+		overflow: hidden;
 	}
 }
 

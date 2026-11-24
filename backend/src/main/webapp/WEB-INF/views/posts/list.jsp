@@ -9,11 +9,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <c:choose>
 	<%-- 검색어는 사용자가 친 값이라 c:out으로 출력한다 (XSS 방지) --%>
-	<c:when test="${not empty query}"><title>'<c:out value="${query}" />' 검색 - 찍먹</title>
-	<%-- 검색 결과 화면은 검색 엔진에 올리지 않는다 (검색어마다 비슷한 화면이 끝없이 생긴다) --%>
-	<meta name="robots" content="noindex"></c:when>
+	<c:when test="${not empty query}"><title>'<c:out value="${query}" />' 검색 - 찍먹</title></c:when>
 	<c:otherwise><title>찍먹</title></c:otherwise>
 </c:choose>
+<%-- 검색 결과와 필터를 고른 화면은 검색 엔진에 올리지 않는다 (검색어나 필터마다 비슷한 화면이 끝없이 생긴다. 필터는 JM-83 PR 전 검토) --%>
+<c:if test="${not empty query or filtered}"><meta name="robots" content="noindex"></c:if>
 <%-- 모든 화면이 함께 쓰는 스타일 (src/main/webapp/css/app.css) --%>
 <%-- c:url: 배포 서버에서는 주소 뒤에 파일 내용의 지문이 붙는다 (/css/app-3f2a….css). 개발 PC에서는 그대로 /css/app.css --%>
 <link rel="stylesheet" href="<c:url value='/css/app.css' />">
@@ -40,21 +40,144 @@
 		     method="get": 검색어가 주소(/search?q=라면)에 남아서 뒤로 가기, 새로 고침, 주소 공유가 된다
 		     type="search": 휴대폰 자판의 "검색" 버튼으로 바로 보내고, 칸 안의 지우기(x)가 생긴다
 		     maxlength="30": 서버도 30자까지만 쓴다 (PostService.MAX_QUERY_LENGTH) --%>
+		<%-- [필터] (JM-83): 찾기 옆의 단추. 누르면 필터 창(아래 dialog)이 피드 위에 겹쳐 뜬다. 고른 조건이 있으면 그 수를 함께 보여 준다 ("필터 2").
+		     검색어를 바꿔 다시 찾아도 고른 필터가 남도록, 고른 값을 숨은 칸으로 함께 보낸다 --%>
 		<form class="search" action="/search" method="get" role="search">
 			<input type="search" name="q" value="<c:out value='${query}' />" maxlength="30" placeholder="닉네임이나 음식 이름" aria-label="검색어 (닉네임이나 음식 이름)">
+			<c:forEach var="group" items="${filter.groups}"><c:forEach var="chip" items="${group.chips}"><c:if test="${chip.checked}"><input type="hidden" name="tag" value="${chip.value}"></c:if></c:forEach></c:forEach>
+			<c:forEach var="option" items="${filter.minOptions}"><c:if test="${option.selected and not empty option.value}"><input type="hidden" name="kcalMin" value="${option.value}"></c:if></c:forEach>
+			<c:forEach var="option" items="${filter.maxOptions}"><c:if test="${option.selected and not empty option.value}"><input type="hidden" name="kcalMax" value="${option.value}"></c:if></c:forEach>
 			<button type="submit">찾기</button>
+			<%-- 글자 대신 슬라이더 모양 아이콘 (가로줄 셋에 동그란 손잡이, 운영자 요청 draft3). 고른 필터가 없으면 속이 빈 손잡이,
+			     있으면 손잡이를 초록으로 채우고 오른쪽 위에 고른 수를 붙인다. 글자가 없어서 화면 읽기 프로그램용 이름(aria-label)을 단다 --%>
+			<button type="button" class="filter-open<c:if test='${filter.count > 0}'> on</c:if>" aria-haspopup="dialog" aria-controls="filter-sheet" title="필터"
+				aria-label="<c:choose><c:when test='${filter.count > 0}'>필터 (${filter.count}개 고름)</c:when><c:otherwise>필터</c:otherwise></c:choose>">
+				<svg class="filter-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+					<path d="M3 6h18M3 12h18M3 18h18" />
+					<circle cx="8" cy="6" r="2.6" />
+					<circle cx="16" cy="12" r="2.6" />
+					<circle cx="8" cy="18" r="2.6" />
+				</svg>
+				<c:if test="${filter.count > 0}"><span class="filter-count" aria-hidden="true">${filter.count}</span></c:if>
+			</button>
 		</form>
 	</header>
 
-	<%-- 검색 결과 줄 (JM-52): 무엇으로 찾았는지, 몇 개인지, 피드로 돌아가는 링크 --%>
+	<%-- 필터 창 (JM-83, 피드백 11번과 13번): [필터]를 누르면 휴대폰은 아래에서 올라오는 판, PC는 가운데 창으로 피드 위에 겹쳐 뜬다 (피드를 밀지 않는다).
+	     묶음마다 칩(체크 상자)을 고르고 칼로리는 최소와 최대를 고른 뒤 [적용]을 누르면 한 번에 거른다 (주소 ?tag=KOREAN&tag=SPICY&kcalMin=400).
+	     같은 묶음 안에서 여럿 고르면 "하나라도", 다른 묶음끼리는 "모두" 맞는 글이다 (PostFilterQuery). 검색 결과에서 열면 검색어와 함께 거른다.
+	     dialog: 브라우저가 창을 띄우고 뒤를 어둡게 하며, Esc로 닫힌다 (아래 스크립트가 showModal로 연다) --%>
+	<dialog id="filter-sheet" class="filter-sheet" aria-labelledby="filter-title">
+		<form class="filter-form" method="get" action="${empty query ? '/' : '/search'}" autocomplete="off">
+			<c:if test="${not empty query}"><input type="hidden" name="q" value="<c:out value='${query}' />"></c:if>
+			<div class="sheet-head">
+				<h2 id="filter-title">필터</h2>
+				<button type="button" class="sheet-close" aria-label="필터 창 닫기">✕</button>
+			</div>
+			<div class="sheet-body">
+				<c:forEach var="group" items="${filter.groups}">
+					<fieldset class="filter-group">
+						<legend>${group.label}</legend>
+						<div class="filter-chips">
+							<c:forEach var="chip" items="${group.chips}">
+								<label class="chip-check"><input type="checkbox" name="tag" value="${chip.value}"<c:if test="${chip.checked}"> checked</c:if>><span>${chip.label}</span></label>
+							</c:forEach>
+						</div>
+					</fieldset>
+				</c:forEach>
+				<fieldset class="filter-group">
+					<legend>칼로리</legend>
+					<div class="kcal-range">
+						<select name="kcalMin" aria-label="최소 칼로리">
+							<c:forEach var="option" items="${filter.minOptions}"><option value="${option.value}"<c:if test="${option.selected}"> selected</c:if>>${option.label}</option></c:forEach>
+						</select>
+						<span>~</span>
+						<select name="kcalMax" aria-label="최대 칼로리">
+							<c:forEach var="option" items="${filter.maxOptions}"><option value="${option.value}"<c:if test="${option.selected}"> selected</c:if>>${option.label}</option></c:forEach>
+						</select>
+						<span>kcal</span>
+					</div>
+				</fieldset>
+			</div>
+			<div class="sheet-foot">
+				<button type="button" class="sheet-clear">초기화</button>
+				<button type="submit" class="sheet-apply">적용</button>
+			</div>
+		</form>
+	</dialog>
+	<%-- 필터 창 열기, 닫기(✕, 바깥 어두운 곳, Esc), 초기화(모두 끄기). PR 전 검토에서 고친 것:
+	     - 열 때마다 form.reset()으로 지금 걸린 필터(서버가 그린 checked, selected)로 되돌린다: 닫았다 다시 열면 적용하지 않은 선택이 남아 있었다.
+	       autocomplete="off"도 같은 이유 (뒤로 가기로 돌아오면 브라우저가 칸 값을 되살렸다)
+	     - 비어 있는 칼로리 칸(0, 제한 없음)은 보낼 값에서 뺀다(formdata). 전에는 칸을 잠갔는데(disabled), 뒤로 가기로 돌아오면 잠긴 채 남았다
+	     - 브라우저가 저장해 둔 화면으로 돌아오면(pageshow persisted) 창을 닫고 지금 필터로 되돌린다: 열린 채로 돌아왔다
+	     - 바깥 어두운 곳은 누른 곳과 뗀 곳이 모두 바깥일 때만 닫는다: 창 안에서 끌어 밖에서 놓으면 닫혔다
+	     - dialog를 모르는 옛 브라우저(iOS 15.3 이전)는 창을 화면 안에 펼쳐 보인다 (showModal이 없으면 open 속성만) --%>
+	<script>
+	(function () {
+		const sheet = document.getElementById('filter-sheet');
+		const form = sheet.querySelector('form');
+		const modal = typeof sheet.showModal === 'function';
+		function openSheet() {
+			form.reset();
+			if (modal) {
+				sheet.showModal();
+			} else {
+				sheet.setAttribute('open', '');
+			}
+		}
+		function closeSheet() {
+			if (modal) {
+				sheet.close();
+			} else {
+				sheet.removeAttribute('open');
+			}
+		}
+		document.querySelectorAll('.filter-open').forEach(function (button) {
+			button.addEventListener('click', openSheet);
+		});
+		sheet.querySelector('.sheet-close').addEventListener('click', closeSheet);
+		let pressedOutside = false;
+		sheet.addEventListener('pointerdown', function (event) { pressedOutside = event.target === sheet; });
+		sheet.addEventListener('click', function (event) {
+			if (event.target === sheet && pressedOutside) {
+				closeSheet();
+			}
+			pressedOutside = false;
+		});
+		sheet.querySelector('.sheet-clear').addEventListener('click', function () {
+			sheet.querySelectorAll('input[type="checkbox"]').forEach(function (box) { box.checked = false; });
+			sheet.querySelectorAll('select').forEach(function (select) { select.value = ''; });
+		});
+		form.addEventListener('formdata', function (event) {
+			['kcalMin', 'kcalMax'].forEach(function (name) {
+				if (!event.formData.get(name)) {
+					event.formData.delete(name);
+				}
+			});
+		});
+		window.addEventListener('pageshow', function (event) {
+			if (event.persisted) {
+				closeSheet();
+				form.reset();
+			}
+		});
+	})();
+	</script>
+
+	<%-- 검색 결과 줄 (JM-52): 무엇으로 찾았는지, 몇 개인지, 피드로 돌아가는 링크. 필터도 골랐으면 그 이름과 "필터 지우기" (JM-83) --%>
 	<c:if test="${not empty query}">
-		<p class="search-result">'<strong><c:out value="${query}" /></strong>' 검색 결과 ${total}개 <a href="/">전체 보기</a></p>
+		<p class="search-result">'<strong><c:out value="${query}" /></strong>' 검색 결과 ${total}개<c:if test="${filtered}"> (필터: <c:forEach var="label" items="${filter.labels}" varStatus="s">${label}<c:if test="${not s.last}">, </c:if></c:forEach>) <a href="<c:out value='${clearFilterUrl}' />">필터 지우기</a></c:if> <a href="/">전체 보기</a></p>
+	</c:if>
+	<%-- 필터 결과 줄 (JM-83): 피드에서 필터만 골랐을 때. 검색 결과 줄과 같은 모양 한 줄 --%>
+	<c:if test="${empty query and filtered}">
+		<p class="search-result">필터: <strong><c:forEach var="label" items="${filter.labels}" varStatus="s">${label}<c:if test="${not s.last}">, </c:if></c:forEach></strong> 글 ${total}개 <a href="/">필터 지우기</a></p>
 	</c:if>
 
 	<%-- empty: 목록이 비어 있으면 true --%>
 	<c:if test="${empty feed.posts}">
 		<c:choose>
 			<c:when test="${not empty query}"><p class="empty search-empty">찾은 글이 없어요.<br>음식 이름의 일부만 쳐 보세요 (예: 찌개)</p></c:when>
+			<c:when test="${filtered}"><p class="empty search-empty">고른 것에 맞는 글이 없어요.<br>고른 것을 하나씩 빼 보세요</p></c:when>
 			<c:otherwise><p class="empty">아직 올라온 사진이 없어요.</p></c:otherwise>
 		</c:choose>
 	</c:if>
@@ -108,11 +231,8 @@
 
 	<%-- 쪽 번호 줄: 이전 1 2 3 다음 (JM-57). 2쪽 이상일 때만 보인다. 그리는 법은 common/pager.jspf --%>
 	<c:set var="nav" value="${feed.nav}" />
-	<%-- 검색 결과는 쪽을 넘겨도 같은 검색어로 (/search?q=라면&page=2). &amp;는 HTML 안의 & (브라우저가 &로 읽는다) --%>
-	<c:choose>
-		<c:when test="${not empty query}"><c:set var="pagerBase" value="/search?q=${searchParam}&amp;page=" /></c:when>
-		<c:otherwise><c:set var="pagerBase" value="/?page=" /></c:otherwise>
-	</c:choose>
+	<%-- 쪽 번호 줄의 주소 앞부분(pagerBase)은 Controller가 만든다: 검색어와 고른 필터를 그대로 싣고 쪽만 바꾼다
+	     (/search?q=라면&amp;tag=KOREAN&amp;page=2, 필터가 없는 피드는 /?page=). &amp;는 HTML 안의 & (브라우저가 &로 읽는다) --%>
 	<%@ include file="/WEB-INF/views/common/pager.jspf" %>
 
 	<%-- 공통 바닥글 (개인정보처리방침 링크) --%>

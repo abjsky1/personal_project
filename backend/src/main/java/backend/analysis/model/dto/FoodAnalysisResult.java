@@ -7,7 +7,13 @@ import java.util.function.ToDoubleFunction;
 
 // AI가 돌려준 분석 결과. 이름과 타입을 responseSchema(GeminiFoodAnalyzer)와 똑같이 맞춘다. (기획서 6.3절)
 // Map 대신 record를 쓰는 이유: 검사, 합계, 저장, 화면에서 값을 꺼내 쓰는데, 이름을 틀리면 실행 전에 빨간 줄로 알 수 있다.
-public record FoodAnalysisResult(boolean isFood, List<FoodItem> items, String confidence, String comment) {
+// tags: 사진 전체의 태그 (JM-83). AI가 답하지 않았으면 null이고, 그 글은 나중에 태그 채우기(PostTagFiller)가 채운다
+public record FoodAnalysisResult(boolean isFood, List<FoodItem> items, String confidence, String comment, FoodTags tags) {
+
+	// 태그 없이 만든다 (태그가 생기기 전부터 쓰던 모양. 테스트와 확정 합계 계산이 쓴다)
+	public FoodAnalysisResult(boolean isFood, List<FoodItem> items, String confidence, String comment) {
+		this(isFood, items, confidence, comment, null);
+	}
 
 	// 음식 하나. 숫자는 320.5처럼 소수로 올 수 있어서 double로 받는다.
 	public record FoodItem(String name, double amountG, double kcal, double carbsG, double proteinG, double fatG) {

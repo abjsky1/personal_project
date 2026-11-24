@@ -1,8 +1,10 @@
 package backend.analysis.service;
 
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -15,8 +17,12 @@ import backend.analysis.model.dto.FoodAnalysisResult;
 import backend.analysis.model.dto.FoodAnalyzerResponse;
 import backend.analysis.model.dto.FoodCandidates;
 import backend.analysis.model.dto.FoodCandidatesResponse;
+import backend.analysis.model.dto.FoodTags;
+import backend.analysis.model.dto.FoodTagsResponse;
 import backend.analysis.model.dto.TypedEstimates;
 import backend.analysis.model.dto.TypedEstimatesResponse;
+import backend.analysis.model.entity.FoodTag;
+import backend.analysis.model.entity.FoodTag.Group;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -32,9 +38,24 @@ import tools.jackson.databind.json.JsonMapper;
 // - analyzeCandidates: 음식마다 후보 세 개와 100g당 영양. "내가 보고 확정"으로 올린 글.
 //   답이 길어서 더 느리고 토큰을 더 쓰므로, 고른 글에만 쓴다.
 // - estimateTyped: 후보에 맞는 것이 없어 사용자가 이름을 직접 적었을 때. 사진과 적은 이름을 함께 보내고 100g당 영양을 받는다.
+//
+// 태그 (JM-83, 음식 카테고리): 앞의 두 지시문의 답에 사진 전체의 태그(종류, 나라, 주식, 주재료, 맵기, 온도)가 함께 온다 (호출 수는 그대로).
+// 태그가 생기기 전의 글은 classify가 사진을 다시 보고 태그만 고른다 (PostTagFiller).
 @Slf4j
 @Component
 public class GeminiFoodAnalyzer implements FoodAnalyzer {
+
+	// 태그를 고르는 기준 (JM-83, 음식 카테고리). 두 분석 지시문의 끝에 붙이고, 지난 글을 채울 때(classify)도 같은 글을 쓴다.
+	// 값 목록은 FoodTag의 code와 같다 (아래 TAGS_SCHEMA가 FoodTag에서 만든다). 값을 바꾸면 여기의 설명도 함께 고친다
+	private static final String TAG_RULES = """
+			- tags: 사진 전체의 분류입니다. 음식이 여럿이면 주된 음식(밥상이면 국이나 찌개와 메인 반찬, 그 밖에는 가장 큰 음식)을 기준으로 정합니다.
+			  - kind: MEAL(끼니가 되는 식사), SNACK(간식, 디저트, 과일, 과자), DRINK(음료만 있는 사진) 중 하나
+			  - cuisine: KOREAN(한식), CHINESE(중식), JAPANESE(일식), WESTERN(양식: 미국, 유럽, 멕시코 등), ASIAN(한식, 중식, 일식을 뺀 아시아: 베트남, 태국, 인도 등), OTHER(어느 나라 음식이라 하기 어려운 것: 과일, 생수, 과자 등) 중 하나
+			  - staples: 사진에 보이는 주식 모두. RICE(밥, 죽, 덮밥, 볶음밥, 김밥), BREAD(빵, 버거, 피자, 샌드위치, 베이글), NOODLE(라면, 국수, 우동, 파스타 같은 면), RICE_CAKE(떡, 떡볶이). 없으면 빈 배열
+			  - ingredients: 주된 재료 모두. MEAT(고기, 닭, 햄이나 소시지 같은 가공육), SEAFOOD(생선, 회, 새우 같은 해산물), VEGETABLE(샐러드나 나물처럼 채소가 중심인 음식). 반찬으로 조금 있는 재료는 넣지 않습니다. 없으면 빈 배열
+			  - spicy: 주된 음식이 고추, 고춧가루, 고추장, 마라 등으로 매운 음식이면 true
+			  - temperature: 주된 음식을 따뜻하게 먹으면 HOT, 차갑게 먹으면 COLD(냉면, 샐러드, 회, 아이스 음료, 아이스크림), 어느 쪽도 아니면 NEUTRAL(빵, 과일, 김밥, 과자)
+			""";
 
 	private static final String PROMPT = """
 			당신은 영양 분석 도우미입니다. 사진 속 음식을 보고 영양 정보를 추정하세요.
@@ -45,7 +66,12 @@ public class GeminiFoodAnalyzer implements FoodAnalyzer {
 			- 양은 그릇 크기와 일반적인 1인분을 기준으로 추정합니다.
 			- confidence: 추정의 확신 정도 (LOW / MEDIUM / HIGH)
 			- comment: 어떻게 추정했는지 한국어 한 문장
-			""";
+			""" + TAG_RULES;
+
+	// 지난 글의 태그를 채울 때의 지시문 (JM-83, PostTagFiller). 이미 분석이 끝난 음식 사진이라 태그만 묻는다 (답이 짧아 빠르고 토큰이 적다)
+	private static final String CLASSIFY_PROMPT = """
+			당신은 음식 사진 분류 도우미입니다. 사진 속 음식을 보고 아래 tags의 기준대로 분류해서, tags 안의 칸(kind, cuisine, staples, ingredients, spicy, temperature)만으로 답하세요.
+			""" + TAG_RULES;
 
 	// 후보용 지시문. 영양을 "100g당"으로 받는 이유: 사용자가 양을 고치거나 다른 후보를 골라도 서버가 곱해서 다시 계산할 수 있다.
 	private static final String CANDIDATES_PROMPT = """
@@ -59,7 +85,7 @@ public class GeminiFoodAnalyzer implements FoodAnalyzer {
 			- 양은 그릇 크기와 일반적인 1인분을 기준으로 추정합니다.
 			- confidence: 첫 번째 후보들에 대한 확신 정도 (LOW / MEDIUM / HIGH)
 			- comment: 어떻게 추정했는지 한국어 한 문장
-			""";
+			""" + TAG_RULES;
 
 	// 직접 적은 음식용 지시문. 이 뒤에 사용자가 적은 이름을 번호를 붙여 한 줄씩 덧붙여 보낸다 (typedPrompt).
 	// 사용자가 적은 글자가 지시문에 들어가므로 두 가지를 해 둔다.
@@ -83,9 +109,24 @@ public class GeminiFoodAnalyzer implements FoodAnalyzer {
 	private static final Map<String, Object> STRING = Map.of("type", "STRING");
 	private static final Map<String, Object> BOOLEAN = Map.of("type", "BOOLEAN");
 	private static final Map<String, Object> CONFIDENCE = Map.of("type", "STRING", "enum", List.of("LOW", "MEDIUM", "HIGH"));
+
+	// 태그의 응답 형식 (JM-83). 이름은 FoodTags와 똑같이 맞춘다. 값 목록은 FoodTag에서 만든다 (enum: 그 값들 가운데서만 답한다).
+	// 온도의 NEUTRAL은 태그로 저장하지 않는 값이라 FoodTag에 없어서 여기서 더한다
+	private static final Map<String, Object> TAGS_SCHEMA = Map.of(
+			"type", "OBJECT",
+			"properties", Map.of(
+					"kind", oneOf(codesOf(Group.KIND)),
+					"cuisine", oneOf(codesOf(Group.CUISINE)),
+					"staples", Map.of("type", "ARRAY", "items", oneOf(codesOf(Group.STAPLE))),
+					"ingredients", Map.of("type", "ARRAY", "items", oneOf(codesOf(Group.INGREDIENT))),
+					"spicy", BOOLEAN,
+					"temperature", oneOf(Stream.concat(codesOf(Group.TEMPERATURE).stream(), Stream.of("NEUTRAL")).toList())),
+			"required", List.of("kind", "cuisine", "staples", "ingredients", "spicy", "temperature"));
+
 	private static final Map<String, Object> RESPONSE_SCHEMA = Map.of(
 			"type", "OBJECT",
 			"properties", Map.of(
+					"tags", TAGS_SCHEMA,
 					"isFood", BOOLEAN,
 					"items", Map.of(
 							"type", "ARRAY",
@@ -101,12 +142,13 @@ public class GeminiFoodAnalyzer implements FoodAnalyzer {
 									"required", List.of("name", "amountG", "kcal", "carbsG", "proteinG", "fatG"))),
 					"confidence", CONFIDENCE,
 					"comment", STRING),
-			"required", List.of("isFood", "items", "confidence", "comment"));
+			"required", List.of("isFood", "items", "confidence", "comment", "tags"));
 
 	// 후보용 응답 형식. 이름은 FoodCandidates와 똑같이 맞춘다.
 	private static final Map<String, Object> CANDIDATES_SCHEMA = Map.of(
 			"type", "OBJECT",
 			"properties", Map.of(
+					"tags", TAGS_SCHEMA,
 					"isFood", BOOLEAN,
 					"items", Map.of(
 							"type", "ARRAY",
@@ -128,7 +170,7 @@ public class GeminiFoodAnalyzer implements FoodAnalyzer {
 									"required", List.of("amountG", "candidates"))),
 					"confidence", CONFIDENCE,
 					"comment", STRING),
-			"required", List.of("isFood", "items", "confidence", "comment"));
+			"required", List.of("isFood", "items", "confidence", "comment", "tags"));
 
 	// 직접 적은 음식용 응답 형식. 이름은 TypedEstimates와 똑같이 맞춘다. 글자 칸이 하나도 없다 (참, 거짓과 숫자뿐).
 	private static final Map<String, Object> TYPED_SCHEMA = Map.of(
@@ -194,6 +236,26 @@ public class GeminiFoodAnalyzer implements FoodAnalyzer {
 				root.at("/usageMetadata/candidatesTokenCount").asInt(0));
 	}
 
+	@Override
+	public FoodTagsResponse classify(byte[] jpeg) {
+		JsonNode root = ask(CLASSIFY_PROMPT, TAGS_SCHEMA, jpeg);
+		return new FoodTagsResponse(
+				parse(answerOf(root), FoodTags.class),
+				model,
+				root.at("/usageMetadata/promptTokenCount").asInt(0),
+				root.at("/usageMetadata/candidatesTokenCount").asInt(0));
+	}
+
+	// 응답 형식에서 "이 값들 가운데 하나"인 글자 칸
+	private static Map<String, Object> oneOf(List<String> values) {
+		return Map.of("type", "STRING", "enum", values);
+	}
+
+	// 그 묶음의 태그가 AI에게 받는 값들 (FoodTag의 순서대로)
+	private static List<String> codesOf(Group group) {
+		return Arrays.stream(FoodTag.values()).filter(tag -> tag.getGroup() == group).map(FoodTag::getCode).toList();
+	}
+
 	// 직접 적은 음식용 지시문 뒤에, 적은 이름을 번호를 붙여 한 줄씩 덧붙인다. 예: "1. 마라샹궈"
 	// 이름은 FoodAnalysisService가 줄바꿈을 없애고 길이를 줄여서 넘긴다 (한 줄에 이름 하나가 지켜진다).
 	private String typedPrompt(List<String> names) {
@@ -204,7 +266,7 @@ public class GeminiFoodAnalyzer implements FoodAnalyzer {
 		return prompt.toString();
 	}
 
-	// 지시문과 사진을 보내고 Gemini의 응답 전체를 돌려준다. 세 분석이 함께 쓴다.
+	// 지시문과 사진을 보내고 Gemini의 응답 전체를 돌려준다. 네 호출(분석, 후보, 직접 적기, 태그)이 함께 쓴다.
 	private JsonNode ask(String prompt, Map<String, Object> schema, byte[] jpeg) {
 		// 키가 없으면(CI, 테스트) 보내 봤자 거절당하므로 바로 실패로 처리한다.
 		if (apiKey.isBlank()) {

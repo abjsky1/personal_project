@@ -1,6 +1,6 @@
 # 구조 그림
 
-찍먹의 구조를 한눈에 보는 그림 네 장이다 (2026-11-23 기준. 처음 그린 것은 JM-78, 관리자 화면은 JM-82, 사진 검토는 JM-80, 사진 검토 경보는 JM-84, 운영 통계는 JM-75, IP 위치 파일과 방문 지역 표는 JM-86, 검색 결과 화면은 JM-52에서 더했다).
+찍먹의 구조를 한눈에 보는 그림 네 장이다 (2026-11-24 기준. 처음 그린 것은 JM-78, 관리자 화면은 JM-82, 사진 검토는 JM-80, 사진 검토 경보는 JM-84, 운영 통계는 JM-75, IP 위치 파일과 방문 지역 표는 JM-86, 검색 결과 화면은 JM-52, 필터와 음식 태그는 JM-83에서 더했다).
 
 | 그림 | 보여 주는 것 | 기획서 |
 |---|---|---|
@@ -17,6 +17,6 @@
 & "C:\Program Files\Google\Chrome\Application\chrome.exe" --headless=new --hide-scrollbars --force-device-scale-factor=2 --window-size=1600,1345 --screenshot="$PWD\resource-map.png" "$PWD\resource-map.html"
 ```
 
-- 파일 이름 두 곳과 높이(`--window-size`의 두 번째 숫자)만 그림마다 바꾼다. 높이: deploy-architecture 1100, site-ia 1356, ai-analysis-flow 1296, resource-map 1345. 내용이 늘어 아래가 잘리면 높이를 늘린다.
+- 파일 이름 두 곳과 높이(`--window-size`의 두 번째 숫자)만 그림마다 바꾼다. 높이: deploy-architecture 1100, site-ia 1395, ai-analysis-flow 1296, resource-map 1345. 내용이 늘어 아래가 잘리면 높이를 늘린다.
 - 글꼴은 Noto Sans KR이다. PC에 없으면 다른 글꼴로 그려져 글자가 상자를 넘칠 수 있다.
 - 비밀값은 이름만 적는다. 값(비밀번호, 키, 토큰)과 버킷 이름, RDS 주소는 그림에 넣지 않는다.

@@ -44,10 +44,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	//   utf8mb4_0900_ai_ci는 posts.nickname과 같은 규칙이라 대소문자를 가리지 않는다 (pizza로 Pizza를 찾는다)
 	// - ESCAPE '!': 검색어의 %와 _는 "아무 글자"가 아니라 그 글자 자체로 찾는다. PostService.likePattern이 앞에 !를 붙여 둔다
 	// 글이 수백 개인 지금은 글마다 JSON을 펼쳐도 빠르다. 숫자는 docs/performance.md, 글이 많아지면 음식 이름을 따로 칸에 두는 쪽으로 (기획서 18절)
-	String SEARCH_WHERE = """
-			from posts p
-			where p.status = :status
-			  and (replace(p.nickname, ' ', '') like :pattern escape '!'
+	// 검색어 조건만 따로 둔다: 필터와 함께 찾을 때(PostFilterQuery, JM-83)도 같은 조건을 쓴다. 글은 p, 검색어는 :pattern
+	String SEARCH_MATCH = """
+			(replace(p.nickname, ' ', '') like :pattern escape '!'
 			       or exists (
 			         select 1
 			         from food_analyses a,
@@ -58,6 +57,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			                '$[*]' columns (name varchar(500) character set utf8mb4 collate utf8mb4_0900_ai_ci path '$.name')) f
 			         where a.post_id = p.id and replace(f.name, ' ', '') like :pattern escape '!'))
 			""";
+
+	String SEARCH_WHERE = "from posts p where p.status = :status and " + SEARCH_MATCH;
 
 	// 최신 글(번호 큰 순)부터 한 쪽. countQuery: 전체 쪽 수를 알려고 같은 조건으로 한 번 더 센다 (피드의 findByStatus와 같다)
 	// 정렬은 SQL에 직접 적는다 (네이티브 쿼리에 Pageable의 정렬을 맡기지 않는다). 넘기는 Pageable에는 쪽 번호와 크기만 담는다

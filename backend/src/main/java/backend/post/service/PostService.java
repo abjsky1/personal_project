@@ -31,12 +31,14 @@ import backend.image.ProcessedImage;
 import backend.location.model.entity.PostLocation;
 import backend.location.model.repository.PostLocationRepository;
 import backend.location.model.vo.GeoPoint;
+import backend.post.model.dto.FeedFilter;
 import backend.post.model.dto.FeedPage;
 import backend.post.model.dto.PostCreateForm;
 import backend.post.model.dto.PostSummary;
 import backend.post.model.dto.SearchResult;
 import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
+import backend.post.model.repository.PostFilterQuery;
 import backend.post.model.repository.PostRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -60,6 +62,8 @@ public class PostService {
 	public static final int MAX_QUERY_LENGTH = 30;
 
 	private final PostRepository postRepository;
+	// 피드 필터로 글을 찾는다 (JM-83)
+	private final PostFilterQuery postFilterQuery;
 	private final PostLocationRepository postLocationRepository;
 	private final FoodAnalysisRepository foodAnalysisRepository;
 	private final FoodAnalysisService foodAnalysisService;
@@ -168,14 +172,34 @@ public class PostService {
 		return new FeedPage(summariesOf(page.getContent()), PageNav.of(page.getNumber() + 1, page.getTotalPages()));
 	}
 
+	// 필터로 거른 피드 (JM-83): 고른 태그와 칼로리 범위에 맞는 글, 최신순으로 한 쪽. 쪽 번호는 피드와 같은 규칙이고,
+	// 몇 개가 맞는지(total)도 함께 돌려준다 (결과 줄에 보인다). 조건을 만드는 법은 PostFilterQuery
+	@Transactional(readOnly = true)
+	public SearchResult getFilteredFeed(FeedFilter filter, int requestedPage) {
+		return filtered(filter, null, requestedPage);
+	}
+
 	// 검색 (JM-52): 닉네임이나 음식 이름(AI의 이름, 확정한 이름)에 검색어가 들어 있는 글, 최신순으로 한 쪽.
 	// query는 normalizeQuery를 거친 값(앞뒤 빈칸을 뗀 30자 이하, 비어 있지 않음)이어야 한다. 쪽 번호는 피드와 같은 규칙으로 맞춘다
+	// 필터(JM-83)를 함께 고르면 검색어와 필터가 모두 맞는 글이다 (PostFilterQuery). 필터가 없으면 지금까지의 검색 쿼리 그대로
 	@Transactional(readOnly = true)
-	public SearchResult search(String query, int requestedPage) {
+	public SearchResult search(String query, FeedFilter filter, int requestedPage) {
 		String pattern = likePattern(query);
+		if (!filter.isEmpty()) {
+			return filtered(filter, pattern, requestedPage);
+		}
 		Page<Post> page = loadSearch(pattern, PageNav.readablePage(requestedPage, PAGE_SIZE));
 		if (!page.hasContent() && page.getTotalPages() > 0) {
 			page = loadSearch(pattern, page.getTotalPages());
+		}
+		FeedPage feed = new FeedPage(summariesOf(page.getContent()), PageNav.of(page.getNumber() + 1, page.getTotalPages()));
+		return new SearchResult(feed, page.getTotalElements());
+	}
+
+	private SearchResult filtered(FeedFilter filter, String pattern, int requestedPage) {
+		Page<Post> page = postFilterQuery.find(filter, pattern, PageRequest.of(PageNav.readablePage(requestedPage, PAGE_SIZE) - 1, PAGE_SIZE));
+		if (!page.hasContent() && page.getTotalPages() > 0) {
+			page = postFilterQuery.find(filter, pattern, PageRequest.of(page.getTotalPages() - 1, PAGE_SIZE));
 		}
 		FeedPage feed = new FeedPage(summariesOf(page.getContent()), PageNav.of(page.getNumber() + 1, page.getTotalPages()));
 		return new SearchResult(feed, page.getTotalElements());
