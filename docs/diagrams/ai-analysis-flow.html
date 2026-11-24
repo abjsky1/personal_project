@@ -68,7 +68,7 @@ h1 { position: absolute; left: 50px; top: 30px; font-size: 31px; font-weight: 80
 <body>
 <div class="stage">
   <h1>찍먹 AI 분석 흐름</h1>
-  <div class="subtitle"><b>사진 한 장이 칼로리가 되기까지</b>Google Gemini (gemini-3.5-flash-lite) &nbsp;|&nbsp; 2026-11-15 기준</div>
+  <div class="subtitle"><b>사진 한 장이 칼로리가 되기까지</b>Google Gemini (gemini-3.5-flash-lite) &nbsp;|&nbsp; 2026-11-24 기준</div>
   <div class="legend">
     <em>일하는 곳</em>
     <span class="w browser">브라우저</span><span class="w app">app 서버</span><span class="w store">저장소</span><span class="w ai">Gemini</span>
@@ -82,7 +82,7 @@ h1 { position: absolute; left: 50px; top: 30px; font-size: 31px; font-weight: 80
   <div class="step" style="left:64px; top:184px; width:341px; height:182px;" data-fit="s1">
     <div class="top"><span class="num">1</span><span class="w app">app 서버</span></div>
     <h3>업로드 제한</h3>
-    <p>같은 IP에서 1분에 3번, 하루 30번까지 올릴 수 있다.</p>
+    <p>브라우저마다 1분에 5번, 하루 30번. IP는 하루 200번, 전체는 하루 500개.</p>
     <p>넘으면 여기서 거절한다.</p>
   </div>
   <div class="step" style="left:440px; top:184px; width:341px; height:182px;" data-fit="s2">
@@ -113,7 +113,7 @@ h1 { position: absolute; left: 50px; top: 30px; font-size: 31px; font-weight: 80
   <div class="step" style="left:64px; top:500px; width:227px; height:300px;" data-fit="s5">
     <div class="top"><span class="num">5</span><span class="w app">app 서버</span></div>
     <h3>하루 상한 확인</h3>
-    <p>오늘 AI 호출이 200번을 넘었으면 부르지 않는다.</p>
+    <p>오늘 AI 호출이 500번을 넘었으면 부르지 않는다 (태그 채우기 호출도 센다).</p>
     <p>그 글은 상한 초과로 남는다.</p>
     <div class="detail"><b>횟수는 DB에서 센다</b>배포로 서버가 다시 켜져도 오늘 횟수가 0으로 돌아가지 않는다.</div>
   </div>
@@ -142,7 +142,7 @@ h1 { position: absolute; left: 50px; top: 30px; font-size: 31px; font-weight: 80
     <div class="top"><span class="num">8</span><span class="w store">RDS</span></div>
     <h3>검사하고 저장</h3>
     <p>음수이거나 지나치게 큰 값이면 실패로 처리한다.</p>
-    <p>결과와 함께 모델, 토큰 수, 걸린 시간을 저장한다.</p>
+    <p>결과, 모델, 토큰 수, 시간과 필터용 <b>음식 태그</b>를 저장한다.</p>
     <p>상태가 <b>DONE</b>으로 바뀐다.</p>
     <div class="detail"><b>실패로 남는 경우</b>답이 비었을 때, 시간 초과, 이상한 값, Gemini 쪽 오류</div>
   </div>
