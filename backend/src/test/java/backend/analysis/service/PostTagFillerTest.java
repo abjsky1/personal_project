@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -133,15 +134,15 @@ class PostTagFillerTest {
 		assertThat(row.getTaggedAt()).isNotNull();
 		assertThat(row.getTagAttempts()).isEqualTo(1);
 		// 이 호출도 하루 분석 횟수에 센다
-		assertThat(foodAnalysisRepository.countByTagCalledAtGreaterThanEqual(before)).isGreaterThanOrEqualTo(1);
+		assertThat(foodAnalysisRepository.sumTagAttemptsCalledSince(before)).isGreaterThanOrEqualTo(1);
 		assertThat(mine(foodAnalysisRepository.findUntagged(Instant.now().plusSeconds(600), 1000), id)).isEmpty();
 		assertThat(output).contains("Post tags filled: postId=" + id).contains("inputTokens=1300, outputTokens=40");
 	}
 
 	@Test
-	void AI가_실패하거나_사진이_없으면_맡은_횟수만_늘고_태그는_없다(CapturedOutput output) {
+	void AI가_쓸_수_없는_답을_주거나_사진이_없으면_맡은_횟수만_늘고_태그는_없다(CapturedOutput output) {
 		Long failing = saveDone("fail.jpg");
-		when(analyzer.classify(JPEG)).thenThrow(new FoodAnalysisException("HTTP_503"));
+		when(analyzer.classify(JPEG)).thenThrow(new FoodAnalysisException("BAD_RESPONSE"));
 		Long missing = saveDone("missing.jpg");
 		when(storage.load("missing.jpg")).thenReturn(Optional.empty());
 
@@ -154,8 +155,67 @@ class PostTagFillerTest {
 			assertThat(row.getTaggedAt()).isNull();
 			assertThat(row.getTagAttempts()).isEqualTo(1);
 		}
-		assertThat(output).contains("Post tag fill failed: postId=" + failing + ", reason=HTTP_503")
+		assertThat(output).contains("Post tag fill failed: postId=" + failing + ", reason=BAD_RESPONSE")
 				.contains("Post tag fill failed: postId=" + missing + ", reason=IMAGE_NOT_FOUND");
+	}
+
+	// AI 장애(429, 5xx, 연결 실패)와 사진 저장소가 잠깐 안 될 때: 맡은 것을 돌려주고 그 회차를 멈춘다 (PR 전 검토).
+	// 장애 동안 최신 글들이 3번을 다 써 버리면 영영 채워지지 않았다
+	@Test
+	void AI에게서_답을_받지_못하면_맡은_것을_돌려주고_그_회차를_멈춘다(CapturedOutput output) {
+		Long older = saveDone("older.jpg");
+		Long newer = saveDone("newer.jpg");
+		when(analyzer.classify(JPEG)).thenThrow(new FoodAnalysisException("HTTP_503"));
+
+		filler.fill();
+
+		// 최신 글 하나만 부르고 멈췄다
+		verify(analyzer, times(1)).classify(any());
+		for (Long id : List.of(older, newer)) {
+			FoodAnalysis row = foodAnalysisRepository.findById(id).orElseThrow();
+			assertThat(row.getTagAttempts()).isZero();
+			assertThat(row.getTagCalledAt()).isNull();
+			assertThat(row.getTaggedAt()).isNull();
+		}
+		assertThat(output).contains("Post tag fill paused, no answer: postId=" + newer + ", reason=HTTP_503");
+		// 다음 회차에 그대로 다시 찾는다
+		assertThat(mine(foodAnalysisRepository.findUntagged(Instant.now().minus(STALE), 1000), older, newer)).hasSize(2);
+	}
+
+	@Test
+	void 사진_저장소가_잠깐_안_되면_답을_받지_못한_것으로_보고_돌려준다() {
+		Long id = saveDone("s3.jpg");
+		when(storage.load("s3.jpg")).thenThrow(new IllegalStateException("S3 503 SlowDown"));
+
+		assertThat(filler.fillOne(new UntaggedPost(id, "s3.jpg"))).isEqualTo(PostTagFiller.Outcome.STOPPED);
+
+		verify(analyzer, never()).classify(any());
+		assertThat(foodAnalysisRepository.findById(id).orElseThrow().getTagAttempts()).isZero();
+	}
+
+	// 예상하지 못한 오류를 밖으로 던지면 Spring이 ERROR로 적어 에러 메일이 가고 그 회차가 끊긴다 (PR 전 검토)
+	@Test
+	void 예상하지_못한_오류도_그_글의_실패로만_남긴다(CapturedOutput output) {
+		Long id = saveDone("a.jpg");
+		when(analyzer.classify(JPEG)).thenThrow(new IllegalStateException("boom"));
+
+		assertThat(filler.fillOne(new UntaggedPost(id, "a.jpg"))).isEqualTo(PostTagFiller.Outcome.FAILED);
+
+		assertThat(foodAnalysisRepository.findById(id).orElseThrow().getTagAttempts()).isEqualTo(1);
+		assertThat(output).contains("Post tag fill failed: postId=" + id + ", reason=IllegalStateException");
+	}
+
+	// 하루 분석 횟수에는 글 수가 아니라 맡은 횟수를 모두 센다: 한 글을 세 번 부를 수 있다 (PR 전 검토)
+	@Test
+	void 하루_횟수에는_태그_채우기가_맡은_횟수를_모두_센다() {
+		Long id = saveDone("a.jpg");
+		Instant since = Instant.now().minusSeconds(1);
+		long before = foodAnalysisRepository.sumTagAttemptsCalledSince(since);
+		foodAnalysisRepository.claimTagging(id, Instant.now(), Instant.now().minus(STALE));
+		ageTagClaim(id);
+		foodAnalysisRepository.claimTagging(id, Instant.now(), Instant.now().minus(STALE));
+
+		assertThat(foodAnalysisRepository.sumTagAttemptsCalledSince(since)).isEqualTo(before + 2);
 	}
 
 	@Test

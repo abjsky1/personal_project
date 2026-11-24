@@ -69,12 +69,13 @@ class PostFilterTest {
 		assertThat(found).containsExactly(chineseSpicy, koreanSpicy);
 	}
 
-	// 보이는 칼로리(확정한 글은 확정한 합계)가 최소 이상 최대 미만. 분석이 없는 글은 칼로리를 고르면 빠진다
+	// 보이는 칼로리(확정한 글은 확정한 합계)가 최소 이상 최대 미만. 분석이 없는 글은 칼로리를 고르면 빠진다.
+	// 카드에 보이는 숫자처럼 반올림해서 견준다: 799.4는 799(최대 800 미만에 듦), 799.6은 카드에 800으로 보이므로 800 이상 (PR 전 검토)
 	@Test
 	void 칼로리는_최소_이상_최대_미만이고_확정한_글은_확정한_칼로리로_본다() throws Exception {
 		Long at400 = saveTagged(400);
-		Long at799 = saveTagged(799.9);
-		Long at800 = saveTagged(800);
+		Long at799 = saveTagged(799.4);
+		Long at800 = saveTagged(799.6);
 		Long confirmedDown = saveTagged(1500);
 		foodAnalysisRepository.confirmOnce(confirmedDown, "[]", new BigDecimal("600"), BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE,
 				false, Instant.now());

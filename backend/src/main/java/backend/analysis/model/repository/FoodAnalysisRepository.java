@@ -198,6 +198,19 @@ public interface FoodAnalysisRepository extends JpaRepository<FoodAnalysis, Long
 		return claimTagging(postId, now, staleBefore, FoodAnalysis.MAX_TAG_ATTEMPTS);
 	}
 
-	// 태그 채우기가 어느 시각 이후에 AI를 부른 글 수 (하루 분석 횟수에 더한다, FoodAnalysisService.countToday)
-	long countByTagCalledAtGreaterThanEqual(Instant since);
+	// 맡은 것을 돌려준다: AI에게서 답을 받지 못했을 때 (AI 서버 오류, 연결 실패, 사진 저장소가 잠깐 안 됨, PR 전 검토).
+	// 맡은 횟수를 하나 되돌리고 맡은 시각을 지워서, 잠깐의 장애로 최신 글들이 3번을 다 써 버리지 않게 한다.
+	// 내가 맡은 그대로일 때만(맡은 시각이 같을 때만) 바꾼다
+	@Transactional
+	@Modifying(clearAutomatically = true)
+	@Query("""
+			update FoodAnalysis a set a.tagAttempts = a.tagAttempts - 1, a.tagCalledAt = null
+			where a.postId = :postId and a.taggedAt is null and a.tagCalledAt = :claim and a.tagAttempts > 0
+			""")
+	int releaseTagging(@Param("postId") Long postId, @Param("claim") Instant claim);
+
+	// 태그 채우기가 어느 시각 이후에 AI를 부른 횟수 (하루 분석 횟수에 더한다, FoodAnalysisService.countToday).
+	// 그 시각 이후에 부른 글의 맡은 횟수를 모두 더한다 (한 글을 세 번까지 부를 수 있다)
+	@Query("select coalesce(sum(a.tagAttempts), 0) from FoodAnalysis a where a.tagCalledAt >= :since")
+	long sumTagAttemptsCalledSince(@Param("since") Instant since);
 }

@@ -296,7 +296,7 @@ class FoodAnalysisServiceTest {
 	void 오늘_횟수에는_직접_적은_음식을_계산한_호출과_태그를_채운_호출도_센다() {
 		when(repository.countByCompletedAtGreaterThanEqual(any())).thenReturn(3L);
 		when(repository.countByTypedCalledAtGreaterThanEqual(any())).thenReturn(2L);
-		when(repository.countByTagCalledAtGreaterThanEqual(any())).thenReturn(4L);
+		when(repository.sumTagAttemptsCalledSince(any())).thenReturn(4L);
 
 		assertThat(service.countToday()).isEqualTo(9);
 	}

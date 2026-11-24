@@ -1418,6 +1418,11 @@ a.notice-row:hover {
 	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 
+/* dialog를 모르는 옛 브라우저에서도 열기 전에는 숨긴다 (아는 브라우저는 원래 숨긴다) */
+.filter-sheet:not([open]) {
+	display: none;
+}
+
 .filter-sheet::backdrop {
 	background: rgba(0, 0, 0, 0.35);
 }
@@ -1447,7 +1452,10 @@ a.notice-row:hover {
 	font-size: 1.1rem;
 }
 
+/* 닫기 단추는 손가락으로 누르기 쉽게 44px 칸 (PR 전 검토: 30 x 32px였다) */
 .sheet-close {
+	min-width: 44px;
+	min-height: 44px;
 	padding: 4px 8px;
 	background: none;
 	color: #666;
@@ -1616,6 +1624,11 @@ a.notice-row:hover {
 	/* 휴대폰은 [초기화] [적용]을 반씩 */
 	.sheet-foot button {
 		flex: 1;
+	}
+
+	/* 창이 열려 있는 동안 뒤의 피드가 같이 스크롤되지 않게 (PR 전 검토. PC는 스크롤 막대가 사라져 화면이 흔들려서 휴대폰만) */
+	body:has(.filter-sheet[open]) {
+		overflow: hidden;
 	}
 }
 

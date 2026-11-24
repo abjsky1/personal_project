@@ -70,7 +70,7 @@ public class GeminiFoodAnalyzer implements FoodAnalyzer {
 
 	// 지난 글의 태그를 채울 때의 지시문 (JM-83, PostTagFiller). 이미 분석이 끝난 음식 사진이라 태그만 묻는다 (답이 짧아 빠르고 토큰이 적다)
 	private static final String CLASSIFY_PROMPT = """
-			당신은 음식 사진 분류 도우미입니다. 사진 속 음식을 보고 아래 기준으로 분류해서 tags 하나로 답하세요.
+			당신은 음식 사진 분류 도우미입니다. 사진 속 음식을 보고 아래 tags의 기준대로 분류해서, tags 안의 칸(kind, cuisine, staples, ingredients, spicy, temperature)만으로 답하세요.
 			""" + TAG_RULES;
 
 	// 후보용 지시문. 영양을 "100g당"으로 받는 이유: 사용자가 양을 고치거나 다른 후보를 골라도 서버가 곱해서 다시 계산할 수 있다.

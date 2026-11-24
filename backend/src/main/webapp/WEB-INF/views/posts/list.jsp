@@ -9,11 +9,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <c:choose>
 	<%-- 검색어는 사용자가 친 값이라 c:out으로 출력한다 (XSS 방지) --%>
-	<c:when test="${not empty query}"><title>'<c:out value="${query}" />' 검색 - 찍먹</title>
-	<%-- 검색 결과 화면은 검색 엔진에 올리지 않는다 (검색어마다 비슷한 화면이 끝없이 생긴다) --%>
-	<meta name="robots" content="noindex"></c:when>
+	<c:when test="${not empty query}"><title>'<c:out value="${query}" />' 검색 - 찍먹</title></c:when>
 	<c:otherwise><title>찍먹</title></c:otherwise>
 </c:choose>
+<%-- 검색 결과와 필터를 고른 화면은 검색 엔진에 올리지 않는다 (검색어나 필터마다 비슷한 화면이 끝없이 생긴다. 필터는 JM-83 PR 전 검토) --%>
+<c:if test="${not empty query or filtered}"><meta name="robots" content="noindex"></c:if>
 <%-- 모든 화면이 함께 쓰는 스타일 (src/main/webapp/css/app.css) --%>
 <%-- c:url: 배포 서버에서는 주소 뒤에 파일 내용의 지문이 붙는다 (/css/app-3f2a….css). 개발 PC에서는 그대로 /css/app.css --%>
 <link rel="stylesheet" href="<c:url value='/css/app.css' />">
@@ -68,7 +68,7 @@
 	     같은 묶음 안에서 여럿 고르면 "하나라도", 다른 묶음끼리는 "모두" 맞는 글이다 (PostFilterQuery). 검색 결과에서 열면 검색어와 함께 거른다.
 	     dialog: 브라우저가 창을 띄우고 뒤를 어둡게 하며, Esc로 닫힌다 (아래 스크립트가 showModal로 연다) --%>
 	<dialog id="filter-sheet" class="filter-sheet" aria-labelledby="filter-title">
-		<form class="filter-form" method="get" action="${empty query ? '/' : '/search'}">
+		<form class="filter-form" method="get" action="${empty query ? '/' : '/search'}" autocomplete="off">
 			<c:if test="${not empty query}"><input type="hidden" name="q" value="<c:out value='${query}' />"></c:if>
 			<div class="sheet-head">
 				<h2 id="filter-title">필터</h2>
@@ -105,26 +105,61 @@
 			</div>
 		</form>
 	</dialog>
-	<%-- 필터 창 열기, 닫기(✕, 바깥 어두운 곳), 초기화(모두 끄기).
-	     적용할 때 비어 있는 칼로리 칸(0, 제한 없음)은 보내지 않는다: 주소에 kcalMin=&kcalMax= 같은 빈 값이 남지 않게 --%>
+	<%-- 필터 창 열기, 닫기(✕, 바깥 어두운 곳, Esc), 초기화(모두 끄기). PR 전 검토에서 고친 것:
+	     - 열 때마다 form.reset()으로 지금 걸린 필터(서버가 그린 checked, selected)로 되돌린다: 닫았다 다시 열면 적용하지 않은 선택이 남아 있었다.
+	       autocomplete="off"도 같은 이유 (뒤로 가기로 돌아오면 브라우저가 칸 값을 되살렸다)
+	     - 비어 있는 칼로리 칸(0, 제한 없음)은 보낼 값에서 뺀다(formdata). 전에는 칸을 잠갔는데(disabled), 뒤로 가기로 돌아오면 잠긴 채 남았다
+	     - 브라우저가 저장해 둔 화면으로 돌아오면(pageshow persisted) 창을 닫고 지금 필터로 되돌린다: 열린 채로 돌아왔다
+	     - 바깥 어두운 곳은 누른 곳과 뗀 곳이 모두 바깥일 때만 닫는다: 창 안에서 끌어 밖에서 놓으면 닫혔다
+	     - dialog를 모르는 옛 브라우저(iOS 15.3 이전)는 창을 화면 안에 펼쳐 보인다 (showModal이 없으면 open 속성만) --%>
 	<script>
 	(function () {
 		const sheet = document.getElementById('filter-sheet');
-		document.querySelectorAll('.filter-open').forEach(function (button) {
-			button.addEventListener('click', function () { sheet.showModal(); });
-		});
-		sheet.querySelector('.sheet-close').addEventListener('click', function () { sheet.close(); });
-		sheet.addEventListener('click', function (event) {
-			if (event.target === sheet) {
-				sheet.close();
+		const form = sheet.querySelector('form');
+		const modal = typeof sheet.showModal === 'function';
+		function openSheet() {
+			form.reset();
+			if (modal) {
+				sheet.showModal();
+			} else {
+				sheet.setAttribute('open', '');
 			}
+		}
+		function closeSheet() {
+			if (modal) {
+				sheet.close();
+			} else {
+				sheet.removeAttribute('open');
+			}
+		}
+		document.querySelectorAll('.filter-open').forEach(function (button) {
+			button.addEventListener('click', openSheet);
+		});
+		sheet.querySelector('.sheet-close').addEventListener('click', closeSheet);
+		let pressedOutside = false;
+		sheet.addEventListener('pointerdown', function (event) { pressedOutside = event.target === sheet; });
+		sheet.addEventListener('click', function (event) {
+			if (event.target === sheet && pressedOutside) {
+				closeSheet();
+			}
+			pressedOutside = false;
 		});
 		sheet.querySelector('.sheet-clear').addEventListener('click', function () {
 			sheet.querySelectorAll('input[type="checkbox"]').forEach(function (box) { box.checked = false; });
 			sheet.querySelectorAll('select').forEach(function (select) { select.value = ''; });
 		});
-		sheet.querySelector('form').addEventListener('submit', function () {
-			sheet.querySelectorAll('select').forEach(function (select) { select.disabled = !select.value; });
+		form.addEventListener('formdata', function (event) {
+			['kcalMin', 'kcalMax'].forEach(function (name) {
+				if (!event.formData.get(name)) {
+					event.formData.delete(name);
+				}
+			});
+		});
+		window.addEventListener('pageshow', function (event) {
+			if (event.persisted) {
+				closeSheet();
+				form.reset();
+			}
 		});
 	})();
 	</script>

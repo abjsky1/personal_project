@@ -162,12 +162,14 @@ public class FoodAnalysisService {
 
 	// 오늘(한국 시간 자정부터) AI를 부른 횟수. 상한 검사와 운영자 통계가 같은 숫자를 본다.
 	// 글을 올릴 때의 분석과, 직접 적은 음식을 계산한 호출(JM-74)을 더한다. 둘 다 AI를 한 번씩 부른 것이다.
-	// 지난 글의 태그를 채우려고 사진을 다시 보낸 호출(JM-83, PostTagFiller)도 더한다 (분석에 함께 오는 태그는 따로 부르지 않아서 세지 않는다)
+	// 지난 글의 태그를 채우려고 사진을 다시 보낸 호출(JM-83, PostTagFiller)도 더한다 (분석에 함께 오는 태그는 따로 부르지 않아서 세지 않는다).
+	// 태그 호출은 오늘 부른 글의 맡은 횟수를 모두 더한다: 한 글을 여러 번 부를 수 있어서 글 수로 세면 적게 센다 (PR 전 검토).
+	// 그 글을 어제 부른 횟수까지 들어가 조금 많게 셀 수 있지만, 비용을 막는 장치라 많게 세는 쪽이 낫다
 	public long countToday() {
 		Instant startOfToday = LocalDate.now(KOREA).atStartOfDay(KOREA).toInstant();
 		return foodAnalysisRepository.countByCompletedAtGreaterThanEqual(startOfToday)
 				+ foodAnalysisRepository.countByTypedCalledAtGreaterThanEqual(startOfToday)
-				+ foodAnalysisRepository.countByTagCalledAtGreaterThanEqual(startOfToday);
+				+ foodAnalysisRepository.sumTagAttemptsCalledSince(startOfToday);
 	}
 
 	public int getDailyLimit() {
@@ -558,11 +560,9 @@ public class FoodAnalysisService {
 		return estimates;
 	}
 
-	// AI에게서 답을 받지 못한 실패인지 (GeminiFoodAnalyzer가 붙이는 이유로 가린다):
-	// 키가 없어 부르지 못함, 연결 실패나 시간 초과(NETWORK), AI 서버가 오류로 답함(HTTP_429, HTTP_503 등)
+	// AI에게서 답을 받지 못한 실패인지 (FoodAnalysisException.isNoAnswer. 태그 채우기도 같은 기준을 쓴다)
 	private boolean gotNoAnswer(FoodAnalysisException e) {
-		String reason = e.getMessage();
-		return "NO_API_KEY".equals(reason) || "NETWORK".equals(reason) || reason.startsWith("HTTP_");
+		return e.isNoAnswer();
 	}
 
 	// AI의 답을 쓸 수 있는지: 적은 이름과 같은 개수이고, 음식이라고 한 것의 100g당 값이 후보와 같은 범위 안이어야 한다

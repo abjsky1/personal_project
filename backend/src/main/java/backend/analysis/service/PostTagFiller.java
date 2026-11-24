@@ -2,7 +2,9 @@ package backend.analysis.service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -30,6 +32,8 @@ import lombok.extern.slf4j.Slf4j;
 // AI 비용을 지키는 장치
 // - 한 글은 FoodAnalysis.MAX_TAG_ATTEMPTS번까지만 맡는다 (사진이 없거나 AI가 계속 실패하는 글에 끝없이 부르지 않게)
 // - 부르기 전에 그 글을 맡는다(claimTagging): 무중단 배포로 app 둘이 잠깐 같이 떠 있어도 한 글에 AI는 한 번만 불린다
+// - AI에게서 답을 받지 못하면(장애, 시간 초과, 사진 저장소가 잠깐 안 됨) 맡은 것을 돌려주고 그 회차를 멈춘다: 장애가 길어도 5분에 한 번만 부르고,
+//   최신 글들이 장애 동안 3번을 다 써 버려 영영 채워지지 않는 일이 없다 (PR 전 검토)
 // - 오늘 분석 횟수가 상한(app.analysis.daily-limit)에 닿았으면 부르지 않는다. 태그 호출도 그 횟수에 센다 (countToday)
 // - 한 번에 batchSize개까지만, 일정 스레드에서 차례로 부른다 (글을 올린 사람의 분석 일꾼과 줄을 쓰지 않는다)
 //
@@ -66,8 +70,9 @@ public class PostTagFiller {
 		this.batchSize = batchSize;
 	}
 
-	// 다시 넣기(PendingAnalysisRequeuer)와 같은 일정 스레드에서 차례로 돈다. 한 번에 20개면 AI 응답(태그만 묻는 호출은 가운데 1.6초)으로 40초쯤 걸린다.
-	// 그동안 다시 넣기는 차례를 기다린다 (5분 간격이라 늦어도 1분 안쪽)
+	// 일정 스레드는 둘이다 (spring.task.scheduling.pool.size=2): 이 채우기가 AI를 기다리는 동안에도 다시 넣기(PendingAnalysisRequeuer)는 제때 돈다.
+	// 한 번에 20개면 AI 응답(태그만 묻는 호출은 가운데 1.6초)으로 40초쯤 걸린다.
+	// AI에게서 답을 받지 못하면(장애, 시간 초과) 그 회차는 바로 멈춘다: 장애 동안 20개를 차례로 기다리지 않고, 5분에 한 번만 부르게 (PR 전 검토)
 	@Scheduled(initialDelayString = "${app.tags.fill.initial-delay}", fixedDelayString = "${app.tags.fill.interval}")
 	public void fill() {
 		// 이 실행의 로그에 같은 번호(traceId)를 붙인다
@@ -89,6 +94,8 @@ public class PostTagFiller {
 					filled++;
 				} else if (outcome == Outcome.FAILED) {
 					failed++;
+				} else if (outcome == Outcome.STOPPED) {
+					break;
 				}
 			}
 			log.info("Post tag fill run: found={}, filled={}, failed={}", targets.size(), filled, failed);
@@ -100,21 +107,22 @@ public class PostTagFiller {
 		}
 	}
 
-	// 한 글을 채운 결과. FAILED는 맡은 횟수만 하나 늘었고, SKIPPED는 다른 app이 맡았거나 이미 채운 글이다
+	// 한 글을 채운 결과
+	// FILLED: 채움. FAILED: 채우지 못하고 맡은 횟수만 하나 늘었다 (이상한 답, 사진 파일이 없음 등. 3번이면 더 찾지 않는다)
+	// STOPPED: AI에게서 답을 받지 못해 맡은 것을 돌려주었다. 이 회차는 여기서 멈춘다. SKIPPED: 다른 app이 맡았거나 이미 채운 글
 	enum Outcome {
-		FILLED, FAILED, SKIPPED
+		FILLED, FAILED, STOPPED, SKIPPED
 	}
 
-	// 한 글의 태그를 채운다
+	// 한 글의 태그를 채운다. 맡은 시각은 마이크로초까지로 자른다: 돌려줄 때 DB 칸(DATETIME(6))의 값과 같은지 비교한다
 	Outcome fillOne(UntaggedPost target) {
-		Instant now = Instant.now();
-		if (foodAnalysisRepository.claimTagging(target.postId(), now, now.minus(CLAIM_STALE_AFTER)) == 0) {
+		Instant claim = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		if (foodAnalysisRepository.claimTagging(target.postId(), claim, claim.minus(CLAIM_STALE_AFTER)) == 0) {
 			return Outcome.SKIPPED;
 		}
 		long startedAt = System.currentTimeMillis();
 		try {
-			byte[] jpeg = imageStorage.load(target.imageKey()).orElseThrow(() -> new FoodAnalysisException("IMAGE_NOT_FOUND"));
-			FoodTagsResponse response = foodAnalyzer.classify(jpeg);
+			FoodTagsResponse response = foodAnalyzer.classify(loadPhoto(target.imageKey()));
 			Set<FoodTag> tags = response.tags() == null ? Set.of() : response.tags().toTags();
 			if (tags.isEmpty()) {
 				throw new FoodAnalysisException("EMPTY_TAGS");
@@ -125,9 +133,33 @@ public class PostTagFiller {
 					response.inputTokens(), response.outputTokens());
 			return Outcome.FILLED;
 		} catch (FoodAnalysisException e) {
-			log.warn("Post tag fill failed: postId={}, reason={}, latencyMs={}", target.postId(), e.getMessage(),
+			long latencyMs = System.currentTimeMillis() - startedAt;
+			if (e.isNoAnswer()) {
+				foodAnalysisRepository.releaseTagging(target.postId(), claim);
+				log.warn("Post tag fill paused, no answer: postId={}, reason={}, latencyMs={}", target.postId(), e.getMessage(), latencyMs);
+				return Outcome.STOPPED;
+			}
+			log.warn("Post tag fill failed: postId={}, reason={}, latencyMs={}", target.postId(), e.getMessage(), latencyMs);
+			return Outcome.FAILED;
+		} catch (DataAccessException | TransactionException e) {
+			// DB 오류는 이 회차를 멈추게 밖(fill)으로 넘긴다
+			throw e;
+		} catch (RuntimeException e) {
+			// 예상하지 못한 오류도 이 글 하나의 실패로 남기고 다음 글로 간다 (밖으로 던지면 Spring이 ERROR로 적어 에러 메일이 간다, PR 전 검토)
+			log.warn("Post tag fill failed: postId={}, reason={}, latencyMs={}", target.postId(), e.getClass().getSimpleName(),
 					System.currentTimeMillis() - startedAt);
 			return Outcome.FAILED;
 		}
+	}
+
+	// 사진을 읽는다. 파일이 없으면 다시 해도 소용없는 실패(IMAGE_NOT_FOUND), 저장소가 잠깐 안 되면(S3 네트워크, 혼잡) 답을 받지 못한 실패(IMAGE_LOAD)
+	private byte[] loadPhoto(String imageKey) {
+		Optional<byte[]> photo;
+		try {
+			photo = imageStorage.load(imageKey);
+		} catch (RuntimeException e) {
+			throw new FoodAnalysisException("IMAGE_LOAD");
+		}
+		return photo.orElseThrow(() -> new FoodAnalysisException("IMAGE_NOT_FOUND"));
 	}
 }
