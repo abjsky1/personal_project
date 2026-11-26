@@ -1,10 +1,11 @@
 <%@ page pageEncoding="UTF-8" %>
 <%-- 관리자 글 목록의 한 줄 (JM-82). 검토할 사진(JM-80)과 전체 글 두 곳에서 같은 모양으로 쓴다 (admin/posts.jsp).
      include하는 쪽에서 post(이 줄의 글)와 rowPrefix(줄 id의 앞말: 같은 글이 두 곳에 나와도 id가 겹치지 않게)를 정해 둔다.
-     사진을 가린 글(post.photoHeld)은 AI 결과를 "검토 중"으로 붉게 쓰고, 삭제 옆에 "올리기"를 둔다 --%>
+     사진을 가린 글(post.photoHeld)은 AI 결과를 "검토 중"으로 붉게 쓰고, 삭제 옆에 "올리기"를 둔다.
+     사진은 관리자 주소(/admin/images/파일이름, JM-95)로 연다: 공개 주소(/images/)는 가린 글의 사진을 내주지 않는다 --%>
 <li class="admin-row<c:if test="${post.photoHeld}"> held</c:if>" id="${rowPrefix}post-${post.id}">
-	<a class="admin-thumb" href="${post.imageUrl}" target="_blank" rel="noopener">
-		<img src="${post.thumbnailUrl}" alt="${post.id}번 글의 사진" loading="lazy">
+	<a class="admin-thumb" href="/admin${post.imageUrl}" target="_blank" rel="noopener">
+		<img src="/admin${post.thumbnailUrl}" alt="${post.id}번 글의 사진" loading="lazy">
 	</a>
 	<div class="admin-info">
 		<p class="admin-head">

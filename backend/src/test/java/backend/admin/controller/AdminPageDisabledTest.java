@@ -27,5 +27,7 @@ class AdminPageDisabledTest {
 		mockMvc.perform(post("/admin/login").param("password", "")).andExpect(status().isNotFound());
 		mockMvc.perform(get("/admin/posts")).andExpect(status().isNotFound());
 		mockMvc.perform(get("/admin/stats")).andExpect(status().isNotFound());
+		// 관리자 사진 주소 (JM-95)도 꺼진다
+		mockMvc.perform(get("/admin/images/00000000-0000-0000-0000-000000000000.jpg")).andExpect(status().isNotFound());
 	}
 }
