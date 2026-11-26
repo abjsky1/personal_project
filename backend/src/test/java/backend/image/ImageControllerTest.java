@@ -132,7 +132,9 @@ class ImageControllerTest {
 	@Test
 	void 우리가_만든_이름_모양이_아니면_찾아보지도_않고_404() throws Exception {
 		// 확장자가 다르거나, 무작위 이름(UUID) 모양이 아닌 경우
-		mockMvc.perform(get("/images/photo.png")).andExpect(status().isNotFound());
+		mockMvc.perform(get("/images/photo.png"))
+				.andExpect(status().isNotFound())
+				.andExpect(header().string("Cache-Control", "no-store"));
 		mockMvc.perform(get("/images/application.properties")).andExpect(status().isNotFound());
 	}
 

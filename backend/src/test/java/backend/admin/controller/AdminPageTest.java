@@ -231,13 +231,18 @@ class AdminPageTest {
 		assertThat(reviewAfter).extracting(PostSummary::id).doesNotContain(held.getId());
 	}
 
-	// 관리자 사진 주소 (JM-95): 공개 주소(/images/)가 내주지 않는 가린 글의 사진을 관리자 화면에서 본다.
+	// 관리자 사진 주소 (JM-95): 공개 주소(/images/)가 내주지 않는 가린 글과 지운 글의 사진을 관리자 화면에서 본다.
 	// 관리자 화면의 썸네일과 큰 사진 링크가 이 주소를 쓴다 (post-row.jspf). 브라우저에 남기지 않는다
 	@Test
-	void 관리자_사진_주소는_로그인한_관리자에게만_가린_글의_사진도_보낸다() throws Exception {
+	void 관리자_사진_주소는_로그인한_관리자에게만_가린_글과_지운_글의_사진도_보낸다() throws Exception {
 		byte[] photo = TestImages.jpeg(30, 30);
 		Post held = postRepository.save(new Post("검토시험", passwordEncoder.encode("1234"), null,
 				imageStorage.saveJpeg(photo), UUID.randomUUID() + ".jpg", null));
+		byte[] deletedPhoto = TestImages.jpeg(40, 40);
+		Post deleted = postRepository.save(new Post("삭제시험", passwordEncoder.encode("1234"), null,
+				imageStorage.saveJpeg(deletedPhoto), UUID.randomUUID() + ".jpg", null));
+		deleted.deleteByAdmin();
+		postRepository.flush();
 		FoodAnalysis analysis = new FoodAnalysis(held);
 		analysis.markNotFood(new FoodAnalyzerResponse(
 				new FoodAnalysisResult(false, List.of(), "HIGH", "음식이 아니에요"), "test-model", 1300, 50), 1500);
@@ -252,11 +257,19 @@ class AdminPageTest {
 				.andExpect(status().isOk())
 				.andExpect(content().bytes(photo))
 				.andExpect(header().string("Cache-Control", "no-store, private"));
+		mockMvc.perform(get("/admin/images/" + deleted.getImageKey()).session(session))
+				.andExpect(status().isOk())
+				.andExpect(content().bytes(deletedPhoto));
 		// 관리자로 들어온 브라우저라도 공개 주소로는 열리지 않는다
 		mockMvc.perform(get("/images/" + key).session(session)).andExpect(status().isNotFound());
-		// 이름 모양이 다르거나 저장소에 없는 사진은 404
-		mockMvc.perform(get("/admin/images/application.properties").session(session)).andExpect(status().isNotFound());
-		mockMvc.perform(get("/admin/images/" + held.getThumbnailKey()).session(session)).andExpect(status().isNotFound());
+		mockMvc.perform(get("/images/" + deleted.getImageKey()).session(session)).andExpect(status().isNotFound());
+		// 이름 모양이 다르거나 저장소에 없는 사진은 404이고 브라우저가 기억하지 않는다
+		mockMvc.perform(get("/admin/images/application.properties").session(session))
+				.andExpect(status().isNotFound())
+				.andExpect(header().string("Cache-Control", "no-store"));
+		mockMvc.perform(get("/admin/images/" + held.getThumbnailKey()).session(session))
+				.andExpect(status().isNotFound())
+				.andExpect(header().string("Cache-Control", "no-store"));
 	}
 
 	// 운영 통계 화면 (JM-75): 운영자 API와 같은 값을 서버에서 그린다. 머리말의 로그아웃 폼에 CSRF 값이 들어간다
