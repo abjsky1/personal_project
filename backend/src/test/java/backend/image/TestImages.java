@@ -13,6 +13,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.CRC32;
 
 import javax.imageio.ImageIO;
@@ -56,14 +58,46 @@ public final class TestImages {
 
 	// RGB PNG에 투명색(tRNS) 조각을 끼워 넣는다. "이 색인 화소는 투명으로 본다"는 표시라,
 	// 자바는 이런 PNG를 투명도가 있는 화소당 4바이트 그림(TYPE_4BYTE_ABGR)으로 펼친다.
-	// tRNS는 그림 데이터(IDAT) 앞에 와야 한다 → IHDR 바로 뒤(서명 8바이트 + IHDR 조각 25바이트 = 33번째 바이트)에 넣는다
+	// tRNS는 그림 데이터(IDAT) 앞에 와야 해서 IHDR 바로 뒤에 넣는다 (withChunk)
 	public static byte[] withTransparentColor(byte[] rgbPng) {
-		ByteArrayOutputStream out = new ByteArrayOutputStream();
-		out.write(rgbPng, 0, 33);
 		// RGB 투명색: 빨강, 초록, 파랑을 각각 2바이트로
-		writeChunk(out, "tRNS", new byte[] {0, 1, 0, 2, 0, 3});
-		out.write(rgbPng, 33, rgbPng.length - 33);
+		return withChunk(rgbPng, "tRNS", new byte[] {0, 1, 0, 2, 0, 3});
+	}
+
+	// PNG의 머리 조각(IHDR) 바로 뒤에 조각 하나를 끼워 넣는다. 여러 번 부르면 나중에 넣은 조각이 앞에 온다
+	// 그림 데이터(IDAT)보다 앞에 와야 하는 조각(tRNS 등)도 있어서 맨 앞쪽에 넣는다
+	public static byte[] withChunk(byte[] png, String type, byte[] data) {
+		ByteArrayOutputStream chunk = new ByteArrayOutputStream();
+		writeChunk(chunk, type, data);
+		return insertAfterHeader(png, chunk.toByteArray());
+	}
+
+	// PNG의 IHDR 조각 바로 뒤(서명 8바이트 + IHDR 조각 25바이트 = 33번째 바이트)에 바이트를 그대로 끼워 넣는다
+	// 조각 규칙에 맞지 않는 바이트(길이를 속인 조각 등)로 깨진 PNG를 만들 때도 쓴다
+	public static byte[] insertAfterHeader(byte[] png, byte[] bytes) {
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		out.write(png, 0, 33);
+		out.writeBytes(bytes);
+		out.write(png, 33, png.length - 33);
 		return out.toByteArray();
+	}
+
+	// PNG에 촬영 정보 조각(eXIf)으로 GPS 위치와 촬영 시각을 넣는다. dateTimeOriginal 형식은 EXIF 규칙대로 "2026:10:29 12:30:00"
+	// 내용은 JPEG의 EXIF와 같은 TIFF 형식이다 (JPEG와 달리 앞에 "Exif\0\0" 표시가 없다)
+	public static byte[] withPngGps(byte[] png, double latitude, double longitude, String dateTimeOriginal) {
+		return withChunk(png, "eXIf", buildTiff(null, latitude, longitude, dateTimeOriginal));
+	}
+
+	// PNG 파일 안 조각의 종류를 차례대로 모은다 (시험에서 어떤 조각이 남았는지 볼 때)
+	public static List<String> chunkTypes(byte[] png) {
+		List<String> types = new ArrayList<>();
+		int pos = 8;
+		while (pos + 12 <= png.length) {
+			int length = ByteBuffer.wrap(png, pos, 4).getInt();
+			types.add(new String(png, pos + 4, 4, StandardCharsets.ISO_8859_1));
+			pos += 12 + length;
+		}
+		return types;
 	}
 
 	// 회색 + 투명도 PNG 파일 내용 (색 형식 4). 자바는 화소당 2바이트의 TYPE_CUSTOM 그림으로 펼친다
