@@ -28,30 +28,21 @@ x-logging-local: &logging-local
     max-size: "10m"
     max-file: "3"
 
-# AWS CloudWatch Logs로 보내는 로그 (app): 배포로 컨테이너가 바뀌어도 남고, 콘솔에서 traceId로 검색할 수 있다.
-# 로그 그룹 /macros/server 안에 컨테이너 이름(macros-app1-1, macros-app2-1)으로 스트림이 생긴다. 그룹이 같아서 경보와 검색은 그대로 된다. 보관 기간 90일은 콘솔에서 로그 그룹에 설정한다 (처리방침 "이용 기록 3개월").
+# AWS CloudWatch Logs로 보내는 기록 (app1, app2, nginx): 배포로 컨테이너가 바뀌어도 90일 남고, 콘솔에서 검색할 수 있다.
+# 로그 그룹 /macros/server 안에 컨테이너 이름으로 스트림이 생긴다 (macros-app1-1, macros-app2-1, macros-nginx-1). 보관 기간 90일은 콘솔에서 로그 그룹에 설정한다 (처리방침 "이용 기록 3개월").
 # 서버의 Docker가 EC2 역할(macros-ec2의 macros-logs 정책)로 보낸다. docker compose logs 도 그대로 된다 (Docker가 사본을 서버에 잠시 남김).
+# app은 JSON 줄이다 (traceId로 검색, 경보 app-error와 photo-held가 본다). nginx는 IP 없는 접속 기록 글자 줄이다 (2026-11-26부터, JM-91).
+#   사람이 화면을 다 받기까지 걸린 시간(전송 포함)과 502는 nginx 기록에만 있다. 경보는 JSON 줄만 보므로 nginx 줄에는 울리지 않는다.
+#   IP가 들어가는 nginx의 에러 줄은 보내지 않는다 (nginx/default.conf의 error_log, 컨테이너 안 파일)
+# 맨 아래 두 줄은 CloudWatch가 느리거나 닿지 않을 때를 위한 것이다 (nginx는 2026-11-26 PR #61, app은 같은 날 PR #62):
+#   mode: non-blocking: 보내지 못한 기록을 메모리(max-buffer-size, 4MB)에 모아 두고, 넘치면 새 기록을 버린다. 컨테이너는 기다리지 않는다.
+#   기본값(blocking)이면 켤 때 CloudWatch에 스트림을 만들지 못한 컨테이너는 뜨지 않고(서버를 다시 켤 때라면 사이트가 멈춘다),
+#   오래 막히면 기록을 넘기지 못한 app과 nginx가 요청 처리까지 기다릴 수 있다. 사이트가 멈추는 것보다 기록 몇 줄을 잃는 편이 낫다.
+# 주의: non-blocking이어도 켜질 때 스트림을 끝내 만들지 못하면(권한, 긴 CloudWatch 장애) 보내지 못한 줄을 4,096줄까지 쥐고 있다가,
+#   그 뒤 그 컨테이너가 꺼질 때(끄거나, 메모리 초과로 죽거나) Docker가 정리를 끝내지 못한다 (Docker 25). 다시 켜지지도 않는다.
+#   그래서 배포 뒤에는 스트림을 만들지 못한 오류가 없는지 본다 (docs/performance.md 5절). awslogs-create-stream: "false"는 Docker 25가 받지 않는다
+# 이 묶음은 app과 nginx가 같이 쓴다. 여기를 바꾸면 nginx도 다시 만들어진다 (deploy.sh 7단계, 보통 1~2초 끊김). app만 바꿀 때는 묶음을 나눈다
 x-logging-cloud: &logging-cloud
-  driver: awslogs
-  options:
-    awslogs-region: ap-northeast-2
-    awslogs-group: /macros/server
-    awslogs-create-group: "true"
-    tag: "{{.Name}}"
-
-# nginx 접속 기록도 같은 로그 그룹 /macros/server로 보낸다 (JM-91, 2026-11-26). 스트림은 컨테이너 이름 macros-nginx-1.
-# 사람이 화면을 다 받기까지 걸린 시간(전송 포함)과 502는 nginx 기록에만 있다. 서버 안 파일과 달리 nginx를 새로 만들어도 90일 남는다.
-# app의 설정과 다른 것은 맨 아래 두 줄이다. CloudWatch가 느리거나 닿지 않을 때를 위한 것:
-#   mode: non-blocking: 보내지 못한 기록을 메모리(max-buffer-size, 4MB)에 모아 두고, 넘치면 새 기록을 버린다. nginx는 기다리지 않는다.
-#   기본값(blocking)이면 nginx를 새로 켤 때 CloudWatch에 스트림을 만들지 못하면 nginx가 뜨지 않아 사이트가 멈추고,
-#   CloudWatch가 오래 막히면 기록을 넘기지 못한 nginx가 요청 처리까지 기다릴 수 있다. nginx는 app처럼 두 자리가 아니라 하나뿐이다.
-#   non-blocking에서는 스트림 만들기를 뒤에서 다시 시도하므로 nginx가 먼저 켜진다. 사이트가 멈추는 것보다 기록 몇 줄을 잃는 편이 낫다
-#   (app은 아직 기본값이다: docs/troubleshooting/2026-11-26-app-log-blocking.md)
-# 경보(app-error, photo-held)는 JSON 줄만 보므로 nginx의 글자 줄에는 울리지 않는다. 접속 기록은 서버의 docker compose logs nginx 로도 그대로 본다.
-# IP가 들어가는 nginx의 에러 줄은 CloudWatch로 보내지 않는다 (nginx/default.conf의 error_log, 컨테이너 안 파일).
-# 주의: non-blocking이어도 nginx가 켜질 때 스트림을 끝내 만들지 못하면(권한, 긴 CloudWatch 장애) 보내지 못한 줄을 4,096줄까지 쥐고 있다가,
-#   그 뒤 nginx를 끌 때 끝나지 않는다. 그래서 nginx를 새로 만든 배포 뒤에는 스트림이 생겼는지 본다 (docs/performance.md 5절)
-x-logging-cloud-nginx: &logging-cloud-nginx
   driver: awslogs
   options:
     awslogs-region: ap-northeast-2
@@ -136,8 +127,8 @@ services:
     environment:
       # 로그 시각을 한국 시간으로 (서버 기본값은 UTC = 한국보다 9시간 늦게 찍힌다)
       TZ: Asia/Seoul
-    # 접속 기록은 CloudWatch로 (위의 x-logging-cloud-nginx). 형식은 nginx/default.conf의 log_format noip (IP 없음)
-    logging: *logging-cloud-nginx
+    # 접속 기록은 CloudWatch로 (위의 x-logging-cloud, app과 같은 설정). 형식은 nginx/default.conf의 log_format noip (IP 없음)
+    logging: *logging-cloud
 
   # 예비 인증서 관리 (JM-67부터 예비): 서비스에는 가비아에서 산 인증서를 쓰고, Let's Encrypt 인증서는 문제가 생기면 되돌아갈 수 있게 계속 갱신해 둔다.
   # Let's Encrypt 인증서는 90일짜리라서, 12시간마다 "만료 30일 전이면 갱신"을 시도한다.

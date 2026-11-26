@@ -66,10 +66,10 @@
 - **언제**: 방문 수 2026-11-18 JM-86 (PR #46), 사용자 흐름 11-20 JM-92 (PR #54)
 - **확인**: JM-92를 만들 때 테스트가 실제로 잡았다. 링크 표시가 없는 화면에서 `List.of(...).contains(null)`이 예외를 던져, 인터셉터 밖으로 나가면 ERROR 로그가 찍히는 상태였다. PR 전 검토에서는 깨진 utm 값(`%ED%95`처럼 잘린 것)이 들어오면 경고만 남고 그 방문의 첫 줄을 통째로 잃는 것을 로컬 서버로 재현해 고쳤다. 지금은 저장하는 쪽이 예외를 던질 때, 주소 값이 깨졌을 때, 화면을 그리다 실패했을 때를 테스트로 지킨다 (`PageFlowInterceptorTest`, `VisitCountInterceptorTest`)
 
-## 10. 기록을 보내는 곳이 막히면 사이트도 멈추는 문제 → nginx 기록은 non-blocking으로 (JM-91)
+## 10. 기록을 보내는 곳이 막히면 사이트도 멈추는 문제 → CloudWatch로 보내는 기록은 non-blocking으로 (JM-91)
 
 - **예상한 문제**: nginx 접속 기록을 CloudWatch로 보낼 때 Docker의 기본 방식(blocking)을 쓰면, CloudWatch에 닿지 않는 때에 nginx를 새로 켜면(nginx 설정이 바뀐 배포, 재부팅) 스트림을 만들지 못해 nginx가 뜨지 않는다. nginx는 app과 달리 하나뿐이라 그대로 사이트가 멈춘다. 오래 막히면 기록을 넘기지 못한 nginx가 요청 처리까지 기다릴 수도 있다
-- **미리 한 것**: nginx만 `mode: non-blocking`, `max-buffer-size: 4m`으로 보낸다 (`deploy/compose.yaml`의 `x-logging-cloud-nginx`). 스트림 만들기는 뒤에서 다시 시도하고, 넘기지 못한 기록은 메모리 4 MB에 모았다가 넘치면 버린다. 기록 몇 줄을 잃더라도 사이트는 멈추지 않는다
-- **언제**: 2026-11-26 JM-91 (PR #61)
+- **미리 한 것**: nginx와 app 모두 `mode: non-blocking`, `max-buffer-size: 4m`으로 보낸다 (`deploy/compose.yaml`의 `x-logging-cloud`. nginx는 PR #61, app은 같은 날 PR #62에서 같은 묶음 하나로). 스트림 만들기는 뒤에서 다시 시도하고, 넘기지 못한 기록은 메모리 4 MB에 모았다가 넘치면 버린다. 기록 몇 줄을 잃더라도 사이트는 멈추지 않는다
+- **언제**: 2026-11-26 JM-91 (nginx PR #61, app PR #62)
 - **확인**: 내 PC에서 CloudWatch에 닿지 않는 주소로 두 방식을 켜 봤다. blocking은 `failed to initialize logging driver`로 켜지지 않았고(종료 코드 125), non-blocking은 켜졌다. 서버의 Docker(25.0.18)와 같은 버전대의 소스도 같다 (non-blocking이면 스트림 만들기를 뒤에서 다시 시도한다)
-- **남은 것**: non-blocking이어도 nginx가 켜질 때 스트림을 끝내 만들지 못하면(권한이 스트림 이름으로 묶였거나 CloudWatch가 하루쯤 닿지 않음), Docker 25의 awslogs는 보내지 못한 줄을 4,096줄(지금 양으로 하루쯤)까지 쥐고 기다리다가, 그 뒤 nginx를 끌 때 끝나지 않는다 (배포 7단계가 멈추고 80, 443번이 닫힌 채. moby v25.0.5의 awslogs `Log`와 `RingLogger.Close`로 확인). PR 전 검토에서 찾았고, 그래서 nginx를 새로 만든 배포 뒤에는 스트림이 생겼는지 본다 ([performance.md](../performance.md) 5절). 더 막으려면 스트림이 생긴 뒤 `awslogs-create-stream: "false"`로 만들기를 건너뛰는 방법이 있다. app은 아직 기본값이다 → [2026-11-26-app-log-blocking](2026-11-26-app-log-blocking.md). CloudWatch가 막혔던 동안 버려진 nginx 기록은 되살릴 수 없다 (그 시간의 숫자가 빈다)
+- **남은 것**: non-blocking이어도 컨테이너가 켜질 때 스트림을 끝내 만들지 못하면(권한이 스트림 이름으로 묶였거나 CloudWatch가 하루쯤 닿지 않음), Docker 25의 awslogs는 보내지 못한 줄을 4,096줄(지금 양으로 하루쯤)까지 쥐고 기다리다가, 그 뒤 그 컨테이너를 끌 때 끝나지 않는다 (nginx라면 배포 7단계가 멈추고 80, 443번이 닫힌 채. app이라면 배포 때 옛 자리를 끄는 경우는 배포 작업만 멈추지만, 사이트를 맡은 자리가 메모리 초과 등으로 꺼지면 다시 켜지지 않아 502가 된다. moby v25.0.5의 awslogs `Log`와 `RingLogger.Close`로 확인). PR 전 검토에서 찾았고, 그래서 배포 뒤에는 스트림을 만들지 못한 오류가 없는지 본다 ([performance.md](../performance.md) 5절). 스트림을 만들지 않게 하는 `awslogs-create-stream: "false"`는 서버의 Docker 25가 받지 않아 쓰지 않았다 (moby v25.0.5의 옵션 검사에 이 이름이 빠져 있어 컨테이너를 만들 때 거절된다). app도 같은 날 바꿨다 (PR #62, [2026-11-26-app-log-blocking](2026-11-26-app-log-blocking.md)). CloudWatch가 막혔던 동안 버려진 기록은 되살릴 수 없다 (그 시간의 숫자가 빈다)
