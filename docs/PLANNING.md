@@ -810,7 +810,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 - **비용 점검**: 한 달에 한 번 청구서(결제 → 청구서 → 서비스별 요금)에서 **"Hrs"나 "GB-Mo"가 붙은 줄**만 본다. 그 줄이 켜 둔 자원(서버, 디스크, IP, DB)이고, "Requests", 0 GB 줄과 나라별 요금표 줄은 자원이 아니다. 낯선 줄이 있으면 태그 편집기에서 전 지역, 전 유형으로 검색해 서비스별로 정렬하고, 서울 밖이면서 기본 VPC 부품이 아닌 것을 찾는다 (첫 점검 2026-11-05, 10절)
 - **운영자 작업 (관리자 API, S3-3)**: 화면이 없고 열쇠(토큰)로 부르는 JSON API다 (13절). 열쇠를 어디에도 복사하지 않도록, **서버에 SSH로 들어가 `.env`에서 바로 읽어** 쓴다
   - 처음 한 번: 서버에서 `openssl rand -hex 24`로 열쇠를 만들어 `deploy/.env`에 `APP_ADMIN_TOKEN=값` 한 줄 추가 → `bash deploy.sh current` (바뀐 환경 변수로 app을 끊김 없이 다시 켠다, 약 45초. 2026-11-23 전에는 `docker compose up -d app`, 20초 끊김)
-  - 순서: ① PC에서 PowerShell을 열고 `ssh -i <키 파일 경로> ec2-user@3.39.120.213` (프롬프트가 `[ec2-user@…]$`로 바뀐다. `Connection timed out`이면 아래 장애 대응의 SSH 항목) ② `cd ~/personal_project/deploy` (막 들어오면 홈 폴더라서 `.env`가 없다고 나온다) ③ 아래 상자의 첫 줄로 열쇠를 변수에 담는다 (화면에 찍히지 않는다. 창을 닫으면 사라지므로 접속할 때마다 다시) ④ 필요한 명령 **한 줄만** 복사해 실행한다 — 삭제 줄을 그대로 붙여 넣으면 그 번호의 글, 댓글이 지워진다 (피드백 1번은 예시) ⑤ 브라우저로 결과 확인 ⑥ `exit`로 나온다
+  - 순서: ① PC에서 PowerShell(맥북은 터미널)을 열고 `ssh -i <키 파일 경로> ec2-user@3.39.120.213` (맥북은 처음 한 번 `chmod 400 <키 파일 경로>`로 키 파일을 나만 읽게 한다. 아니면 ssh가 키를 쓰지 않는다. 프롬프트가 `[ec2-user@…]$`로 바뀐다. `Connection timed out`이면 아래 장애 대응의 SSH 항목) ② `cd ~/personal_project/deploy` (막 들어오면 홈 폴더라서 `.env`가 없다고 나온다) ③ 아래 상자의 첫 줄로 열쇠를 변수에 담는다 (화면에 찍히지 않는다. 창을 닫으면 사라지므로 접속할 때마다 다시) ④ 필요한 명령 **한 줄만** 복사해 실행한다 — 삭제 줄을 그대로 붙여 넣으면 그 번호의 글, 댓글이 지워진다 (피드백 1번은 예시) ⑤ 브라우저로 결과 확인 ⑥ `exit`로 나온다
     ```
     TOKEN=$(grep ^APP_ADMIN_TOKEN= .env | cut -d= -f2)
     curl -s -X POST https://jjikmuk.com/api/admin/posts/<글 번호>/delete -H "X-Admin-Token: $TOKEN"
@@ -836,7 +836,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
   - 사진 검토 알림 메일 (처음 한 번, AWS 콘솔. 2026-11-16 만들고 시험 글 두 개로 확인): CloudWatch → 로그 그룹 `/macros/server` → 지표 필터 `photo-held`(패턴 `{ $.message = "Post held for review*" }`, 지표 `macros/PhotoHeld`, 값 1, 기본값 0) → 그 지표로 경보 `macros-photo-held`(합계, 5분, 1 이상, 누락 데이터는 양호) → SNS 주제 `macros-alerts`(에러 경보와 같은 주제). 경보는 상태가 바뀔 때 한 번 메일을 보내므로, 5분 안에 여러 장이 걸려도 메일은 한 통이다. 메일이 오면 관리자 화면을 연다. 로그 문구는 `FoodAnalysisService`에 있고, 바꾸면 이 패턴도 바꾼다
   - 운영 통계 (JM-75): 관리자 화면 위의 "통계"에서 기간(오늘, 7일, 30일, 90일)을 골라 본다. 서버에서 볼 때는 위 상자의 stats 줄을 쓰고, 고쳐 쓰는 AI만 보려면 끝의 `jq .`를 `jq .confirm`으로, 지역별 글 수만 보려면 `jq .regions`로, 방문 지역만 보려면 `jq .visits`로 바꾼다
   - IP 위치 파일 (JM-86, 서버, 처음 한 번과 매달): 방문 지역 카드는 서버에 DB-IP 무료판 파일이 있어야 시/도가 나온다 (없으면 모두 "알 수 없음"). SSH로 서버에 들어가 `cd ~/personal_project/deploy && mkdir -p geoip && curl -fL -o geoip/dbip-city-lite.mmdb.gz https://download.db-ip.com/free/dbip-city-lite-$(date +%Y-%m).mmdb.gz && gunzip -f geoip/dbip-city-lite.mmdb.gz && ls -l geoip` (약 57MB를 받아 121MB로 푼다. 주소의 연월은 `$(date +%Y-%m)`가 서버 날짜로 채운다). 파일은 방문을 셀 때 연다: app이 파일 없음을 본 뒤 10분이 지나고 처음 세는 방문에서 읽기 시작하고, 로그에 `IP region file loaded`가 찍힌다. 바로 확인하려면 `bash deploy.sh current` 뒤 새 브라우저(시크릿 창)로 사이트를 한 번 연다. 권한이 없다고 나오면(배포가 먼저 돌아 Docker가 빈 폴더를 root 것으로 만든 경우) 앞에 `sudo chown -R ec2-user: geoip`. 새 판은 매달 1일에 나온다: 바꿀 때도 연월을 고치지 않고 같은 명령으로 받은 뒤 `bash deploy.sh current` (app은 처음 연 파일을 계속 쓰므로 다시 띄워야 새 판을 읽는다. 2026-11-23부터는 끊기지 않는다. 그 전에는 `docker compose restart app`으로 20초쯤 끊겨서 사람이 적은 때에 하고, 급하지 않으면 다음 배포 때 저절로 바뀐다). 서버 날짜는 UTC라서 1일 오전 9시 전에는 지난달 판을 다시 받고, 새 판이 아직 없으면 curl이 404로 멈추고 지금 파일은 그대로 남는다. 출처 링크(IP Geolocation by DB-IP)는 통계 카드에 있다 (CC BY 4.0)
-  - 내 PC에서 직접 부를 수도 있다 (Git Bash에서 같은 curl, 열쇠는 직접 입력). PowerShell은 한글 본문이 깨질 수 있어 Git Bash를 쓴다
+  - 내 PC에서 직접 부를 수도 있다 (윈도우는 Git Bash, 맥북은 터미널에서 같은 curl, 열쇠는 직접 입력). PowerShell은 한글 본문이 깨질 수 있어 Git Bash를 쓴다
 - **사용자 흐름 보기 (JM-92)**: 들어온 곳, 첫 화면 다음 화면, 자주 가는 이동, 방문당 화면 수, 올리기까지 간 방문 비율을 서버에서 SQL로 뽑는다. SSH로 서버에 들어가 `cd ~/personal_project/deploy` 다음, [`user-flow.md`](user-flow.md)의 SQL을 `docker run --rm -i --env-file .env mysql:8.4 ...`에 넘긴다 (명령 전체는 그 문서 3절). 읽기만 하고 DB 비밀번호는 화면에 나오지 않는다. 관리자 통계 화면의 카드는 다음 조각
 - **장애 대응 (런북, S4-6)**: 알림 두 종류가 메일로 온다. 받으면 아래 순서로 본다
   - **"Down" (UptimeRobot)**: ① 브라우저로 `https://jjikmuk.com` 열어 보기 ② SSH → `cd ~/personal_project/deploy && docker compose ps && cat nginx/active-app.inc` (사이트를 맡은 자리가 app1인지 app2인지) ③ 그 자리가 죽어 있으면 `docker compose logs <자리> --tail 100`으로 원인 보고 `docker compose up -d <자리>`로 재시작 (이름 없이 `up -d`를 하면 두 자리가 다 켜진다) ④ SSH 자체가 안 되면 EC2 콘솔에서 인스턴스 상태 확인 → 재부팅 (재부팅하면 1분 뒤 컨테이너가 스스로 올라온다) ⑤ 끝나면 `troubleshooting/`에 기록
@@ -870,7 +870,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
     cd ~/personal_project/deploy
     docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
     ```
-  - ⑦ 확인한다 (서버 창에서 그대로 실행해도 되고, 내 PC에서는 Git Bash): `echo | openssl s_client -connect jjikmuk.com:443 -servername jjikmuk.com 2>/dev/null | openssl x509 -noout -issuer -enddate`에 새 만료일이 나오는지 보고, 휴대폰으로도 열어 자물쇠의 인증서 정보에서 만료일을 본다. 다음 교체일을 Jira에 적고 `.old` 파일을 지운다
+  - ⑦ 확인한다 (서버 창에서 그대로 실행해도 되고, 내 PC에서는 Git Bash, 맥북은 터미널): `echo | openssl s_client -connect jjikmuk.com:443 -servername jjikmuk.com 2>/dev/null | openssl x509 -noout -issuer -enddate`에 새 만료일이 나오는지 보고, 휴대폰으로도 열어 자물쇠의 인증서 정보에서 만료일을 본다. 다음 교체일을 Jira에 적고 `.old` 파일을 지운다
   - 만료가 가까운데 발급이 끝나지 않으면: `default.conf`의 인증서 경로를 예비 인증서로 되돌리는 PR을 머지한다 (10절 "예비")
 
 ## 17. 성공 지표 (공개 후 4주)
@@ -962,6 +962,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 
 ## 변경 이력
 
+- 2026-11-26 — 맥북에서도 개발 (JM-88): 서버 접속과 확인 명령에 맥북 터미널을 더함, 키 파일은 처음 한 번 `chmod 400`. 16절
 - 2026-11-26 — 사진 주소는 보이는 글의 사진만 (JM-95, 사진 저장소 점검에서 찾은 개인정보 약점): 지운 글과 가린 글의 사진은 `/images/`로 요청해도 404, 관리자 화면은 `/admin/images/`. posts에 사진 이름 색인 둘. 5.1절, 13절
 - 2026-11-26 — app 기록도 `non-blocking`으로 (JM-91): CloudWatch에 닿지 않아도 app이 켜지고 로그를 쓰며 기다리지 않게. nginx와 같은 기록 설정 하나로 합쳤다. 11절의 로그 저장, 18절 결정
 - 2026-11-26 — nginx 접속 기록을 CloudWatch로 (JM-91의 첫 조각): 서버 안 파일(10 MB 세 개, 넘치면 앞쪽부터 지워짐)에서 app과 같은 로그 그룹의 `macros-nginx-1` 스트림으로, `non-blocking`으로 보낸다. IP가 들어가는 에러 줄은 보내지 않고 컨테이너 안 파일로. 10절의 로그 보관과 IP, 11절의 로그 저장, 18절 결정
