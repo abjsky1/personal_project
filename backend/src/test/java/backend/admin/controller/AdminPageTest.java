@@ -3,13 +3,16 @@ package backend.admin.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +37,8 @@ import backend.analysis.model.dto.FoodAnalysisResult;
 import backend.analysis.model.dto.FoodAnalyzerResponse;
 import backend.analysis.model.entity.FoodAnalysis;
 import backend.analysis.model.repository.FoodAnalysisRepository;
+import backend.image.ImageStorage;
+import backend.image.TestImages;
 import backend.post.model.dto.FeedPage;
 import backend.post.model.dto.PostSummary;
 import backend.post.model.entity.Post;
@@ -45,10 +50,11 @@ import jakarta.servlet.http.Cookie;
 
 // 관리자 화면(/admin)의 기기 등록, 로그인(등록한 브라우저와 비밀번호), 글 목록과 삭제를 확인하는 테스트 (JM-82)
 // 틀린 횟수는 IP마다 세므로, 테스트끼리 섞이지 않게 테스트마다 다른 IP를 쓴다
+// app.upload-dir: 관리자 사진 주소(JM-95) 테스트가 저장하는 사진을 개발 폴더(uploads)가 아니라 build 폴더에 둔다
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-@TestPropertySource(properties = "app.admin.password=test-admin-password")
+@TestPropertySource(properties = { "app.admin.password=test-admin-password", "app.upload-dir=build/test-uploads" })
 class AdminPageTest {
 
 	private static final String PASSWORD = "test-admin-password";
@@ -74,6 +80,9 @@ class AdminPageTest {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private ImageStorage imageStorage;
 
 	// 개발 DB에 등록해 둔 기기가 있어도 테스트마다 비우고 시작한다 (테스트가 끝나면 되돌아간다)
 	@BeforeEach
@@ -220,6 +229,34 @@ class AdminPageTest {
 		@SuppressWarnings("unchecked")
 		List<PostSummary> reviewAfter = (List<PostSummary>) after.getModelAndView().getModel().get("held");
 		assertThat(reviewAfter).extracting(PostSummary::id).doesNotContain(held.getId());
+	}
+
+	// 관리자 사진 주소 (JM-95): 공개 주소(/images/)가 내주지 않는 가린 글의 사진을 관리자 화면에서 본다.
+	// 관리자 화면의 썸네일과 큰 사진 링크가 이 주소를 쓴다 (post-row.jspf). 브라우저에 남기지 않는다
+	@Test
+	void 관리자_사진_주소는_로그인한_관리자에게만_가린_글의_사진도_보낸다() throws Exception {
+		byte[] photo = TestImages.jpeg(30, 30);
+		Post held = postRepository.save(new Post("검토시험", passwordEncoder.encode("1234"), null,
+				imageStorage.saveJpeg(photo), UUID.randomUUID() + ".jpg", null));
+		FoodAnalysis analysis = new FoodAnalysis(held);
+		analysis.markNotFood(new FoodAnalyzerResponse(
+				new FoodAnalysisResult(false, List.of(), "HIGH", "음식이 아니에요"), "test-model", 1300, 50), 1500);
+		foodAnalysisRepository.saveAndFlush(analysis);
+		String key = held.getImageKey();
+
+		// 로그인하지 않으면 사진 대신 로그인 화면으로 보낸다
+		mockMvc.perform(get("/admin/images/" + key)).andExpect(redirectedUrl("/admin/login"));
+
+		MockHttpSession session = loggedIn("10.2.0.12");
+		mockMvc.perform(get("/admin/images/" + key).session(session))
+				.andExpect(status().isOk())
+				.andExpect(content().bytes(photo))
+				.andExpect(header().string("Cache-Control", "no-store, private"));
+		// 관리자로 들어온 브라우저라도 공개 주소로는 열리지 않는다
+		mockMvc.perform(get("/images/" + key).session(session)).andExpect(status().isNotFound());
+		// 이름 모양이 다르거나 저장소에 없는 사진은 404
+		mockMvc.perform(get("/admin/images/application.properties").session(session)).andExpect(status().isNotFound());
+		mockMvc.perform(get("/admin/images/" + held.getThumbnailKey()).session(session)).andExpect(status().isNotFound());
 	}
 
 	// 운영 통계 화면 (JM-75): 운영자 API와 같은 값을 서버에서 그린다. 머리말의 로그아웃 폼에 CSRF 값이 들어간다

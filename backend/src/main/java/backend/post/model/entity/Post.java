@@ -24,8 +24,13 @@ import jakarta.persistence.Table;
 // @Entity: JPA가 관리하는 클래스라는 표시
 // @Table: 테이블 이름과 인덱스를 정한다.
 // 인덱스 (status, id): 목록 조회("ACTIVE인 글을 id 큰 순서로 20개")를 빠르게 하려고 만든다.
+// 인덱스 image_key, thumbnail_key: 사진 주소(/images/파일이름)마다 그 사진의 글을 찾는다 (JM-95, PhotoVisibility).
+//   색인이 없으면 글을 모두 훑는다: 글 10만 개에서 13 ~ 25 ms, 색인 둘이면 0.3 ms (로컬 MySQL, 기록 저장소 JM-95)
 @Entity
-@Table(name = "posts", indexes = @Index(name = "idx_posts_status_id", columnList = "status, id"))
+@Table(name = "posts", indexes = {
+		@Index(name = "idx_posts_status_id", columnList = "status, id"),
+		@Index(name = "idx_posts_image_key", columnList = "image_key"),
+		@Index(name = "idx_posts_thumbnail_key", columnList = "thumbnail_key") })
 public class Post {
 
 	// @Id: 기본 키(PK) / IDENTITY: 번호는 MySQL의 AUTO_INCREMENT가 1, 2, 3...으로 매긴다.
@@ -131,6 +136,12 @@ public class Post {
 	// 피드와 글 화면에는 사진 대신 "관리자가 사진을 검토 중입니다"가 보이고, 운영자는 관리자 화면에서 올리거나 지운다.
 	// analysisStatus: 이 글의 AI 분석 상태. 분석 기록이 없는 옛날 글(null)과 분석 중, 실패한 글은 가리지 않는다
 	public boolean isPhotoHeld(AnalysisStatus analysisStatus) {
+		return isPhotoHeld(analysisStatus, photoApprovedAt);
+	}
+
+	// 위와 같은 기준을 글 객체 없이 쓴다: 사진 주소(JM-95, PhotoVisibility)는 사진 요청마다 글을 엔티티로 읽지 않고 두 값만 읽는다.
+	// static: Post.isPhotoHeld(분석 상태, 올린 시각)로 부른다. 기준을 여기 한 곳에만 둬서 피드와 사진 주소가 어긋나지 않게 한다
+	public static boolean isPhotoHeld(AnalysisStatus analysisStatus, Instant photoApprovedAt) {
 		return analysisStatus == AnalysisStatus.NOT_FOOD && photoApprovedAt == null;
 	}
 
