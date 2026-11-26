@@ -13,6 +13,14 @@
 # 끄기 (DB와 사진까지 지우려면 끝에 -v):
 #   docker compose --env-file ../.env -f compose.yaml -f compose.local.yaml down
 
+# 내 PC에는 AWS 권한이 없으므로 CloudWatch 대신 내 PC 안 파일로 남긴다 (app1, app2, nginx가 같이 쓴다).
+# 드라이버가 다르면 compose.yaml의 awslogs 설정을 옵션까지 통째로 덮어쓴다
+x-logging-local: &logging-local
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 # app1, app2에 똑같이 덧씌우는 설정. compose.yaml의 x-app처럼 한 번만 적는다 (&이름표, *가져다 쓰기)
 x-app-local: &app-local
   environment:
@@ -21,12 +29,7 @@ x-app-local: &app-local
   # 사진 폴더를 두 자리가 같이 쓴다: 운영에서 두 app이 같은 S3를 보듯, 바꿔치기한 뒤에도 앞서 올린 사진이 보이게 한다
   volumes:
     - uploads:/app/uploads
-  # 내 PC에는 AWS 권한이 없으므로 CloudWatch 대신 서버 안 파일로 (compose.yaml의 awslogs를 통째로 덮어쓴다)
-  logging:
-    driver: json-file
-    options:
-      max-size: "10m"
-      max-file: "3"
+  logging: *logging-local
   depends_on:
     # MySQL이 접속을 받을 준비가 된 뒤에 켠다 (안 그러면 DB 연결 실패로 켜지자마자 꺼진다)
     mysql:
@@ -37,6 +40,8 @@ services:
   nginx:
     volumes:
       - ./nginx-local:/etc/nginx/conf.d:ro
+    # 운영의 nginx는 CloudWatch로 보낸다 (JM-91). 내 PC에서는 app과 같이 파일로
+    logging: *logging-local
 
   # 인증서 갱신 컨테이너는 내 PC에서 켜지 않는다 (프로필이 붙은 서비스는 --profile로 고르지 않으면 안 켜진다)
   certbot:
