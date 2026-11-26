@@ -22,7 +22,7 @@
 - **미리 한 것**: 운영 로그를 JSON(ECS 형식) 한 줄로 찍어 CloudWatch Logs `/macros/server`로 보낸다. 배포로 컨테이너가 바뀌어도 90일 남고, traceId와 레벨로 검색한다
 - **언제**: 2026-11-04 S4-6 (`d5a7451`)
 - **확인**: 2026-11-19 이 로그로 앱 쪽 응답 시간과 AI 응답 시간(127건 p50 2.4초, p95 4.1초)을 뽑았다
-- **더한 것**: nginx 접속 기록(글자 줄, IP 없음)도 2026-11-26부터 같은 로그 그룹의 `macros-nginx-1`로 보낸다 (JM-91, PR #61). 그 전에는 서버 안 파일이라 오래된 것부터 지워졌다 (11-26에는 11-08부터만 남아 있었다). 보내는 방식은 10번
+- **더한 것**: nginx 접속 기록(글자 줄, IP 없음)도 2026-11-26부터 같은 로그 그룹의 `macros-nginx-1`로 보낸다 (JM-91, PR #61). 그 전에는 서버 안 파일이라 오래된 것부터 지워졌다 (11-26에는 11-08부터만 남아 있었다). 보내는 방식은 10번. IP가 들어가는 nginx 에러 줄은 보내지 않고 컨테이너 안 파일에만 남긴다
 
 ## 4. 에러가 나도 아무도 모르는 문제 → 에러 경보 메일, 다운 알림
 
@@ -72,4 +72,4 @@
 - **미리 한 것**: nginx만 `mode: non-blocking`, `max-buffer-size: 4m`으로 보낸다 (`deploy/compose.yaml`의 `x-logging-cloud-nginx`). 스트림 만들기는 뒤에서 다시 시도하고, 넘기지 못한 기록은 메모리 4 MB에 모았다가 넘치면 버린다. 기록 몇 줄을 잃더라도 사이트는 멈추지 않는다
 - **언제**: 2026-11-26 JM-91 (PR #61)
 - **확인**: 내 PC에서 CloudWatch에 닿지 않는 주소로 두 방식을 켜 봤다. blocking은 `failed to initialize logging driver`로 켜지지 않았고(종료 코드 125), non-blocking은 켜졌다. 서버의 Docker(25.0.18)와 같은 버전대의 소스도 같다 (non-blocking이면 스트림 만들기를 뒤에서 다시 시도한다)
-- **남은 것**: app은 아직 기본값이다 → [2026-11-26-app-log-blocking](2026-11-26-app-log-blocking.md). CloudWatch가 막혔던 동안 버려진 nginx 기록은 되살릴 수 없다 (그 시간의 숫자가 빈다)
+- **남은 것**: non-blocking이어도 nginx가 켜질 때 스트림을 끝내 만들지 못하면(권한이 스트림 이름으로 묶였거나 CloudWatch가 하루쯤 닿지 않음), Docker 25의 awslogs는 보내지 못한 줄을 4,096줄(지금 양으로 하루쯤)까지 쥐고 기다리다가, 그 뒤 nginx를 끌 때 끝나지 않는다 (배포 7단계가 멈추고 80, 443번이 닫힌 채. moby v25.0.5의 awslogs `Log`와 `RingLogger.Close`로 확인). PR 전 검토에서 찾았고, 그래서 nginx를 새로 만든 배포 뒤에는 스트림이 생겼는지 본다 ([performance.md](../performance.md) 5절). 더 막으려면 스트림이 생긴 뒤 `awslogs-create-stream: "false"`로 만들기를 건너뛰는 방법이 있다. app은 아직 기본값이다 → [2026-11-26-app-log-blocking](2026-11-26-app-log-blocking.md). CloudWatch가 막혔던 동안 버려진 nginx 기록은 되살릴 수 없다 (그 시간의 숫자가 빈다)

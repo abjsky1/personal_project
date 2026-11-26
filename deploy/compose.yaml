@@ -47,7 +47,10 @@ x-logging-cloud: &logging-cloud
 #   CloudWatch가 오래 막히면 기록을 넘기지 못한 nginx가 요청 처리까지 기다릴 수 있다. nginx는 app처럼 두 자리가 아니라 하나뿐이다.
 #   non-blocking에서는 스트림 만들기를 뒤에서 다시 시도하므로 nginx가 먼저 켜진다. 사이트가 멈추는 것보다 기록 몇 줄을 잃는 편이 낫다
 #   (app은 아직 기본값이다: docs/troubleshooting/2026-11-26-app-log-blocking.md)
-# 경보(app-error, photo-held)는 JSON 줄만 보므로 nginx의 글자 줄에는 울리지 않는다. 서버의 docker compose logs nginx 도 그대로 된다.
+# 경보(app-error, photo-held)는 JSON 줄만 보므로 nginx의 글자 줄에는 울리지 않는다. 접속 기록은 서버의 docker compose logs nginx 로도 그대로 본다.
+# IP가 들어가는 nginx의 에러 줄은 CloudWatch로 보내지 않는다 (nginx/default.conf의 error_log, 컨테이너 안 파일).
+# 주의: non-blocking이어도 nginx가 켜질 때 스트림을 끝내 만들지 못하면(권한, 긴 CloudWatch 장애) 보내지 못한 줄을 4,096줄까지 쥐고 있다가,
+#   그 뒤 nginx를 끌 때 끝나지 않는다. 그래서 nginx를 새로 만든 배포 뒤에는 스트림이 생겼는지 본다 (docs/performance.md 5절)
 x-logging-cloud-nginx: &logging-cloud-nginx
   driver: awslogs
   options:

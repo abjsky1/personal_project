@@ -414,8 +414,8 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 - [x] 이미지 처리 동시 실행 수 제한: 한 번에 한 장 (`ImageProcessor.process`에 `synchronized`). 사용자가 늘어 기다림이 생기면 2장으로 늘리는 것을 검토
 - [x] 비밀값: 환경 변수 주입, 레포, 이미지에 포함되지 않았는지 확인 — 이미지에는 없음 (`.env`는 빌드 대상 폴더 밖), 서버 `.env`는 레포 밖, `chmod 600`. 밖에서 `/.env`, `/.git/config`를 요청해도 404 (S4-3)
 - [x] 시간대: 시각은 `Instant`(시간대와 무관한 한 시점)로 저장하고 화면은 코드에서 `Asia/Seoul`로 바꿔 보여 주므로 서버 시간대와 상관없다. 컨테이너 `TZ=Asia/Seoul`은 로그 시각을 한국 시간으로 읽기 위해
-- [x] 로그 보관 (S4-6, 2026-11-04): app 로그는 **CloudWatch Logs**(로그 그룹 `/macros/server`, 보관 90일 = 처리방침 "이용 기록 3개월")로 보내서 배포로 컨테이너가 바뀌어도 남고 traceId로 검색된다. nginx, certbot 로그는 서버 안 10MB × 3개(배포해도 안 바뀌는 컨테이너라 유지됨). 보는 법은 11절
-- [x] 접속 기록에 IP 안 남기기 (S4-6): nginx access log를 IP 없는 형식(`log_format noip`)으로. 처리방침 "접속 IP는 서버 메모리에만 최대 1일 보관"과 맞춤. nginx error log에는 오류가 났을 때만 IP가 찍힐 수 있고 서버 안 30MB까지만 남는다
+- [x] 로그 보관 (S4-6, 2026-11-04): app 로그는 **CloudWatch Logs**(로그 그룹 `/macros/server`, 보관 90일 = 처리방침 "이용 기록 3개월")로 보내서 배포로 컨테이너가 바뀌어도 남고 traceId로 검색된다. certbot 로그는 서버 안 10MB × 3개. nginx 접속 기록은 2026-11-26부터 같은 CloudWatch 그룹 (JM-91. 그 전에는 서버 안 10MB × 3개). 보는 법은 11절
+- [x] 접속 기록에 IP 안 남기기 (S4-6): nginx access log를 IP 없는 형식(`log_format noip`)으로. 처리방침 "접속 IP는 서버 메모리에만 최대 1일 보관"과 맞춤. nginx error log에는 오류가 났을 때 IP가 찍힌다. 그래서 CloudWatch로 보내지 않고 컨테이너 안 파일(error 등급만, nginx를 새로 만들면 사라짐)에만 남긴다 (2026-11-26, JM-91. 그 전에는 Docker 기록으로 서버 안 30MB까지)
 - [x] S3: 버킷(공개 차단 유지) + EC2용 IAM 역할 (`s3:PutObject`, `s3:GetObject`, `s3:ListBucket`). ListBucket이 없으면 없는 사진을 요청할 때 404 대신 403(권한 없음)이 돌아온다 (S4-3: 없는 사진은 404, 버킷 주소로 직접 접근하면 403인 것을 확인)
 - [x] 서버 `.env`: `DB_HOST`(RDS 엔드포인트), `MYSQL_PASSWORD`(RDS 마스터 비밀번호), `APP_S3_BUCKET`, `GEMINI_API_KEY`. 사진 저장소 s3는 prod 프로필이 이미 켠다 (S4-3. 버킷 이름, RDS 주소도 레포가 아니라 서버 `.env`에만 적는다)
 - [x] RDS: 공개 접근 끄기 + 보안 그룹은 EC2에서만 3306 허용, 자동 백업 켜기 (S4-3. 보관 1일은 무료 플랜 제한 → 10절)
@@ -446,7 +446,7 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 
 **배포 단계에서 (S4~)**
 - **JSON 구조화 로그**: 설정 한 줄(`logging.structured.format.console=ecs`)로 켠다. 로컬은 읽기 쉬운 글자 형식 유지 → 켬 (S4-6, 2026-11-04)
-- **로그 저장, 검색** (S4-6): app 컨테이너 로그를 Docker의 `awslogs` 드라이버로 CloudWatch Logs에 보낸다 (`deploy/compose.yaml`). 보는 법: AWS 콘솔 → CloudWatch → 로그 그룹 `/macros/server` → 스트림 `macros-app1-1` 또는 `macros-app2-1` (2026-11-23 전에는 `macros-app-1`. 그룹 전체에서 검색하면 자리를 몰라도 된다). nginx 접속 기록은 2026-11-26부터 같은 그룹의 스트림 `macros-nginx-1` (JM-91. IP 없는 글자 줄이라 JSON 칸으로 고르는 경보와 쿼리에는 섞이지 않고, CloudWatch가 막혀도 nginx가 멈추지 않게 `non-blocking`으로 보낸다. 보는 쿼리는 `performance.md` 4.2). 검색은 **Logs Insights**에서, 예: `fields @timestamp, log.level, message | filter traceId = "9dff6979" | sort @timestamp` (사용자가 알려 준 traceId로 그 요청의 로그만 본다). 서버에서 바로 볼 때는 여전히 `docker compose logs app1` (사이트를 맡은 자리가 app2면 `app2`. `cat nginx/active-app.inc`로 본다)
+- **로그 저장, 검색** (S4-6): app 컨테이너 로그를 Docker의 `awslogs` 드라이버로 CloudWatch Logs에 보낸다 (`deploy/compose.yaml`). 보는 법: AWS 콘솔 → CloudWatch → 로그 그룹 `/macros/server` → 스트림 `macros-app1-1` 또는 `macros-app2-1` (2026-11-23 전에는 `macros-app-1`. 그룹 전체에서 검색하면 자리를 몰라도 된다). nginx 접속 기록은 2026-11-26부터 같은 그룹의 스트림 `macros-nginx-1` (JM-91. IP 없는 글자 줄이라 JSON 칸으로 고르는 경보와 쿼리에는 섞이지 않고, CloudWatch가 막혀도 nginx가 멈추지 않게 `non-blocking`으로 보낸다. 보는 쿼리는 `performance.md` 4.2). IP가 들어가는 nginx 에러 줄은 보내지 않는다 (서버에서 `docker compose exec nginx tail -n 50 /var/log/nginx/error-with-ip.log`). 검색은 **Logs Insights**에서, 예: `fields @timestamp, log.level, message | filter traceId = "9dff6979" | sort @timestamp` (사용자가 알려 준 traceId로 그 요청의 로그만 본다). 서버에서 바로 볼 때는 여전히 `docker compose logs app1` (사이트를 맡은 자리가 app2면 `app2`. `cat nginx/active-app.inc`로 본다)
 - **에러 알림**: Sentry 대신 **CloudWatch 지표 필터 + SNS 메일**로 단순화 (S4-6, 2026-11-04 만듦). 로그 그룹의 지표 필터 `app-error`(패턴 `{ $.log.level = "ERROR" }`, 지표 `macros/AppErrors`, 값 1, 기본값 0) → 경보 `macros-app-error`(5분 합계 > 0, 누락 데이터는 양호) → SNS 주제 `macros-alerts` → 메일. 앱에서 ERROR가 한 번이라도 찍히면 5분 안에 메일이 온다. 도구를 더 들이지 않는다. ERROR는 서버 문제에만 남긴다: 사용자가 보낸 요청이 잘못된 경우(깨진 주소 값, 아주 큰 쪽 번호 등)는 400번대와 WARN 한 줄이라 메일이 가지 않는다 (2026-11-20, JM-107, [트러블슈팅](troubleshooting/2026-11-20-bad-request-values-alarm.md))
 - **사진 검토 알림** (2026-11-16, JM-80): 에러 알림과 같은 방식이다. 지표 필터 `photo-held`(패턴 `{ $.message = "Post held for review*" }`, 지표 `macros/PhotoHeld`, 값 1, 기본값 0) → 경보 `macros-photo-held`(5분 합계 1 이상, 누락 데이터는 양호) → SNS 주제 `macros-alerts` → 메일. AI가 사진을 가리면 운영자가 관리자 화면에서 검토한다 (16절)
 - **다운 알림**: 외부 업타임 모니터가 `/actuator/health`를 확인, 응답 없으면 알림 → UptimeRobot 무료, 5분 간격, 메일 (S4-6, 2026-11-04)
@@ -928,7 +928,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 | 롤백 | `bash deploy.sh <예전 SHA>` (GHCR에 남은 이미지를 다시 받음). 2026-11-23부터 무중단이라 되돌릴 때도 끊기지 않는다 | 2026-11-03 |
 | 무중단 배포 | 서버 하나에서 app 두 자리(app1, app2)를 번갈아 쓰는 블루그린. 새 자리를 켜서 확인하고 데운 뒤 nginx `reload`로 넘기고, 옛 nginx 일꾼이 끝난 뒤 옛 자리를 끈다. nginx가 502일 때 다시 보내는 방법은 app이 하나뿐이라 보낼 곳이 없어 고르지 않았다. 세션과 메모리 안의 횟수 제한은 지금처럼 배포 때 풀린다 (Redis 같은 공유 저장소는 두지 않음). 끌 때는 Spring 기본값(하던 분석을 DB를 연 채 기다림)을 쓰고 `await-termination`은 넣지 않는다(DB를 닫은 뒤에 기다려 분석이 실패함). DB 칸은 옛 코드와 같이 쓸 수 있게만 바꾼다(10절) | 2026-11-23 (JM-62) |
 | 로그, 알림 | app 로그는 CloudWatch Logs 90일(JSON). 에러 알림은 Sentry 대신 CloudWatch 지표 필터 + SNS 메일, 다운 알림은 UptimeRobot. nginx 접속 기록에 IP를 남기지 않음 | 2026-11-04 |
-| nginx 접속 기록 | app과 같은 CloudWatch 로그 그룹 `/macros/server`에 90일 (스트림 `macros-nginx-1`). 사람이 받은 응답 시간과 502가 이 기록에만 있어서다. `mode: non-blocking`: 기본값이면 CloudWatch에 닿지 않을 때 nginx가 새로 켜지지 못해 사이트가 멈추므로, 스트림 만들기를 뒤에서 다시 하고 넘친 기록은 버린다 (기록 몇 줄보다 사이트가 먼저). app은 아직 기본값이다 ([트러블슈팅](troubleshooting/2026-11-26-app-log-blocking.md)) | 2026-11-26 (JM-91) |
+| nginx 접속 기록 | app과 같은 CloudWatch 로그 그룹 `/macros/server`에 90일 (스트림 `macros-nginx-1`). 사람이 받은 응답 시간과 502가 이 기록에만 있어서다. `mode: non-blocking`: 기본값이면 CloudWatch에 닿지 않을 때 nginx가 새로 켜지지 못해 사이트가 멈추므로, 스트림 만들기를 뒤에서 다시 하고 넘친 기록은 버린다 (기록 몇 줄보다 사이트가 먼저). 에러 줄은 IP가 들어 있어 보내지 않고 컨테이너 안 파일에만 남긴다. app은 아직 기본값이다 ([트러블슈팅](troubleshooting/2026-11-26-app-log-blocking.md)) | 2026-11-26 (JM-91) |
 | 백업 복구 연습 | **하지 않는다**. 자동 백업 + 16절의 복구 절차로 갈음하고, 실제로 필요해질 때 절차대로 한다 | 2026-11-04 |
 | 댓글, 피드백의 IP | 저장하지 않는다 (12절 초안의 `ip_hash` 컬럼을 만들지 않음). 처리방침과 게시글 구현에 맞춤 | 2026-11-04 |
 | 운영자 기능 | 화면 없이 API + 관리자 토큰 (MVP). 운영 화면은 필요해지면. **2026-11-13 (JM-82)**: 관리자 화면을 더함. 피드의 글이 몇 번인지 볼 방법이 없어 지울 글을 닉네임과 시각으로 설명해야 했다 (운영자 요청). 열쇠 하나만으로 들어가면 열쇠를 아는 사람은 누구나 관리자가 되므로, 화면 전용 비밀번호에 더해 처음 등록한 노트북 브라우저에서만 들어오게 한다 (2026-11-14 운영자 결정: 휴대폰 인증 앱의 6자리(TOTP)까지는 아직 하지 않고 노트북에서만. 첫 안은 TOTP였다). 서버 API 열쇠는 그대로 서버에만 둔다. 등록한 기기는 DB(`admin_device`, 쿠키 값의 해시만), 비밀번호는 서버 `.env` | 2026-11-04 |
@@ -961,7 +961,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 
 ## 변경 이력
 
-- 2026-11-26 — nginx 접속 기록을 CloudWatch로 (JM-91의 첫 조각): 서버 안 파일(10 MB 세 개, 넘치면 앞쪽부터 지워짐)에서 app과 같은 로그 그룹의 `macros-nginx-1` 스트림으로, `non-blocking`으로 보낸다. 11절의 로그 저장, 18절 결정
+- 2026-11-26 — nginx 접속 기록을 CloudWatch로 (JM-91의 첫 조각): 서버 안 파일(10 MB 세 개, 넘치면 앞쪽부터 지워짐)에서 app과 같은 로그 그룹의 `macros-nginx-1` 스트림으로, `non-blocking`으로 보낸다. IP가 들어가는 에러 줄은 보내지 않고 컨테이너 안 파일로. 10절의 로그 보관과 IP, 11절의 로그 저장, 18절 결정
 - 2026-11-24 — 음식 필터 (JM-83, 지인 피드백 11번과 13번): AI가 글마다 음식 태그(종류, 나라, 주식, 주재료, 맵기, 온도)를 고르고, 찾기 옆 [필터] 창에서 태그와 칼로리 범위로 거른다. 검색과 함께 쓴다. 지난 글은 사진을 다시 보내 채운다. 4.1절, 4.2절, 6.6절(새로), 12절(`food_analyses`의 태그 칸, `post_tags`), 13절, 14절, 18절
 - 2026-11-23 — 검색 (JM-52, 지인 피드백 6번과 11번): 피드 머리에 검색 칸을 두고 `/search?q=`로 닉네임과 음식 이름(AI의 답과 확정한 이름)의 일부를 찾는다. 띄어쓰기는 보지 않고, 메모는 찾지 않는다. 4.1절, 4.2절, 12절(`items`, `page_views`의 `SEARCH`), 13절, 14절(검색 칸 자리, 검색 결과에서 "← 목록"), 18절(검색 방식과 바꿀 때)
 - 2026-11-23 — 끌 때 버려진 AI 분석 다시 넣기 (JM-110): 6.1절 자동 재시도의 첫 조각으로 PENDING을 5분마다 다시 줄에 넣고, `food_analyses.claimed_at`, `claim_count`(12절)으로 분석을 한 번만, 한 글에 3번까지만 맡게 했다. 4.1절, 6.4절의 실패 처리, 알고 배포하는 한계, 18절 결정

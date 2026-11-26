@@ -67,7 +67,7 @@
 ## 재는 법
 
 - 로컬: 서버를 `--logging.structured.format.file=ecs`로 띄워 운영과 같은 JSON 로그를 파일로 남기고, 비공개 기록 저장소의 `python -I bad_request_values.py <포트> <로그 파일> <결과 json> [사진 폴더]`로 69가지를 보낸다. 표는 `bad_request_values_report.py`
-- 운영 (배포 뒤): bot User-Agent로 몇 가지만 보내 400을 보고, 경보 `macros-app-error`가 그대로 정상인지 본다. 얼마나 자주 들어오는지는 CloudWatch Logs Insights에서 `filter message like "Invalid request parameter"`로 센다. 원인 9가 전에 운영에서 있었는지는 `filter @message like /ClientAbortException|Broken pipe|Connection reset/`로 본다
+- 운영 (배포 뒤): bot User-Agent로 몇 가지만 보내 400을 보고, 경보 `macros-app-error`가 그대로 정상인지 본다. 얼마나 자주 들어오는지는 CloudWatch Logs Insights에서 `filter message like "Invalid request parameter"`로 센다. 원인 9가 전에 운영에서 있었는지는 `filter @logStream like /app/ and @message like /ClientAbortException|Broken pipe|Connection reset/`로 본다 (2026-11-26부터 nginx 접속 기록도 같은 그룹이라 app 스트림만 고른다)
 
 ## 기록
 

@@ -48,4 +48,4 @@ docker run --rm --log-driver awslogs --log-opt awslogs-region=ap-northeast-2 --l
 ## 기록
 
 - nginx 쪽 설정과 이유: `deploy/compose.yaml`의 `x-logging-cloud-nginx`, [prevent-observability](prevent-observability.md) 10번
-- 재현 출력: 비공개 기록 저장소 `update_picture/JM-91/local-awslogs-start-2026-11-26.txt`
+- 재현 출력과 서버의 로그 줄 수: 비공개 기록 저장소 `update_picture/JM-91/before-nginx-cloudwatch-2026-11-26.txt`
