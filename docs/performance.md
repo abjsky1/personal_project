@@ -215,8 +215,9 @@ filter @logStream like /nginx/
 
 ### 4.3 밖에서 재기
 
+records 폴더에서 실행한다 (윈도우 노트북 `C:\personal_project\records`, 맥북 `~/dev_an/jjikmuk/records`). 맥북에서는 `python` 대신 `python3`를 쓴다.
+
 ```
-cd C:\personal_project\records
 python -I measure_live.py update_picture/<이슈> before
 python -I measure_live.py update_picture/<이슈> after 154,153,152
 ```
