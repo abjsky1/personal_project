@@ -20,6 +20,7 @@
 
 - 9문장 가운데 5문장이 트랜잭션 설정이다. 공지 목록은 6문장 가운데 5문장, 피드백 목록은 7문장 가운데 5문장
 - 쓰기 트랜잭션(JPA로 한 줄 저장)은 `SET autocommit=0`, INSERT, `COMMIT`, `SET autocommit=1`로 4문장이다. 사용자 흐름의 저장은 그래서 JPA 대신 INSERT 한 문장으로 바꿨다 (아래 기록)
+- 트랜잭션 없이 JdbcTemplate으로 보내는 SQL에는 설정 문장이 붙지 않는다: 사진 주소의 글 찾기(2026-11-26 JM-95, `PhotoVisibility`)는 사진 요청마다 SELECT 한 문장뿐이었다 (general log)
 
 ## 원인
 
@@ -30,7 +31,7 @@ Spring의 `@Transactional(readOnly = true)`가 트랜잭션을 열 때 DB 연결
 1. 운영에서 왕복 시간을 잰다: 앱 쪽 시간(CloudWatch 요청 줄)과 RDS의 지표로, 화면마다 다섯 번이 몇 ms인지 먼저 본다. 크지 않으면 여기서 멈춘다
 2. 줄일 때의 후보 두 가지 (하나씩 바꾸고 하나씩 잰다)
    - 드라이버 설정 `readOnlyPropagatesToServer=false`: `SET SESSION TRANSACTION READ ONLY/READ WRITE` 두 문장이 빠진다. 읽기 전용 트랜잭션에 대한 MySQL 쪽 최적화는 잃는다
-   - HikariCP `auto-commit=false`와 Hibernate `connection.provider_disables_autocommit=true`: `SET autocommit` 두 문장이 빠진다. **주의**: 트랜잭션 밖에서 쓰는 SQL이 커밋되지 않게 된다. 사용자 흐름의 저장(`PageFlowRecorder`, 트랜잭션 없이 INSERT 한 문장)을 먼저 트랜잭션 안으로 옮겨야 한다
+   - HikariCP `auto-commit=false`와 Hibernate `connection.provider_disables_autocommit=true`: `SET autocommit` 두 문장이 빠진다. **주의**: 트랜잭션 밖에서 쓰는 SQL이 커밋되지 않게 된다. 사용자 흐름의 저장(`PageFlowRecorder`, 트랜잭션 없이 INSERT 한 문장)을 먼저 트랜잭션 안으로 옮겨야 한다. 사진 주소의 글 찾기(`PhotoVisibility`, 트랜잭션 없이 SELECT 한 문장, JM-95)도 트랜잭션 밖의 SQL이라, 바꿀 때 사진 요청의 문장 수를 함께 다시 잰다
 3. 목표: 피드 1쪽 9문장 → 5문장. 앱 쪽 피드 p50, p95가 줄어드는지 본다 (기준: CloudWatch 11-04 ~ 11-19 피드 p95 64 ms)
 
 ## 재는 법
@@ -41,4 +42,4 @@ Spring의 `@Transactional(readOnly = true)`가 트랜잭션을 열 때 DB 연결
 ## 기록
 
 - [performance.md](../performance.md) 6절 후보, 8절 JM-92
-- 비공개 기록 저장소 `update_picture/JM-92/draft1-perf.txt`
+- 비공개 기록 저장소 `update_picture/JM-92/draft1-perf.txt`, `update_picture/JM-95/draft1-behavior.txt` 2절 (트랜잭션 없는 글 찾기의 문장 수)
