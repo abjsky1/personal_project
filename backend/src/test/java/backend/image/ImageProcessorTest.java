@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Arrays;
 
 import javax.imageio.IIOException;
 import javax.imageio.ImageIO;
@@ -345,14 +346,37 @@ class ImageProcessorTest {
 	@Test
 	void 글자_조각이_깨져_있어도_읽기_전에_버리므로_사진을_받는다() throws IOException {
 		// 압축 내용이 깨진 글자 조각(zTXt). 고치기 전에는 자바의 PNG 읽기가 이 조각을 읽다 실패해 "읽을 수 없는 사진"(400)이었다
+		// RGB PNG라 자바가 머리 검사(3)에서부터 조각들을 읽는다 → 조각을 버리는 일이 머리 검사보다 늦어지면 이 시험이 실패한다
 		ByteArrayOutputStream text = new ByteArrayOutputStream();
 		text.writeBytes("Comment".getBytes(StandardCharsets.ISO_8859_1));
 		text.write(0); // 이름 끝
 		text.write(0); // 압축 방식 0 (deflate)
 		text.writeBytes(new byte[] {1, 2, 3, 4, 5, 6, 7, 8}); // zlib 형식이 아닌 내용
-		byte[] photo = TestImages.withChunk(TestImages.transparentPng(100, 100), "zTXt", text.toByteArray());
+		byte[] photo = TestImages.withChunk(TestImages.rgbPng(100, 100), "zTXt", text.toByteArray());
 
 		assertSize(processor.process(upload(photo)).main(), 100, 100);
+	}
+
+	@Test
+	void 종류_이름이_규칙에_맞지_않는_조각이_있어도_PNG의_위치와_촬영_시각을_읽는다() {
+		// 종류에 숫자가 든 조각("ab1c"). 자바는 모르는 조각으로 보고 넘어가서 사진은 올라갔지만,
+		// 고치기 전에는 metadata-extractor가 이 조각에서 멈춰 위치와 촬영 시각을 하나도 읽지 못했다
+		// → 조각을 버리는 일이 위치 읽기(4)보다 늦어지면 이 시험이 실패한다
+		byte[] withGps = TestImages.withPngGps(TestImages.rgbPng(200, 100), 37.566535, 126.977969, "2026:10:29 12:30:00");
+		byte[] photo = TestImages.withChunk(withGps, "ab1c", new byte[] {1, 2, 3});
+
+		PhotoMetadata metadata = processor.process(upload(photo)).metadata();
+
+		assertThat(metadata.hasLocation()).isTrue();
+		assertThat(metadata.takenAt()).isEqualTo(Instant.parse("2026-10-29T03:30:00Z"));
+	}
+
+	@Test
+	void IEND의_CRC가_빠진_PNG도_받는다() throws IOException {
+		// 끝 표시(IEND)의 CRC 4바이트가 없는 PNG. 자바는 이런 사진도 받아서, 고치기 전에도 올라가던 사진이다
+		byte[] png = TestImages.rgbPng(100, 100);
+
+		assertSize(processor.process(upload(Arrays.copyOf(png, png.length - 4))).main(), 100, 100);
 	}
 
 	@Test

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -71,6 +72,23 @@ class PngChunksTest {
 		withTrailer.writeBytes("hidden data after the image".getBytes(StandardCharsets.US_ASCII));
 
 		assertThat(PngChunks.keepNeeded(withTrailer.toByteArray())).isEqualTo(png);
+	}
+
+	@Test
+	void CRC가_빠졌거나_길이가_틀린_IEND는_규칙대로_쓴_IEND로_바꾼다() {
+		// 자바의 PNG 읽기는 종류가 IEND면 길이와 CRC를 보지 않아서, 이런 IEND로 끝나는 PNG도 받는다 (고치기 전에도 올라가던 사진)
+		byte[] png = TestImages.rgbPng(100, 100);
+		// 시험용 사진은 규칙대로 쓴 IEND 12바이트(길이 0, "IEND", CRC AE 42 60 82)로 끝난다
+		assertThat(Arrays.copyOfRange(png, png.length - 12, png.length)).containsExactly(
+				0, 0, 0, 0, 'I', 'E', 'N', 'D', 0xAE, 0x42, 0x60, 0x82);
+		byte[] noCrc = Arrays.copyOf(png, png.length - 4);
+		byte[] halfCrc = Arrays.copyOf(png, png.length - 2);
+		byte[] wrongLength = png.clone();
+		ByteBuffer.wrap(wrongLength, png.length - 12, 4).putInt(0x7FFFFFFF);
+
+		for (byte[] broken : new byte[][] {noCrc, halfCrc, wrongLength}) {
+			assertThat(PngChunks.keepNeeded(broken)).isEqualTo(png);
+		}
 	}
 
 	@Test

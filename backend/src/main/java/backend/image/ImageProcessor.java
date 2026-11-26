@@ -107,7 +107,8 @@ public class ImageProcessor {
 
 		// 2. PNG면 그림을 펼치는 데 필요한 조각과 촬영 정보 조각(eXIf)만 남긴다 (JM-108, PngChunks). 아래 단계는 모두 남긴 파일로 한다.
 		// 글자나 색 정보 같은 조각은 이 앱이 쓰지 않는데, 압축한 조각은 풀면 수백 MB가 되기도 한다.
-		// 3의 자바 PNG 읽기와 4의 metadata-extractor가 이런 조각을 한도 없이 풀다 메모리가 모자라지 않게, 읽기 전에 버린다.
+		// 자바의 PNG 읽기(3과 5)는 글자 조각을 하나에 256 KB까지 풀지만 조각 수에는 한도가 없고,
+		// metadata-extractor(4)는 조각 하나를 크기 한도 없이 푼다. 그래서 이런 조각은 읽기 전에 버린다.
 		if (startsWith(original, PNG_SIGNATURE)) {
 			original = PngChunks.keepNeeded(original);
 		}
