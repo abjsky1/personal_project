@@ -87,7 +87,7 @@ h1 { font-size: 31px; font-weight: 800; letter-spacing: -0.6px; }
 
           <div class="grp">Docker 컨테이너 (deploy/compose.yaml)</div>
           <div class="rows" style="--kw:96px">
-            <div class="row"><span class="k">nginx</span><span class="v">HTTPS 입구. 접속 기록은 IP 없이 서버 안에만 (10MB 파일 3개까지)</span></div>
+            <div class="row"><span class="k">nginx</span><span class="v">HTTPS 입구. 접속 기록은 IP 없이 CloudWatch로 (2026-11-26부터)</span></div>
             <div class="row"><span class="k">app</span><span class="v">Spring Boot. 이미지는 GHCR에서 받고, 로그는 CloudWatch로 보낸다</span></div>
             <div class="row"><span class="k">certbot</span><span class="v">예비 인증서(Let's Encrypt)를 12시간마다 갱신해 본다</span></div>
           </div>
@@ -150,7 +150,7 @@ h1 { font-size: 31px; font-weight: 800; letter-spacing: -0.6px; }
             <div class="ch"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><h3>CloudWatch</h3></div>
             <div class="meta">로그, 경보, 지표</div>
             <div class="rows" style="--kw:150px">
-              <div class="row"><span class="k">/macros/server</span><span class="v">app 로그 (JSON, 요청마다 traceId). 90일 보관</span></div>
+              <div class="row"><span class="k">/macros/server</span><span class="v">app 로그 (JSON, 요청마다 traceId)와 nginx 접속 기록 (스트림 macros-nginx-1, IP 없음). 90일 보관</span></div>
               <div class="row"><span class="k">macros-app-error</span><span class="v">경보. app 로그에 ERROR가 찍히면 5분 안에 울린다</span></div>
               <div class="row"><span class="k">macros-photo-held</span><span class="v">경보. AI가 사진을 가리면(검토할 사진) 5분 안에 울린다</span></div>
               <div class="row"><span class="k">SNS macros-alerts</span><span class="v">경보를 운영자 메일로 보낸다</span></div>

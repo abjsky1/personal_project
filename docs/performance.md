@@ -21,9 +21,9 @@
 | 무엇 | 어디서 | 얼마나 자주 | 지금 (2026-11-19) |
 |---|---|---|---|
 | 화면 응답 시간 (서버 안) | 앱이 요청마다 찍는 기록 줄 `GET / -> 200 (35ms)` (`TraceIdFilter`) → CloudWatch 로그 분석 (예전 이름 Logs Insights) | 스프린트를 닫을 때 (주 1회) | 11-04부터 쌓인 것을 한 번 뽑았다 (3절). 쿼리는 4.1 |
-| 화면 응답 시간 (사용자 쪽) | nginx 접속 기록의 `$request_time` (응답을 다 보낼 때까지) | 주 1회 | 서버 안에만 있다 (컨테이너를 새로 만들면 사라짐). 11-04부터 전부 남아 있어 한 번 셌다 (3절). CloudWatch로 보내는 일이 JM-91의 첫 조각 |
+| 화면 응답 시간 (사용자 쪽) | nginx 접속 기록의 `$request_time` (응답을 다 보낼 때까지) | 주 1회 | 2026-11-26부터 CloudWatch(`macros-nginx-1` 스트림, 90일, 4.2). 그 전에는 서버 안 파일(10 MB 세 개)에만 있어 오래된 것부터 지워졌고, 11-18과 11-26에 SSH로 받아 셌다 (3절, 8절) |
 | 밖에서 잰 응답 시간 | 이 PC에서 `measure_live.py` (기록 저장소) | 바꾸기 전과 뒤 | 기준선 있음 (3절) |
-| 배포 때 끊김 | nginx 기록의 502 | 배포마다, 주 1회 합계 | 11-04 ~ 11-18에 87건, 15번 (3절, JM-62) |
+| 배포 때 끊김 | nginx 기록의 502 | 배포마다, 주 1회 합계 | 11-04 ~ 11-18에 87건, 15번 (3절, JM-62). 11-23 무중단 배포 뒤 0건 (11-26에 셈) |
 | LLM 응답 시간 | 분석마다 DB(`food_analyses.latency_ms`, `typed_latency_ms`)와 앱 로그(`latencyMs=`) | 운영자 통계는 늘, p50과 p95는 주 1회 | 앱 로그로 p50, p95를 한 번 뽑았다 (3절) |
 | 요청마다 쿼리 수 | 로컬에서 SQL 로그를 traceId로 묶어 센다. 다음에는 테스트가 센다 | 쿼리를 바꾸는 일마다 | 기준선 있음 (3절) |
 | CPU | EC2와 RDS의 CloudWatch 기본 지표 (5분 간격, 무료) | 주 1회 | 2주치를 한 번 봤다 (3절) |
@@ -187,9 +187,9 @@ filter message like /latencyMs=/
 
 EC2와 RDS 지표는 CloudWatch → 지표 → 모든 지표에서 EC2의 인스턴스별 지표(CPUUtilization, CPUCreditBalance, CPUSurplusCreditsCharged)와 RDS의 DB 인스턴스별 지표(CPUUtilization, FreeableMemory, DatabaseConnections, ReadLatency, WriteLatency, CPUCreditBalance, FreeStorageSpace)를 고르고, 그래프 종류를 **번호**, 옵션의 값을 **시간 범위 값**으로 두면 기간 전체의 평균, 최대, 최소가 숫자 하나씩으로 나온다 (통계는 지표마다 고른다)
 
-### 4.2 nginx 기록 (CloudWatch로 보낸 뒤)
+### 4.2 nginx 기록 (CloudWatch, 2026-11-26부터)
 
-nginx 기록을 CloudWatch로 보내는 순서는 5절의 첫 조각이다. 보낸 뒤에는 같은 로그 그룹에 `macros-nginx-1` 스트림이 생기고, 아래처럼 본다.
+2026-11-26부터 nginx 기록이 같은 로그 그룹의 `macros-nginx-1` 스트림으로 간다 (5절의 첫 조각, PR #61). 그 전 기록은 CloudWatch에 없고, 서버에 남아 있던 것을 11-26에 센 숫자가 8절에 있다. 4.1의 앱 쪽 쿼리와 경보는 JSON 칸(`log.logger`, `message`, `log.level`)으로 고르므로 nginx의 글자 줄은 섞이지 않는다. nginx 기록은 `mode: non-blocking`으로 보내서, CloudWatch가 오래 막히면 메모리 4 MB를 넘친 줄은 버려진다 (그 시간의 숫자가 빈다). nginx의 에러 줄(502, 413 등. nginx가 사용자 IP를 함께 적는다)은 CloudWatch로 보내지 않고 컨테이너 안 파일에만 남긴다 (`nginx/default.conf`의 `error_log`). 아래처럼 본다.
 
 사람이 받은 응답 시간 (bot을 뺀 것, `rt`는 초 단위):
 
@@ -245,21 +245,21 @@ SPRINTS의 그 스프린트 메모에 한 줄을 남긴다. 예:
 
 하나를 시작할 때 Jira 일감을 따로 만들어 그 주의 스프린트에 넣는다 (S7부터의 방식).
 
-1. **응답 시간 쌓기 (JM-91, S7)**: 4.1의 쿼리를 저장하고 첫 숫자를 3절에 채운다. nginx 기록도 CloudWatch로 보낸다. 순서는 아래. 스프린트를 닫을 때 4.6의 한 줄
+1. **응답 시간 쌓기 (JM-91, S7)**: 4.1의 쿼리를 저장하고 첫 숫자를 3절에 채운다. nginx 기록도 CloudWatch로 보낸다 (11-26에 보냄). 순서는 아래. 스프린트를 닫을 때 4.6의 한 줄
 2. **LLM 응답 속도**: AI 분석과 직접 적기 호출을 날마다 p50, p95로. 실패와 늦은 응답(예: 10초 넘음)의 수도
 3. **CPU와 메모리**: CloudWatch 에이전트로 메모리와 디스크 사용률 (사용자 지정 지표 몇 개, 무료 10개 안)
 4. **AWS에서 한눈에**: CloudWatch 대시보드 하나 (응답 시간, 502, LLM 시간, CPU, 메모리)와 경보 (예: p95가 1초 넘음, 메모리 90% 넘음). 대시보드는 3개, 경보는 10개까지 무료다 (지금 경보는 에러와 사진 검토)
 5. **도커로 모니터링 도구 써 보기 (내 PC)**: Spring Boot Actuator와 Micrometer의 Prometheus 지표 → Prometheus → Grafana로 JVM 메모리, 요청 수, 응답 시간을 그래프로 본다. 컨테이너는 cAdvisor, 부하 시험은 k6 (모두 Docker 이미지). 서버(2 GB)에는 메모리 여유가 적어 올리지 않고 내 PC에서만 한다. 지표 주소(`/actuator/prometheus`)는 밖에 열지 않는다
 6. **쿼리 수를 테스트로**: 피드와 글 상세의 쿼리 수를 테스트에서 세고, 늘면 실패하게 한다. 카테고리(JM-83)를 만들 때 같이. 검색(JM-52)은 4.4의 방법으로 손으로 셌다 (3절, 피드와 같은 4개)
 
-### 첫 조각의 nginx 순서 (운영자가 직접 쓴다)
+### 첫 조각의 nginx 순서 (2026-11-26에 했다, PR #61)
 
-1. **지금 기록을 먼저 뽑는다**: nginx 컨테이너를 새로 만들면 서버에 남은 기록(10 MB 파일 세 개)이 사라진다. 그 전에 이 기록으로 사람이 받은 응답 시간과 502를 한 번 세어 기준선에 더한다 (원본은 저장소에 올리지 않는다) → 11-18에 했다 (3절). 바꾸기 직전에 `nginx_perf.py`로 한 번 더 세면 그사이 숫자도 남는다
-2. **권한을 미리 확인한다** (서버): 같은 로그 그룹으로 시험 컨테이너 하나를 보내 본다. `docker run --rm --log-driver awslogs --log-opt awslogs-region=ap-northeast-2 --log-opt awslogs-group=/macros/server --log-opt tag=awslogs-test alpine echo awslogs-test` → CloudWatch에 `awslogs-test` 스트림이 생기면 된다. awslogs는 시작할 때 CloudWatch에 스트림을 만들지 못하면 컨테이너가 뜨지 않으므로, nginx를 바꾸기 전에 확인한다
-3. **`deploy/compose.yaml`을 고친다**: nginx의 `logging: *logging-local`을 `logging: *logging-cloud`로, 위의 로그 설명 주석도 맞게. 같은 로그 그룹을 쓰면 보관 기간 90일을 새로 정하지 않아도 된다 (새 그룹을 만들면 보관 기간이 "만료 없음"으로 생겨 처리방침의 3개월을 넘긴다)
-4. **PR → 머지 → 자동 배포**: `deploy.sh`의 마지막 단계(`docker compose up -d --no-deps nginx certbot`, 2026-11-23 무중단 배포부터)가 nginx 설정이 바뀐 것을 보고 nginx 컨테이너를 새로 만든다 (1~2초 접속이 끊길 수 있다). 사람이 적은 때에 머지한다
-5. **확인**: CloudWatch에 `macros-nginx-1` 스트림, 서버의 `docker compose logs nginx`도 그대로 되는지 (Docker가 사본을 남긴다), 사이트 200. 기존 경보(`app-error`, `photo-held`)는 JSON 줄만 보므로 nginx의 글자 줄에는 걸리지 않는다
-6. **4.2의 쿼리를 저장한다**. 되돌릴 때는 3의 한 줄을 되돌리는 PR
+1. **지금 기록을 먼저 뽑는다**: nginx 컨테이너를 새로 만들면 서버에 남은 기록(10 MB 파일 세 개)이 사라진다. 그 전에 이 기록으로 사람이 받은 응답 시간과 502를 한 번 세어 기준선에 더한다 (원본은 저장소에 올리지 않는다) → 11-18에 했다 (3절). 바꾸기 직전에 `nginx_perf.py`로 한 번 더 세면 그사이 숫자도 남는다 → 11-26 머지 직전에 한 번 더 셌다 (8절)
+2. **권한을 미리 확인한다** (서버): 같은 로그 그룹으로 시험 컨테이너 하나를 보내 본다. `docker run --rm --log-driver awslogs --log-opt awslogs-region=ap-northeast-2 --log-opt awslogs-group=/macros/server --log-opt tag=awslogs-test alpine echo awslogs-test` → CloudWatch에 `awslogs-test` 스트림이 생기면 된다. 기본값(blocking)의 awslogs는 시작할 때 CloudWatch에 스트림을 만들지 못하면 컨테이너가 뜨지 않으므로, nginx를 바꾸기 전에 확인한다 → 하지 않았다. 11-23 무중단 배포 때 app1, app2가 같은 그룹에 새 스트림을 만들어 권한은 확인됐고, nginx는 non-blocking으로 보내 스트림을 만들지 못해도 먼저 뜬다 (3)
+3. **`deploy/compose.yaml`을 고친다**: nginx의 `logging: *logging-local`을 `logging: *logging-cloud-nginx`로, 위의 로그 설명 주석도 맞게. 새 묶음은 app의 `x-logging-cloud`에 `mode: non-blocking`과 `max-buffer-size: 4m` 두 줄을 더한 것이다. 기본값(blocking)이면 CloudWatch에 닿지 않을 때 nginx를 새로 켜도 뜨지 않는다 (내 PC에서 닿지 않는 주소로 재현: blocking은 `failed to initialize logging driver`로 켜지지 않고 non-blocking은 켜짐, 11-26). nginx는 app과 달리 하나뿐이라 뜨지 못하면 사이트가 멈춘다. non-blocking은 스트림 만들기를 뒤에서 다시 시도하고, 넘기지 못한 기록은 메모리 4 MB에 모았다가 넘치면 버린다. 내 PC 시험용 `compose.local.yaml`은 nginx도 파일로 덮어쓴다. 같은 PR에서 `nginx/default.conf`에 `error_log`를 더해, IP가 들어가는 에러 줄은 표준 출력(= CloudWatch)이 아니라 컨테이너 안 파일에만 error 등급으로 남긴다 (PR 전 검토에서 찾음. 내 PC에서 502와 413을 만들어 Docker 기록에 IP 든 줄 0줄, 파일에만 있는 것을 확인). 같은 로그 그룹을 쓰면 보관 기간 90일을 새로 정하지 않아도 된다 (새 그룹을 만들면 보관 기간이 "만료 없음"으로 생겨 처리방침의 3개월을 넘긴다)
+4. **PR → 머지 → 자동 배포**: `deploy.sh`의 마지막 단계(`docker compose up -d --no-deps nginx certbot`, 2026-11-23 무중단 배포부터)가 nginx 설정이 바뀐 것을 보고 nginx 컨테이너를 새로 만든다 (보통 1~2초 끊긴다. 느린 사진 전송이 걸려 있으면 옛 nginx가 그 요청을 최대 10초 기다린 뒤 끊으므로 그만큼 길어진다). 사람이 적은 때에 머지한다 → 11-26에 머지했다
+5. **확인**: CloudWatch에 `macros-nginx-1` 스트림, 서버의 `docker compose logs nginx`도 그대로 되는지 (Docker가 사본을 남긴다), 사이트 200. 기존 경보(`app-error`, `photo-held`)는 JSON 줄만 보므로 nginx의 글자 줄에는 걸리지 않는다. 스트림은 배포 직후 꼭 본다: non-blocking이어도 nginx가 켜질 때 스트림을 끝내 만들지 못하면(권한이 스트림 이름으로 묶였거나 CloudWatch가 하루쯤 닿지 않음), Docker 25의 awslogs는 보내지 못한 줄을 4,096줄(지금 양으로 하루쯤)까지 쥐고 기다리다가, 그 뒤 nginx를 끌 때 끝나지 않는다 (배포 7단계가 멈추고 80, 443번이 닫힌 채. moby v25.0.5의 awslogs `Log`와 `RingLogger.Close`로 확인). 서버에서 `sudo journalctl -u docker --since -30min | grep -i awslogs`에 `Error while trying to initialize awslogs`가 없으면 만들어진 것이다. 켜질 때 스트림 만들기에 성공한 nginx는 그 뒤 CloudWatch가 막혀도 못 보낸 줄을 버리며 비우므로 멈추지 않는다
+6. **4.2의 쿼리를 저장한다** (운영자가 콘솔의 Logs Insights에서). 되돌릴 때는 3의 한 줄을 되돌리는 PR
 
 ## 6. 개선 후보 (숫자를 보고 고른다)
 
@@ -297,3 +297,4 @@ SPRINTS의 그 스프린트 메모에 한 줄을 남긴다. 예:
 | 2026-11-23 | JM-62 | 무중단 배포: app 두 자리(app1, app2)를 번갈아 쓰고, 새 자리를 health 확인과 데우기 뒤 nginx reload로 넘김 | 내 PC 리허설(운영 이미지 cbb22dd → cb41f79, 0.2초마다 첫 화면): 502 59건, 12.5초 끊김, 끊긴 뒤 첫 화면 2,761 ms, 피드백 첫 요청 1,482 ms. 운영 nginx 기록(11-04 ~ 11-23): 502 88건, 배포 뒤 첫 요청 가운데 피드 3,259 ms, 글 상세 2,888 ms, 공지 2,505 ms | 502 0건 (처음 옮겨 오는 배포 549번, 보통 배포 두 번 각 500번 요청), 배포 동안 첫 화면 최대 82 ms, 바꿔치기 직후 첫 화면 22 ms와 8 ms, 피드백 9 ms와 14 ms. 배포 한 번 43 ~ 49초, app 둘이 같이 뜰 때 메모리 합 최대 934 MiB(내 PC). 운영(PR #56 배포를 머지 직후부터 밖에서 1초마다 600번, 11-23 15:30 ~ 15:40): 502를 포함한 실패 0건, 배포하는 2분 동안 가운데 99 ms와 가장 느린 것 205 ms, 배포 직후 화면마다 첫 요청 42 ~ 129 ms (바꾸기 전 운영: 배포 15번에 502 87건, 배포 뒤 첫 요청 가운데 2.5 ~ 3.3초) | 기록 저장소 `update_picture/JM-62` |
 | 2026-11-23 | JM-52 | 검색을 더함: 닉네임과 음식 이름(AI의 답과 확정한 이름, JSON_TABLE)의 일부로 찾기 | 검색 없음. 같은 로컬 DB의 피드 두 쿼리(한 쪽, 개수) 합: 글 100개 약 0.3 ~ 0.5 ms, 1천 개 약 0.4 ~ 0.7 ms, 1만 개 약 1 ~ 4 ms | 검색 두 쿼리 합: 글 100개 약 2 ms, 1천 개 약 10 ~ 25 ms, 1만 개 약 70 ~ 250 ms. 같은 PC에서 두 번 쟀는데(draft1, PR 전 검토 뒤) 잴 때의 PC 상태로 두 배쯤 달라 범위로 적는다. 검토 뒤 더한 띄어쓰기 빼기(`REPLACE`)는 같은 실행 안에서 번갈아 재어 5% 안쪽으로 느렸다 (1만 개, 맞는 글 없음: 62 → 67 ms). 요청마다 쿼리 4개(피드와 같음, N+1 없음), 맞는 글이 없으면 1개. 운영 검색 시간은 배포 뒤 4.1로 잰다 (지금 글 약 130개) | 기록 저장소 `update_picture/JM-52` |
 | 2026-11-24 | JM-83 | 음식 태그와 필터: 분석 응답에 태그 칸, 지난 글은 사진을 다시 보내 태그만 고름, 피드와 검색을 태그와 칼로리 범위로 거름 | AI 응답(시험 사진 20장, 실제 Gemini, 같은 사진을 번갈아): 실패 0, 시간 가운데 2,052 ms (p90 3,267), 입력 토큰 가운데 1,329, 출력 139. 필터 없음 | 실패 0, 시간 가운데 2,279 ms (p90 3,441), 입력 1,766, 출력 212. 태그만 묻는 호출 1,602 ms, 입력 1,528, 출력 60. 필터를 고른 화면도 쿼리 4개. 로컬 가짜 글로 잰 필터 두 쿼리(한 쪽, 개수) 합: 1천 개 1.3 ~ 5.7 ms, 1만 개 7 ~ 23 ms (같은 DB의 피드 1.3, 2.0 ms) | 기록 저장소 `update_picture/JM-83` |
+| 2026-11-26 | JM-91 | nginx 접속 기록을 서버 안 파일에서 CloudWatch(`macros-nginx-1`, 90일, non-blocking)로 | 서버에 남아 있던 기록 전부(11-08 20:43 ~ 11-26 09:44, 7만 4천 줄. 앞쪽은 10 MB 파일 세 개를 넘쳐 이미 지워짐)를 머지 직전에 셈: 사람의 피드 p50 32 ms, p95 92 ms (2,764건), 글 상세 48 ms, 437 ms, 사진 144 ms, 2,591 ms (13,258건), 올리기 1,919 ms, 6,195 ms (129건). 502 65건이고 마지막은 11-20 19:03 (11-23 무중단 배포 뒤 0건) | CloudWatch의 첫 숫자는 하루 뒤 4.2의 쿼리로 (다음 PR에 적는다) | 기록 저장소 `update_picture/JM-91/before-nginx-cloudwatch-2026-11-26.json` |

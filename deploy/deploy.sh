@@ -314,7 +314,8 @@ fi
 
 # ── 7. nginx, certbot의 compose 설정이 바뀌었으면 적용한다 ──
 # 예전 deploy.sh는 docker compose up -d로 모든 서비스를 맞췄다. 이제 app은 위에서 자리마다 다루므로, 나머지만 이름을 붙여 맞춘다.
-# 설정이 그대로면 아무것도 하지 않는다. nginx의 이미지나 compose 설정이 바뀐 배포에서만 nginx가 다시 만들어져 1~2초 끊긴다
+# 설정이 그대로면 아무것도 하지 않는다. nginx의 이미지나 compose 설정이 바뀐 배포에서만 nginx가 다시 만들어져 보통 1~2초 끊긴다
+# (느린 전송이 걸려 있으면 옛 nginx가 그 요청을 최대 10초 기다린 뒤 끊으므로 그만큼 길어진다)
 # (default.conf 같은 설정 파일만 바뀐 것은 5단계의 reload로 이미 적용됐다)
 # shellcheck disable=SC2086
 if ! docker compose up -d --no-deps ${DEPLOY_SERVICES:-nginx certbot}; then
