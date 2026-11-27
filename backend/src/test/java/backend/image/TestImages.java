@@ -220,6 +220,8 @@ public final class TestImages {
 	private static byte[] buildTiff(Integer orientation, Double latitude, Double longitude, String dateTime) {
 		boolean hasDate = dateTime != null;
 		boolean hasGps = latitude != null && longitude != null;
+		// 촬영 시각은 끝의 0까지 센 바이트 수만큼 쓴다 (보통 20바이트, 연도가 다섯 자리면 21바이트, JM-112)
+		byte[] dateBytes = hasDate ? (dateTime + "\0").getBytes(StandardCharsets.US_ASCII) : new byte[0];
 		int ifd0Entries = (orientation != null ? 1 : 0) + (hasDate ? 1 : 0) + (hasGps ? 1 : 0);
 
 		// 각 부분이 TIFF 시작에서 몇 번째 바이트에 오는지 미리 계산한다. (목록 = 개수 2 + 항목 12씩 + 다음 목록 위치 4)
@@ -227,7 +229,7 @@ public final class TestImages {
 		int exifIfd = ifd0 + 2 + 12 * ifd0Entries + 4;
 		int gpsIfd = exifIfd + (hasDate ? 2 + 12 + 4 : 0);
 		int dateData = gpsIfd + (hasGps ? 2 + 12 * 4 + 4 : 0);
-		int latitudeData = dateData + (hasDate ? 20 : 0);
+		int latitudeData = dateData + dateBytes.length;
 		int longitudeData = latitudeData + 24;
 		int total = hasGps ? longitudeData + 24 : latitudeData;
 
@@ -249,9 +251,9 @@ public final class TestImages {
 		tiff.putInt(0); // 다음 목록 없음
 
 		if (hasDate) {
-			// EXIF 목록: 촬영 시각(DateTimeOriginal, 0x9003). 20글자(끝의 0 포함)라 값이 있는 위치를 적는다.
+			// EXIF 목록: 촬영 시각(DateTimeOriginal, 0x9003). 4바이트보다 길어서 값이 있는 위치를 적는다.
 			tiff.putShort((short) 1);
-			entry(tiff, 0x9003, ASCII, 20, dateData);
+			entry(tiff, 0x9003, ASCII, dateBytes.length, dateData);
 			tiff.putInt(0);
 		}
 
@@ -267,7 +269,7 @@ public final class TestImages {
 		}
 
 		if (hasDate) {
-			tiff.put((dateTime + "\0").getBytes(StandardCharsets.US_ASCII));
+			tiff.put(dateBytes);
 		}
 		if (hasGps) {
 			putDegreesMinutesSeconds(tiff, latitude);

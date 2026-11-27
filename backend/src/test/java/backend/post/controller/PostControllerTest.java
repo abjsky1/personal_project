@@ -120,6 +120,23 @@ class PostControllerTest {
 	}
 
 	@Test
+	void 촬영_시각이_받는_범위_밖이면_시각만_비우고_글과_위치는_저장한다() throws Exception {
+		// 받는 범위(1988년부터 지금 더하기 1일까지) 밖의 촬영 시각: 연도가 다섯 자리 (JM-112)
+		MockMultipartFile photo = new MockMultipartFile("image", "food.jpg", "image/jpeg",
+				TestImages.withGps(TestImages.jpeg(300, 200), 37.566535, 126.977969, "99999:01:01 00:00:00"));
+
+		mockMvc.perform(multipart("/posts").file(photo)
+				.param("nickname", "테스터")
+				.param("password", "1234")
+				.param("locationConsent", "true"))
+				.andExpect(status().is3xxRedirection());
+
+		Post saved = latestPost();
+		assertThat(saved.getPhotoTakenAt()).isNull();
+		assertThat(postLocationRepository.findById(saved.getId())).isPresent();
+	}
+
+	@Test
 	void 동의하지_않으면_사진에_위치가_있어도_저장하지_않는다() throws Exception {
 		// locationConsent를 보내지 않음 = 체크박스를 체크하지 않음
 		mockMvc.perform(multipart("/posts").file(photoWithGps)
