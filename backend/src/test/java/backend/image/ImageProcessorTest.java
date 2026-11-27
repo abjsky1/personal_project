@@ -17,8 +17,13 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
+import java.util.List;
 
 import javax.imageio.IIOException;
 import javax.imageio.ImageIO;
@@ -159,6 +164,32 @@ class ImageProcessorTest {
 
 		assertThat(metadata.hasLocation()).isFalse();
 		assertThat(metadata.takenAt()).isNull();
+	}
+
+	@Test
+	void 촬영_시각이_1988년_전이거나_지금_더하기_1일_뒤면_시각만_버리고_위치는_남긴다() {
+		// 1988-01-01 00:00(한국 시간) 바로 전, 지금 더하기 2일, 연도가 다섯 자리 (JM-112)
+		for (String dateTime : List.of("1987:12:31 23:59:59", exifTime(Instant.now().plus(Duration.ofDays(2))),
+				"99999:01:01 00:00:00")) {
+			byte[] photo = TestImages.withGps(TestImages.jpeg(200, 100), 37.566535, 126.977969, dateTime);
+
+			PhotoMetadata metadata = processor.process(upload(photo)).metadata();
+
+			assertThat(metadata.takenAt()).as(dateTime).isNull();
+			assertThat(metadata.hasLocation()).as(dateTime).isTrue();
+		}
+	}
+
+	@Test
+	void 촬영_시각이_1988년_1월_1일부터_지금_더하기_1일_사이면_그대로_읽는다() {
+		// 받는 범위의 처음: 한국 시간 1988-01-01 00:00 = 세계 표준시 1987-12-31 15:00
+		byte[] first = TestImages.withGps(TestImages.jpeg(200, 100), 37.566535, 126.977969, "1988:01:01 00:00:00");
+		assertThat(processor.process(upload(first)).metadata().takenAt()).isEqualTo(Instant.parse("1987-12-31T15:00:00Z"));
+
+		// 지금 더하기 12시간 (시계가 빠른 카메라로 찍은 사진)
+		Instant ahead = Instant.now().plus(Duration.ofHours(12)).truncatedTo(ChronoUnit.SECONDS);
+		byte[] photo = TestImages.withGps(TestImages.jpeg(200, 100), 37.566535, 126.977969, exifTime(ahead));
+		assertThat(processor.process(upload(photo)).metadata().takenAt()).isEqualTo(ahead);
 	}
 
 	@Test
@@ -458,6 +489,11 @@ class ImageProcessorTest {
 
 	private MockMultipartFile upload(byte[] data) {
 		return new MockMultipartFile("image", "photo.jpg", "image/jpeg", data);
+	}
+
+	// EXIF 규칙대로 쓴 촬영 시각 글자 (한국 시간, 예: "2026:10:29 12:30:00")
+	private static String exifTime(Instant instant) {
+		return DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss").withZone(ZoneId.of("Asia/Seoul")).format(instant);
 	}
 
 	private BufferedImage read(byte[] data) throws IOException {

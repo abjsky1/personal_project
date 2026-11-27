@@ -8,6 +8,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.Set;
@@ -73,6 +76,13 @@ public class ImageProcessor {
 
 	// 촬영 시각을 읽을 때 쓰는 시간대
 	private static final TimeZone KOREA = TimeZone.getTimeZone("Asia/Seoul");
+	// 받는 촬영 시각의 처음: 1988-01-01 00:00 (한국 시간, JM-112)
+	// 1988년은 메모리 카드에 파일로 저장한 첫 디지털카메라(후지필름 DS-1P)가 나온 해다. 그 전 시각은 카메라 시계가 틀렸거나 꾸민 값이다.
+	private static final Instant TAKEN_AT_FROM = LocalDate.of(1988, 1, 1).atStartOfDay(KOREA.toZoneId()).toInstant();
+	// 받는 촬영 시각의 끝: 지금 더하기 1일
+	// 카메라 시계가 조금 빠를 수 있고, 시간대 칸이 없는 사진을 한국보다 시계가 빠른 곳(키리바시는 5시간)에서 찍으면
+	// 한국 시간으로 읽을 때 실제보다 늦은 시각이 되므로 하루를 더 받는다.
+	private static final Duration TAKEN_AT_AHEAD = Duration.ofDays(1);
 
 	// 최대 화소 수 (application.properties의 app.image.max-pixels)
 	private final long maxPixels;
@@ -251,7 +261,15 @@ public class ImageProcessor {
 			// EXIF 칸에서 촬영 시각(DateTimeOriginal)을 꺼낸다.
 			// EXIF의 시각에는 시간대가 없는 경우가 많아서(예: "2026:10:29 12:30:00"), 한국 시간으로 보고 읽는다.
 			ExifSubIFDDirectory exif = metadata.getFirstDirectoryOfType(ExifSubIFDDirectory.class);
-			Date takenAt = (exif == null) ? null : exif.getDateOriginal(KOREA);
+			Date date = (exif == null) ? null : exif.getDateOriginal(KOREA);
+			Instant takenAt = (date == null) ? null : date.toInstant();
+
+			// 받는 범위 밖의 시각은 버리고, 위치는 그대로 둔다 (JM-112)
+			// 값은 로그에 남기지 않는다. 위치 제공에 동의했는지는 이 뒤에 PostService가 보기 때문이다
+			if (takenAt != null && !isTakenAtInRange(takenAt)) {
+				log.info("Photo taken time out of range, dropped");
+				takenAt = null;
+			}
 
 			// 사진에 어떤 정보가 들어 있었는지 남긴다. 값(좌표, 시각)은 남기지 않고, 정보의 종류와 있음/없음만 남긴다.
 			// → 기기, 브라우저마다 무엇이 지워진 채로 올라오는지(예: 아이폰 Safari) 로그로 확인하는 운영 지표
@@ -263,13 +281,18 @@ public class ImageProcessor {
 			return new PhotoMetadata(
 					hasLocation ? location.getLatitude() : null,
 					hasLocation ? location.getLongitude() : null,
-					takenAt == null ? null : takenAt.toInstant());
+					takenAt);
 		} catch (RuntimeException e) {
 			// 깨진 EXIF는 PhotoMetadataReader가 이미 처리하므로, 여기까지 오는 것은 생각하지 못한 예외다.
 			// 그래도 글은 정보 없이 올라가게 하고, 원인을 찾을 수 있게 스택까지 남긴다 (WARN이라 에러 알림은 가지 않는다)
 			log.warn("Unreadable photo metadata: {}", String.valueOf(e), e);
 			return PhotoMetadata.EMPTY;
 		}
+	}
+
+	// 촬영 시각이 받는 범위(1988-01-01 00:00 한국 시간부터 지금 더하기 1일까지) 안인지 본다. 양 끝은 받는다
+	private static boolean isTakenAtInRange(Instant takenAt) {
+		return !takenAt.isBefore(TAKEN_AT_FROM) && !takenAt.isAfter(Instant.now().plus(TAKEN_AT_AHEAD));
 	}
 
 	// 사진을 펼치고 EXIF 방향대로 돌린 그림을 돌려준다. (Thumbnailator가 방향 정보를 읽어 돌린다)
