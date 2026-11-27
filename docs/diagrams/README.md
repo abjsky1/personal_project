@@ -11,12 +11,18 @@
 
 ## 고쳐 그리기
 
-같은 이름의 `.html`이 원본이다. 구성이 바뀌면 HTML의 글자를 고치고, 이 폴더에서 PowerShell로 다시 찍는다.
+같은 이름의 `.html`이 원본이다. 구성이 바뀌면 HTML의 글자를 고치고, 이 폴더에서 다시 찍는다. 윈도우 노트북은 PowerShell에서:
 
 ```
 & "C:\Program Files\Google\Chrome\Application\chrome.exe" --headless=new --hide-scrollbars --force-device-scale-factor=2 --window-size=1600,1345 --screenshot="$PWD\resource-map.png" "$PWD\resource-map.html"
 ```
 
+맥북은 터미널에서 (내 Chrome의 프로필과 섞이지 않게 빈 임시 프로필로 띄운다):
+
+```
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars --user-data-dir="$(mktemp -d)" --force-device-scale-factor=2 --window-size=1600,1345 --screenshot="$PWD/resource-map.png" "$PWD/resource-map.html"
+```
+
 - 파일 이름 두 곳과 높이(`--window-size`의 두 번째 숫자)만 그림마다 바꾼다. 높이: deploy-architecture 1100, site-ia 1395, ai-analysis-flow 1296, resource-map 1345. 내용이 늘어 아래가 잘리면 높이를 늘린다.
-- 글꼴은 Noto Sans KR이다. PC에 없으면 다른 글꼴로 그려져 글자가 상자를 넘칠 수 있다.
+- 글꼴은 Noto Sans KR이다. PC에 없으면 다른 글꼴로 그려져 글자가 상자를 넘칠 수 있다. 맥북에는 기본으로 없어서 먼저 깐다: `brew install --cask font-noto-sans-kr`
 - 비밀값은 이름만 적는다. 값(비밀번호, 키, 토큰)과 버킷 이름, RDS 주소는 그림에 넣지 않는다.
