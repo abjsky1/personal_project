@@ -77,7 +77,7 @@ public class ImageProcessor {
 	// 촬영 시각을 읽을 때 쓰는 시간대
 	private static final TimeZone KOREA = TimeZone.getTimeZone("Asia/Seoul");
 	// 받는 촬영 시각의 처음: 1988-01-01 00:00 (한국 시간, JM-112)
-	// 1988년은 메모리 카드에 파일로 저장한 첫 디지털카메라(후지필름 DS-1P)가 나온 해다. 그 전 시각은 카메라 시계가 틀렸거나 꾸민 값이다.
+	// 1988년은 메모리 카드에 파일로 저장한 첫 디지털카메라(후지필름 DS-1P)가 발표된 해다. 그 전 시각은 카메라 시계가 틀렸거나 꾸민 값이다.
 	private static final Instant TAKEN_AT_FROM = LocalDate.of(1988, 1, 1).atStartOfDay(KOREA.toZoneId()).toInstant();
 	// 받는 촬영 시각의 끝: 지금 더하기 1일
 	// 카메라 시계가 조금 빠를 수 있고, 시간대 칸이 없는 사진을 한국보다 시계가 빠른 곳(키리바시는 5시간)에서 찍으면
