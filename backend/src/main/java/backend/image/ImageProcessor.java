@@ -10,10 +10,8 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.Date;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Set;
 import java.util.TimeZone;
-import java.util.stream.StreamSupport;
 
 import javax.imageio.IIOException;
 import javax.imageio.ImageIO;
@@ -25,10 +23,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.drew.imaging.ImageMetadataReader;
-import com.drew.imaging.ImageProcessingException;
 import com.drew.lang.GeoLocation;
-import com.drew.metadata.Directory;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.exif.ExifSubIFDDirectory;
 import com.drew.metadata.exif.GpsDirectory;
@@ -40,7 +35,7 @@ import net.coobird.thumbnailator.Thumbnails;
 import net.coobird.thumbnailator.geometry.Positions;
 
 // 올린 사진을 저장하기 전에 다듬는다. (기획서 6.2절)
-// 순서: 1. 진짜 사진인지 검사 → 2. PNG면 쓰지 않는 조각 버리기 → 3. 화소 수와 펼친 크기 검사 → 4. 위치, 촬영 시각 꺼내기
+// 순서: 1. 진짜 사진인지 검사 → 2. PNG면 쓰지 않는 조각 버리기 → 3. 화소 수와 펼친 크기 검사 → 4. EXIF에서 위치, 촬영 시각 칸만 꺼내기
 //       → 5. 펼치기(큰 사진은 긴 변 2560으로 줄이면서) + 방향 바로잡기(회전 보정)
 //       → 6. 크기 줄이기 + JPEG로 새로 저장(EXIF 제거)
 //
@@ -118,6 +113,7 @@ public class ImageProcessor {
 		int longSide = checkPixelCount(original);
 
 		// 4. EXIF를 지우기 전에, 원본에서 위치와 촬영 시각을 꺼내 둔다. (EXIF를 지운 뒤에는 읽을 수 없다)
+		// EXIF의 칸 가운데 위치와 시각 칸 일곱 개만 읽는다 (JM-111, PhotoMetadataReader)
 		PhotoMetadata metadata = readMetadata(original);
 
 		try {
@@ -238,12 +234,14 @@ public class ImageProcessor {
 		return decoded + CONVERSION_BYTES_PER_PIXEL;
 	}
 
-	// EXIF에서 GPS 위치와 촬영 시각을 꺼낸다. (metadata-extractor 라이브러리)
+	// EXIF에서 GPS 위치와 촬영 시각을 꺼낸다. (PhotoMetadataReader가 칸 일곱 개만 읽고, 값 계산은 metadata-extractor 라이브러리)
 	// 사진에 정보가 없거나 읽다가 문제가 생겨도 글은 올라가야 하므로, 예외를 던지지 않고 비어 있는 결과를 돌려준다.
 	private PhotoMetadata readMetadata(byte[] original) {
 		try {
 			// Metadata: 사진 안의 정보 묶음. 그 안에 GPS, EXIF 같은 "디렉터리"(정보 종류별 칸)가 들어 있다.
-			Metadata metadata = ImageMetadataReader.readMetadata(new ByteArrayInputStream(original));
+			// 여기서는 EXIF 목록 셋(IFD0, EXIF, GPS)까지만 들어 있고, 각 목록에는 쓰는 칸만 있다
+			PhotoMetadataReader.Read read = PhotoMetadataReader.read(original);
+			Metadata metadata = read.metadata();
 
 			// GPS 칸에서 위도, 경도를 꺼낸다. 칸이 없거나, 값이 0,0(위치를 못 잡은 사진에 가끔 들어가는 값)이면 위치 없음
 			GpsDirectory gps = metadata.getFirstDirectoryOfType(GpsDirectory.class);
@@ -257,26 +255,20 @@ public class ImageProcessor {
 
 			// 사진에 어떤 정보가 들어 있었는지 남긴다. 값(좌표, 시각)은 남기지 않고, 정보의 종류와 있음/없음만 남긴다.
 			// → 기기, 브라우저마다 무엇이 지워진 채로 올라오는지(예: 아이폰 Safari) 로그로 확인하는 운영 지표
-			// directories 예: [JPEG, Exif IFD0, Exif SubIFD, GPS, ...] — 이름만 있는 목록이라 개인정보가 아니다.
+			// directories 예: [JFIF, Exif IFD0, Exif SubIFD, GPS, ICC Profile] — 이름만 있는 목록이라 개인정보가 아니다.
+			// JM-111부터는 읽지 않는 덩어리(XMP, 제조사 칸 등)도 이름만 남긴다. 가짓수는 10개까지라 로그 한 줄이 길어지지 않는다
 			log.info("Photo metadata: directories={}, gps={}, takenAt={}",
-					directoryNames(metadata), hasLocation, takenAt != null);
+					read.blocks(), hasLocation, takenAt != null);
 
 			return new PhotoMetadata(
 					hasLocation ? location.getLatitude() : null,
 					hasLocation ? location.getLongitude() : null,
 					takenAt == null ? null : takenAt.toInstant());
-		} catch (ImageProcessingException | IOException e) {
-			log.warn("Unreadable photo metadata: {}", e.getMessage());
+		} catch (RuntimeException e) {
+			// 라이브러리 안에서 생각하지 못한 예외가 나도 글은 정보 없이 올라가게 한다 (전에는 IOException 등만 잡아서 500이 됐다)
+			log.warn("Unreadable photo metadata: {}", String.valueOf(e));
 			return PhotoMetadata.EMPTY;
 		}
-	}
-
-	// 사진 안에 들어 있는 정보 칸(디렉터리)의 이름 목록
-	// getDirectories()는 목록(List)이 아니라 반복만 할 수 있는 Iterable이라, stream으로 바꿔서 이름만 모은다.
-	private List<String> directoryNames(Metadata metadata) {
-		return StreamSupport.stream(metadata.getDirectories().spliterator(), false)
-				.map(Directory::getName)
-				.toList();
 	}
 
 	// 사진을 펼치고 EXIF 방향대로 돌린 그림을 돌려준다. (Thumbnailator가 방향 정보를 읽어 돌린다)

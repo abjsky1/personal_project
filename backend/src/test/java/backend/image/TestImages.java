@@ -166,7 +166,11 @@ public final class TestImages {
 	// TIFF 안에는 "목록(IFD)"이 있고, 목록의 항목 하나 = 태그 번호(무슨 정보인지) + 형식 + 개수 + 값(또는 값이 있는 위치)이다.
 	// 여기서는 필요한 항목만 넣은 최소한의 EXIF를 만든다. (null인 값은 넣지 않는다)
 	private static byte[] withExif(byte[] jpeg, Integer orientation, Double latitude, Double longitude, String dateTime) {
-		byte[] tiff = buildTiff(orientation, latitude, longitude, dateTime);
+		return withExifTiff(jpeg, buildTiff(orientation, latitude, longitude, dateTime));
+	}
+
+	// JPEG에 TIFF 내용을 그대로 담은 EXIF 조각을 넣는다 (시험마다 칸을 직접 짠 TIFF를 넣을 때, JM-111)
+	public static byte[] withExifTiff(byte[] jpeg, byte[] tiff) {
 		byte[] exifHeader = {'E', 'x', 'i', 'f', 0x00, 0x00};
 		int segmentLength = 2 + exifHeader.length + tiff.length;
 
@@ -186,6 +190,21 @@ public final class TestImages {
 		int jfifLength = ((jpeg[4] & 0xFF) << 8) | (jpeg[5] & 0xFF);
 		int rest = 4 + jfifLength;
 		out.write(jpeg, rest, jpeg.length - rest);
+		return out.toByteArray();
+	}
+
+	// JPEG의 시작 표시(FF D8) 바로 뒤에 조각 하나를 끼워 넣는다 (XMP, ICC 같은 정보 조각, JM-111)
+	// marker: 조각 종류 (예: 0xE1 = APP1, 0xE2 = APP2). 여러 번 부르면 나중에 넣은 조각이 앞에 온다
+	public static byte[] withSegment(byte[] jpeg, int marker, byte[] payload) {
+		int segmentLength = 2 + payload.length;
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		out.write(jpeg, 0, 2);
+		out.write(0xFF);
+		out.write(marker);
+		out.write(segmentLength >> 8);
+		out.write(segmentLength & 0xFF);
+		out.writeBytes(payload);
+		out.write(jpeg, 2, jpeg.length - 2);
 		return out.toByteArray();
 	}
 
