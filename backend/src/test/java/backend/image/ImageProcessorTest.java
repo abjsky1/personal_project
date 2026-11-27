@@ -394,20 +394,13 @@ class ImageProcessorTest {
 	// ---- EXIF는 위치와 시각 칸만 읽기 (JM-111) ----
 
 	@Test
-	void XMP_조각은_읽지_않아서_깨져_있어도_EXIF의_위치와_시각을_읽는다() {
-		// 이 앱은 XMP를 쓰지 않는다. 확장 XMP가 있다고 적힌 표준 XMP와, 적힌 길이가 맞지 않는 확장 조각
+	void XMP_조각이_있어도_위치와_시각은_EXIF에서_읽는다() {
+		// 이 앱은 XMP를 쓰지 않는다. XMP 안의 위치(다른 값)는 보지 않고 EXIF의 위치를 쓴다
 		String xmp = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">"
-				+ "<rdf:Description rdf:about=\"\" xmlns:xmpNote=\"http://ns.adobe.com/xmp/note/\""
-				+ " xmpNote:HasExtendedXMP=\"0123456789ABCDEF0123456789ABCDEF\"/></rdf:RDF></x:xmpmeta>";
-		ByteArrayOutputStream extension = new ByteArrayOutputStream();
-		extension.writeBytes("http://ns.adobe.com/xmp/extension/\0".getBytes(StandardCharsets.ISO_8859_1));
-		extension.writeBytes("0123456789ABCDEF0123456789ABCDEF".getBytes(StandardCharsets.US_ASCII));
-		extension.writeBytes(new byte[] {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, 0, 0, 0, 0});
-		extension.writeBytes("<x:xmpmeta/>".getBytes(StandardCharsets.US_ASCII));
+				+ "<rdf:Description rdf:about=\"\" xmlns:exif=\"http://ns.adobe.com/exif/1.0/\""
+				+ " exif:GPSLatitude=\"10,0.0N\" exif:GPSLongitude=\"20,0.0E\"/></rdf:RDF></x:xmpmeta>";
 		byte[] photo = TestImages.withGps(TestImages.jpeg(200, 100), 37.566535, 126.977969, "2026:10:29 12:30:00");
-		photo = TestImages.withSegment(photo, 0xE1, extension.toByteArray());
-		photo = TestImages.withSegment(photo, 0xE1,
-				("http://ns.adobe.com/xap/1.0/\0" + xmp).getBytes(StandardCharsets.UTF_8));
+		photo = TestImages.withSegment(photo, 0xE1, ("http://ns.adobe.com/xap/1.0/\0" + xmp).getBytes(StandardCharsets.UTF_8));
 
 		PhotoMetadata metadata = processor.process(upload(photo)).metadata();
 

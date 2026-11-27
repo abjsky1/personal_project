@@ -239,7 +239,7 @@ public class ImageProcessor {
 	private PhotoMetadata readMetadata(byte[] original) {
 		try {
 			// Metadata: 사진 안의 정보 묶음. 그 안에 GPS, EXIF 같은 "디렉터리"(정보 종류별 칸)가 들어 있다.
-			// 여기서는 EXIF 목록 셋(IFD0, EXIF, GPS)까지만 들어 있고, 각 목록에는 쓰는 칸만 있다
+			// 여기서는 목록 셋(첫 목록 IFD0, EXIF 목록, GPS 목록)까지만 들어 있고, 각 목록에는 쓰는 칸만 있다
 			PhotoMetadataReader.Read read = PhotoMetadataReader.read(original);
 			Metadata metadata = read.metadata();
 
@@ -255,8 +255,8 @@ public class ImageProcessor {
 
 			// 사진에 어떤 정보가 들어 있었는지 남긴다. 값(좌표, 시각)은 남기지 않고, 정보의 종류와 있음/없음만 남긴다.
 			// → 기기, 브라우저마다 무엇이 지워진 채로 올라오는지(예: 아이폰 Safari) 로그로 확인하는 운영 지표
-			// directories 예: [JFIF, Exif IFD0, Exif SubIFD, GPS, ICC Profile] — 이름만 있는 목록이라 개인정보가 아니다.
-			// JM-111부터는 읽지 않는 덩어리(XMP, 제조사 칸 등)도 이름만 남긴다. 가짓수는 10개까지라 로그 한 줄이 길어지지 않는다
+			// directories 예: [JPEG, Exif IFD0, Exif SubIFD, GPS, Apple Makernote, ICC Profile] — 이름만 있는 목록이라 개인정보가 아니다.
+			// JM-111부터는 읽지 않는 덩어리(XMP, 제조사 칸 등)도 이름만 남긴다. 가짓수는 12개까지라 로그 한 줄이 길어지지 않는다
 			log.info("Photo metadata: directories={}, gps={}, takenAt={}",
 					read.blocks(), hasLocation, takenAt != null);
 
@@ -265,8 +265,9 @@ public class ImageProcessor {
 					hasLocation ? location.getLongitude() : null,
 					takenAt == null ? null : takenAt.toInstant());
 		} catch (RuntimeException e) {
-			// 라이브러리 안에서 생각하지 못한 예외가 나도 글은 정보 없이 올라가게 한다 (전에는 IOException 등만 잡아서 500이 됐다)
-			log.warn("Unreadable photo metadata: {}", String.valueOf(e));
+			// 깨진 EXIF는 PhotoMetadataReader가 이미 처리하므로, 여기까지 오는 것은 생각하지 못한 예외다.
+			// 그래도 글은 정보 없이 올라가게 하고, 원인을 찾을 수 있게 스택까지 남긴다 (WARN이라 에러 알림은 가지 않는다)
+			log.warn("Unreadable photo metadata: {}", String.valueOf(e), e);
 			return PhotoMetadata.EMPTY;
 		}
 	}

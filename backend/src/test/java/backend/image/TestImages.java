@@ -173,6 +173,10 @@ public final class TestImages {
 	public static byte[] withExifTiff(byte[] jpeg, byte[] tiff) {
 		byte[] exifHeader = {'E', 'x', 'i', 'f', 0x00, 0x00};
 		int segmentLength = 2 + exifHeader.length + tiff.length;
+		// JPEG 조각의 길이 칸은 2바이트라 65,535까지다. 넘으면 길이가 틀린 조각이 되므로 시험을 잘못 짠 것이다
+		if (segmentLength > 0xFFFF) {
+			throw new IllegalArgumentException("EXIF segment too long for JPEG: " + segmentLength);
+		}
 
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		// 1. 시작 표시 FF D8
@@ -197,6 +201,9 @@ public final class TestImages {
 	// marker: 조각 종류 (예: 0xE1 = APP1, 0xE2 = APP2). 여러 번 부르면 나중에 넣은 조각이 앞에 온다
 	public static byte[] withSegment(byte[] jpeg, int marker, byte[] payload) {
 		int segmentLength = 2 + payload.length;
+		if (segmentLength > 0xFFFF) {
+			throw new IllegalArgumentException("segment too long for JPEG: " + segmentLength);
+		}
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		out.write(jpeg, 0, 2);
 		out.write(0xFF);
