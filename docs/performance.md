@@ -192,22 +192,49 @@ EC2와 RDS 지표는 CloudWatch → 지표 → 모든 지표에서 EC2의 인스
 
 2026-11-26부터 nginx 기록이 같은 로그 그룹의 `macros-nginx-1` 스트림으로 간다 (5절의 첫 조각, PR #61). 그 전 기록은 CloudWatch에 없고, 서버에 남아 있던 것을 11-26에 센 숫자가 8절에 있다. 4.1의 앱 쪽 쿼리와 경보는 JSON 칸(`log.logger`, `message`, `log.level`)으로 고르므로 nginx의 글자 줄은 섞이지 않는다. nginx 기록은(같은 날 PR #62부터 app 기록도) `mode: non-blocking`으로 보내서, CloudWatch가 오래 막히면 메모리 4 MB를 넘친 줄은 버려진다 (그 시간의 숫자가 빈다). nginx의 에러 줄(502, 413 등. nginx가 사용자 IP를 함께 적는다)은 CloudWatch로 보내지 않고 컨테이너 안 파일에만 남긴다 (`nginx/default.conf`의 `error_log`). 아래처럼 본다.
 
-사람이 받은 응답 시간 (bot을 뺀 것, `rt`는 초 단위):
+사람이 받은 응답 시간 (bot을 뺀 것, `rt`는 초 단위). 화면을 나누는 규칙과 bot 규칙은 서버 기록을 세던 `nginx_perf.py`(기록 저장소)와 같다. 2026-11-27에 처음 돌려 첫 24시간을 뽑았고, 같은 24시간을 서버 기록으로 다시 센 숫자와 화면마다 건수, p50, p95가 같았다 (8절):
 
 ```
-filter @logStream like /nginx/
+filter @logStream = "macros-nginx-1"
 | parse @message /^\S+ \S+ "(?<method>[A-Z]+) (?<path>[^ "]+)[^"]*" (?<status>\d{3}) (?<bytes>\d+) (?<rt>[\d.]+) "(?<ua>[^"]*)"/
-| filter ispresent(rt) and ua not like /(?i)(bot|crawl|spider|curl|python|headless)/
-| parse path /^(?<head>\/[a-z]*)(?<num>\/\d+)?(?<tail>\/[a-z]+)?/
-| stats count(*) as n, pct(rt, 50) as p50, pct(rt, 95) as p95 by method, head, tail, status
+| filter ispresent(rt) and ua not like /(?i)(bot|crawl|spider|curl|python|go-http|headless|wget|scan|zgrab|censys|expanse|nmap|masscan|java\/|okhttp|node-fetch|axios|httpclient|libwww|facebookexternalhit|preview|slurp|semrush|ahrefs|dataprovider|l9explore|nuclei|fasthttp|operator-stats|yeti\/|daum\/|googleother|inspectiontool|^-$|^$)/
+| parse path /^(?<c1>\/)(?:\?page=\d+)?$/
+| parse path /^(?<c2>\/posts)\/\d+(?:\?.*)?$/
+| parse path /^(?<c3>\/images)\//
+| parse path /^(?<c4>\/posts\/new)$/
+| parse path /^(?<c5>\/posts)$/
+| parse path /^\/posts\/\d+(?<c6>\/confirm)$/
+| parse path /^\/posts\/\d+(?<c7>\/comments)(?:\/\d+\/replies)?$/
+| parse path /^(?<c8>\/api\/posts)\/\d+\/like/
+| parse path /^(?<c9>\/notice)(?:\/\d+)?$/
+| parse path /^(?<c10>\/feedback)(?:\/\d+)?(?:\?.*)?$/
+| parse path /^\/(?<c11>css|js)\//
+| fields coalesce(coalesce(coalesce(c1, c2), coalesce(c3, c4)), coalesce(coalesce(coalesce(c5, c6), coalesce(c7, c8)), coalesce(coalesce(c9, c10), c11))) as cat
+| filter ispresent(cat) and status like /^(200|302|303)$/
+| stats count(*) as n, pct(rt, 50) as p50, pct(rt, 95) as p95, max(rt) as worst by method, cat, status
 | sort n desc
-| limit 40
+| limit 20
+```
+
+- `cat`은 맞은 화면 규칙의 이름표다: `GET /` 피드, `GET /posts` 글 상세, `/images` 사진, `/posts/new` 글쓰기 화면, `POST /posts` 올리기, `/confirm` 확정, `/comments` 댓글 쓰기, `/api/posts` 좋아요, `/notice` 공지, `/feedback` 피드백, `css`와 `js`
+- 1초 넘은 요청 수는 셋째 줄 끝에 `and rt > 1`을 더하고, `stats`를 `count(*) as over_1s by method, cat, status`로 바꾼다
+- 정확한 기간(예: 하루)으로 자르려면 첫 줄에 `and toMillis(@timestamp) >= <시작 밀리초> and toMillis(@timestamp) < <끝 밀리초>`를 더한다
+- 처음 돌리며 고친 것 (11-27): 사진 주소 이름의 앞부분이 따로 잡혀 사진이 여러 줄로 갈리던 묶음을 화면 규칙으로 바꿨고, bot 규칙을 `nginx_perf.py`만큼 늘렸다. `coalesce`는 인자를 11개 주면 `Too Many Arguments`로 거절되어 두 개씩 묶었다. `parse`로 만든 칸을 `fields`에 다시 적으면 `Ephemeral field is already defined`로 거절된다. 오류 내용은 결과 칸에는 "실패함"만 나오고 화면 위쪽 알림에 나온다
+- 콘솔 위쪽의 "N개 중 일치하는 M개"의 N은 결과 줄의 합과 맞지 않는다. 줄 수는 `stats`의 합으로 본다
+
+상태 코드별 줄 수 (bot 포함). 합을 서버의 `docker logs --since <시작> --until <끝> macros-nginx-1 2>&1 | wc -l`과 견주면 non-blocking으로 버려진 줄이 있는지 보인다. 읽지 못한 줄(nginx가 켜질 때의 알림, 깨진 요청)은 상태 칸이 빈 줄로 나온다:
+
+```
+filter @logStream = "macros-nginx-1"
+| parse @message /^\S+ \S+ "(?<method>[A-Z]+) (?<path>[^ "]+)[^"]*" (?<status>\d{3}) (?<bytes>\d+) (?<rt>[\d.]+) "(?<ua>[^"]*)"/
+| stats count(*) as n by status
+| sort n desc
 ```
 
 배포 때 502 (1분 단위):
 
 ```
-filter @logStream like /nginx/
+filter @logStream = "macros-nginx-1"
 | parse @message /" (?<status>\d{3}) \d+ [\d.]+ "/
 | filter status = "502"
 | stats count(*) as n by bin(1m)
@@ -247,7 +274,7 @@ SPRINTS의 그 스프린트 메모에 한 줄을 남긴다. 예:
 
 하나를 시작할 때 Jira 일감을 따로 만들어 그 주의 스프린트에 넣는다 (S7부터의 방식).
 
-1. **응답 시간 쌓기 (JM-91, S7)**: 4.1의 쿼리를 저장하고 첫 숫자를 3절에 채운다. nginx 기록도 CloudWatch로 보낸다 (11-26에 보냄). 순서는 아래. 스프린트를 닫을 때 4.6의 한 줄
+1. **응답 시간 쌓기 (JM-91, S7)**: 4.1의 쿼리를 저장하고 첫 숫자를 3절에 채운다. nginx 기록도 CloudWatch로 보낸다 (11-26에 보냄, 첫 24시간 숫자는 11-27에 뽑아 8절에). 순서는 아래. 스프린트를 닫을 때 4.6의 한 줄
 2. **LLM 응답 속도**: AI 분석과 직접 적기 호출을 날마다 p50, p95로. 실패와 늦은 응답(예: 10초 넘음)의 수도
 3. **CPU와 메모리**: CloudWatch 에이전트로 메모리와 디스크 사용률 (사용자 지정 지표 몇 개, 무료 10개 안)
 4. **AWS에서 한눈에**: CloudWatch 대시보드 하나 (응답 시간, 502, LLM 시간, CPU, 메모리)와 경보 (예: p95가 1초 넘음, 메모리 90% 넘음). 대시보드는 3개, 경보는 10개까지 무료다 (지금 경보는 에러와 사진 검토)
@@ -299,6 +326,6 @@ SPRINTS의 그 스프린트 메모에 한 줄을 남긴다. 예:
 | 2026-11-23 | JM-62 | 무중단 배포: app 두 자리(app1, app2)를 번갈아 쓰고, 새 자리를 health 확인과 데우기 뒤 nginx reload로 넘김 | 내 PC 리허설(운영 이미지 cbb22dd → cb41f79, 0.2초마다 첫 화면): 502 59건, 12.5초 끊김, 끊긴 뒤 첫 화면 2,761 ms, 피드백 첫 요청 1,482 ms. 운영 nginx 기록(11-04 ~ 11-23): 502 88건, 배포 뒤 첫 요청 가운데 피드 3,259 ms, 글 상세 2,888 ms, 공지 2,505 ms | 502 0건 (처음 옮겨 오는 배포 549번, 보통 배포 두 번 각 500번 요청), 배포 동안 첫 화면 최대 82 ms, 바꿔치기 직후 첫 화면 22 ms와 8 ms, 피드백 9 ms와 14 ms. 배포 한 번 43 ~ 49초, app 둘이 같이 뜰 때 메모리 합 최대 934 MiB(내 PC). 운영(PR #56 배포를 머지 직후부터 밖에서 1초마다 600번, 11-23 15:30 ~ 15:40): 502를 포함한 실패 0건, 배포하는 2분 동안 가운데 99 ms와 가장 느린 것 205 ms, 배포 직후 화면마다 첫 요청 42 ~ 129 ms (바꾸기 전 운영: 배포 15번에 502 87건, 배포 뒤 첫 요청 가운데 2.5 ~ 3.3초) | 기록 저장소 `update_picture/JM-62` |
 | 2026-11-23 | JM-52 | 검색을 더함: 닉네임과 음식 이름(AI의 답과 확정한 이름, JSON_TABLE)의 일부로 찾기 | 검색 없음. 같은 로컬 DB의 피드 두 쿼리(한 쪽, 개수) 합: 글 100개 약 0.3 ~ 0.5 ms, 1천 개 약 0.4 ~ 0.7 ms, 1만 개 약 1 ~ 4 ms | 검색 두 쿼리 합: 글 100개 약 2 ms, 1천 개 약 10 ~ 25 ms, 1만 개 약 70 ~ 250 ms. 같은 PC에서 두 번 쟀는데(draft1, PR 전 검토 뒤) 잴 때의 PC 상태로 두 배쯤 달라 범위로 적는다. 검토 뒤 더한 띄어쓰기 빼기(`REPLACE`)는 같은 실행 안에서 번갈아 재어 5% 안쪽으로 느렸다 (1만 개, 맞는 글 없음: 62 → 67 ms). 요청마다 쿼리 4개(피드와 같음, N+1 없음), 맞는 글이 없으면 1개. 운영 검색 시간은 배포 뒤 4.1로 잰다 (지금 글 약 130개) | 기록 저장소 `update_picture/JM-52` |
 | 2026-11-24 | JM-83 | 음식 태그와 필터: 분석 응답에 태그 칸, 지난 글은 사진을 다시 보내 태그만 고름, 피드와 검색을 태그와 칼로리 범위로 거름 | AI 응답(시험 사진 20장, 실제 Gemini, 같은 사진을 번갈아): 실패 0, 시간 가운데 2,052 ms (p90 3,267), 입력 토큰 가운데 1,329, 출력 139. 필터 없음 | 실패 0, 시간 가운데 2,279 ms (p90 3,441), 입력 1,766, 출력 212. 태그만 묻는 호출 1,602 ms, 입력 1,528, 출력 60. 필터를 고른 화면도 쿼리 4개. 로컬 가짜 글로 잰 필터 두 쿼리(한 쪽, 개수) 합: 1천 개 1.3 ~ 5.7 ms, 1만 개 7 ~ 23 ms (같은 DB의 피드 1.3, 2.0 ms) | 기록 저장소 `update_picture/JM-83` |
-| 2026-11-26 | JM-91 | nginx 접속 기록을 서버 안 파일에서 CloudWatch(`macros-nginx-1`, 90일, non-blocking)로 | 서버에 남아 있던 기록 전부(11-08 20:43 ~ 11-26 09:44, 7만 4천 줄. 앞쪽은 10 MB 파일 세 개를 넘쳐 이미 지워짐)를 머지 직전에 셈: 사람의 피드 p50 32 ms, p95 92 ms (2,764건), 글 상세 48 ms, 437 ms, 사진 144 ms, 2,591 ms (13,258건), 올리기 1,919 ms, 6,195 ms (129건). 502 65건이고 마지막은 11-20 19:03 (11-23 무중단 배포 뒤 0건) | CloudWatch의 첫 숫자는 하루 뒤 4.2의 쿼리로 (다음 PR에 적는다) | 기록 저장소 `update_picture/JM-91/before-nginx-cloudwatch-2026-11-26.json` |
+| 2026-11-26 | JM-91 | nginx 접속 기록을 서버 안 파일에서 CloudWatch(`macros-nginx-1`, 90일, non-blocking)로 | 서버에 남아 있던 기록 전부(11-08 20:43 ~ 11-26 09:44, 7만 4천 줄. 앞쪽은 10 MB 파일 세 개를 넘쳐 이미 지워짐)를 머지 직전에 셈: 사람의 피드 p50 32 ms, p95 92 ms (2,764건), 글 상세 48 ms, 437 ms, 사진 144 ms, 2,591 ms (13,258건), 올리기 1,919 ms, 6,195 ms (129건). 502 65건이고 마지막은 11-20 19:03 (11-23 무중단 배포 뒤 0건) | 배포 동안 밖에서 0.5초마다 첫 화면 1,791번에 실패 0 (nginx가 바뀌던 1초에 한 요청 2.7초. 같은 날 app 기록을 바꾼 PR #62의 배포도 1,436번에 실패 0). CloudWatch 첫 24시간(11-26 10:24 ~ 11-27 10:24, 배포 네 번 포함, 4.2의 쿼리): 7,252줄로 서버의 Docker 기록과 줄 수가 같아 버려진 줄 0, IP 든 줄 0, 502 0건. 사람의 피드 p50 48 ms, p95 136 ms (189건), 글 상세 66 ms, 819 ms (93건), 사진 180 ms, 599 ms (430건), 올리기 2,134 ms, 8,000 ms (7건), 1초 넘은 요청은 사진 7건과 올리기 7건. 같은 24시간을 `nginx_perf.py`로 센 숫자와 화면마다 같다. 기록을 보내는 곳만 바꿔 응답 시간이 바뀔 까닭은 없고, 하루치는 건수가 적어 전과의 차이는 주 단위로 본다 | 기록 저장소 `update_picture/JM-91` (`before-nginx-cloudwatch-2026-11-26.json`, `first-day-cloudwatch-2026-11-27.txt`) |
 | 2026-11-26 | JM-95 | 사진 주소가 사진 이름으로 글을 찾아 보이는 글의 사진만 보냄 (트랜잭션 없이 SQL 한 문장, posts에 사진 이름 색인 둘) | 로컬: 사진 요청에 DB 문장 0. 사진 한 장의 앱 쪽 p50 1.0, 0.5 ms (썸네일 하나씩 240번, 두 판). 따로 만든 DB의 글 10만 개에서 사진 이름으로 글 찾기 13 ~ 25 ms (색인 없음). 운영(서버에서 요청): 지운 글의 사진 40장 200 평균 0.079초, 보이는 썸네일 20장 평균 0.082초. 앱 쪽 사진 7일 p50 92 ms, p95 799 ms (11-25) | 로컬: DB 문장 1 (SELECT). 앱 쪽 p50 2.0 (서버를 켠 직후), 1.0 ms로 +0.5 ~ 1 ms. 글 찾기 0.39 ms (개발 DB, 두 색인을 합쳐 씀), 글 10만 개에서 0.26 ~ 0.37 ms. 운영: 지운 글의 사진 40장 404 평균 0.025초 (S3를 읽지 않음), 보이는 썸네일 20장 평균 0.085초 (20장을 한 번씩이라 +3 ms는 흔들림과 못 가름). 배포 동안 밖에서 1초마다 1,200번 실패 0. 앱 쪽 사진 7일은 S8 마감 때 (같은 주에 JM-102가 배포되면 날짜를 나눠 본다) | 기록 저장소 `update_picture/JM-95` |
 | 2026-11-26 | JM-108 | PNG는 읽기 전에 그림을 펼치는 데 필요한 조각과 촬영 정보 조각(eXIf)만 남기고 나머지는 버림 (`PngChunks`) | 로컬, 힙 512 MB, SerialGC, main(`e2e16ec`)과 같은 시각에 번갈아: 글자 조각이 큰 100 x 100 시험 PNG 셋이 old 26 MiB와 190 MiB 모두 OutOfMemoryError (6번, 550 ~ 1,242 ms). 보통 사진의 처리 시간(2번 데운 뒤 5번의 가운데 값, 두 판): RGB 7071 x 7071 685, 690 ms, 투명 팔레트 7071 x 7071 732, 740 ms, 화면 캡처 79, 82 ms, XMP 30 KB 33, 34 ms, JPEG 12 MP 411, 400 ms | 시험 PNG 셋 6번 모두 보통처럼 처리 (345 ~ 399 ms). 보통 사진 9장의 본 사진과 썸네일 18개가 main과 바이트까지 같음. 690, 689 ms, 732, 730 ms, 82, 81 ms, 28, 27 ms (글자 조각을 읽지 않음), 401, 403 ms로 판마다 오르내리는 폭 안. 운영: 배포 동안 밖에서 1초마다 1,200번 실패 0 | 기록 저장소 `update_picture/JM-108` |
