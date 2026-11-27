@@ -40,9 +40,9 @@ import net.coobird.thumbnailator.Thumbnails;
 import net.coobird.thumbnailator.geometry.Positions;
 
 // 올린 사진을 저장하기 전에 다듬는다. (기획서 6.2절)
-// 순서: 1. 진짜 사진인지 검사 → 2. 화소 수와 펼친 크기 검사 → 3. 위치, 촬영 시각 꺼내기
-//       → 4. 펼치기(큰 사진은 긴 변 2560으로 줄이면서) + 방향 바로잡기(회전 보정)
-//       → 5. 크기 줄이기 + JPEG로 새로 저장(EXIF 제거)
+// 순서: 1. 진짜 사진인지 검사 → 2. PNG면 쓰지 않는 조각 버리기 → 3. 화소 수와 펼친 크기 검사 → 4. 위치, 촬영 시각 꺼내기
+//       → 5. 펼치기(큰 사진은 긴 변 2560으로 줄이면서) + 방향 바로잡기(회전 보정)
+//       → 6. 크기 줄이기 + JPEG로 새로 저장(EXIF 제거)
 //
 // EXIF: 사진 파일 안에 숨어 있는 정보(촬영 시각, 카메라 기종, GPS 위치, 사진 방향 등)
 // → 그대로 공개하면 누구나 사진을 내려받아 작성자의 위치를 알 수 있어서, 공개하는 사진에는 절대 남기지 않는다.
@@ -105,22 +105,30 @@ public class ImageProcessor {
 			throw new BusinessException(ErrorCode.INVALID_IMAGE);
 		}
 
-		// 2. 사진 전체를 펼치기 전에 머리 부분만 먼저 읽어서, 화소가 너무 많거나 펼치면 너무 큰 사진을 거절한다.
-		// 통과하면 긴 변의 길이를 받아 둔다 (4에서 줄여 읽을지 정할 때 쓴다).
+		// 2. PNG면 그림을 펼치는 데 필요한 조각과 촬영 정보 조각(eXIf)만 남긴다 (JM-108, PngChunks). 아래 단계는 모두 남긴 파일로 한다.
+		// 글자나 색 정보 같은 조각은 이 앱이 쓰지 않는데, 압축한 조각은 풀면 수백 MB가 되기도 한다.
+		// 자바의 PNG 읽기(3과 5)는 글자 조각을 하나에 256 KB까지 풀지만 조각 수에는 한도가 없고,
+		// metadata-extractor(4)는 조각 하나를 크기 한도 없이 푼다. 그래서 이런 조각은 읽기 전에 버린다.
+		if (startsWith(original, PNG_SIGNATURE)) {
+			original = PngChunks.keepNeeded(original);
+		}
+
+		// 3. 사진 전체를 펼치기 전에 머리 부분만 먼저 읽어서, 화소가 너무 많거나 펼치면 너무 큰 사진을 거절한다.
+		// 통과하면 긴 변의 길이를 받아 둔다 (5에서 줄여 읽을지 정할 때 쓴다).
 		int longSide = checkPixelCount(original);
 
-		// 3. EXIF를 지우기 전에, 원본에서 위치와 촬영 시각을 꺼내 둔다. (EXIF를 지운 뒤에는 읽을 수 없다)
+		// 4. EXIF를 지우기 전에, 원본에서 위치와 촬영 시각을 꺼내 둔다. (EXIF를 지운 뒤에는 읽을 수 없다)
 		PhotoMetadata metadata = readMetadata(original);
 
 		try {
-			// 4. 사진을 펼치면서 EXIF의 방향 정보를 반영한다.
+			// 5. 사진을 펼치면서 EXIF의 방향 정보를 반영한다.
 			// 휴대폰은 세로 사진도 가로로 저장하고 "90도 돌려서 보여 줘"라는 방향 정보만 EXIF에 적어 둔다.
 			// EXIF를 지우기 전에 이 방향대로 실제로 돌려 두지 않으면, 세로 사진이 눕혀져 보인다.
 			// 큰 사진은 펼치면서 긴 변 2560으로 줄이고, 줄인 그림을 돌린다 (readUpright).
 			BufferedImage upright = readUpright(original, longSide);
 			BufferedImage rgb = removeTransparency(upright);
 
-			// 5. 크기를 줄여 JPEG로 새로 저장한다.
+			// 6. 크기를 줄여 JPEG로 새로 저장한다.
 			// 그림(픽셀)만 새 파일로 쓰고 EXIF는 옮겨 적지 않으므로, 이 과정에서 위치 정보 등이 모두 사라진다.
 			byte[] main = toJpeg(fitWithin(rgb, MAIN_MAX_SIZE));
 			byte[] thumbnail = toJpeg(Thumbnails.of(rgb).size(THUMBNAIL_SIZE, THUMBNAIL_SIZE).crop(Positions.CENTER));

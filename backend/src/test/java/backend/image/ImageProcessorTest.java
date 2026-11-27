@@ -13,14 +13,22 @@ import static org.mockito.Mockito.verify;
 
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Arrays;
 
 import javax.imageio.IIOException;
 import javax.imageio.ImageIO;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
+
+import com.drew.imaging.ImageMetadataReader;
+import com.drew.metadata.Metadata;
+import com.drew.metadata.exif.GpsDirectory;
 
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
@@ -303,6 +311,86 @@ class ImageProcessorTest {
 				.isInstanceOf(OutOfMemoryError.class);
 	}
 
+	// ---- PNG의 쓰지 않는 조각 (JM-108) ----
+
+	@Test
+	void PNG의_촬영_정보_조각에서_GPS_위치와_촬영_시각을_읽고_저장할_파일에는_남기지_않는다() throws Exception {
+		// 쓰지 않는 조각(tEXt)도 함께 넣어, 조각을 버리고 새 배열을 만드는 길로 처리되게 한다
+		byte[] withGps = TestImages.withPngGps(TestImages.rgbPng(200, 100), 37.566535, 126.977969, "2026:10:29 12:30:00");
+		byte[] photo = TestImages.withChunk(withGps, "tEXt", "Software\0editor".getBytes(StandardCharsets.ISO_8859_1));
+		// 처리 전에는 GPS가 들어 있다 (시험용 사진이 제대로 만들어졌는지 먼저 확인)
+		assertThat(hasGps(photo)).isTrue();
+
+		ProcessedImage result = processor.process(upload(photo));
+
+		assertThat(result.metadata().latitude()).isCloseTo(37.566535, within(0.000001));
+		assertThat(result.metadata().longitude()).isCloseTo(126.977969, within(0.000001));
+		assertThat(result.metadata().takenAt()).isEqualTo(Instant.parse("2026-10-29T03:30:00Z"));
+		// 공개되는 파일 두 개에는 GPS가 없다
+		assertThat(hasGps(result.main())).isFalse();
+		assertThat(hasGps(result.thumbnail())).isFalse();
+	}
+
+	@Test
+	void 처리는_쓰지_않는_조각을_버린_파일로_한다() throws IOException {
+		// 펼치기(readUpright)가 받은 파일이 조각을 넣기 전의 PNG와 같아야 한다 → 버린 조각은 자바의 PNG 읽기에 닿지 않는다
+		ImageProcessor watched = spy(processor);
+		byte[] png = TestImages.rgbPng(100, 100);
+
+		watched.process(upload(TestImages.withChunk(png, "iTXt", new byte[] {1, 2, 3})));
+
+		// eq: 배열은 같은 배열인지가 아니라 내용이 같은지로 비교한다
+		verify(watched).readUpright(eq(png), anyInt());
+	}
+
+	@Test
+	void 글자_조각이_깨져_있어도_읽기_전에_버리므로_사진을_받는다() throws IOException {
+		// 압축 내용이 깨진 글자 조각(zTXt). 고치기 전에는 자바의 PNG 읽기가 이 조각을 읽다 실패해 "읽을 수 없는 사진"(400)이었다
+		// RGB PNG라 자바가 머리 검사(3)에서부터 조각들을 읽는다 → 조각을 버리는 일이 머리 검사보다 늦어지면 이 시험이 실패한다
+		ByteArrayOutputStream text = new ByteArrayOutputStream();
+		text.writeBytes("Comment".getBytes(StandardCharsets.ISO_8859_1));
+		text.write(0); // 이름 끝
+		text.write(0); // 압축 방식 0 (deflate)
+		text.writeBytes(new byte[] {1, 2, 3, 4, 5, 6, 7, 8}); // zlib 형식이 아닌 내용
+		byte[] photo = TestImages.withChunk(TestImages.rgbPng(100, 100), "zTXt", text.toByteArray());
+
+		assertSize(processor.process(upload(photo)).main(), 100, 100);
+	}
+
+	@Test
+	void 종류_이름이_규칙에_맞지_않는_조각이_있어도_PNG의_위치와_촬영_시각을_읽는다() {
+		// 종류에 숫자가 든 조각("ab1c"). 자바는 모르는 조각으로 보고 넘어가서 사진은 올라갔지만,
+		// 고치기 전에는 metadata-extractor가 이 조각에서 멈춰 위치와 촬영 시각을 하나도 읽지 못했다
+		// → 조각을 버리는 일이 위치 읽기(4)보다 늦어지면 이 시험이 실패한다
+		byte[] withGps = TestImages.withPngGps(TestImages.rgbPng(200, 100), 37.566535, 126.977969, "2026:10:29 12:30:00");
+		byte[] photo = TestImages.withChunk(withGps, "ab1c", new byte[] {1, 2, 3});
+
+		PhotoMetadata metadata = processor.process(upload(photo)).metadata();
+
+		assertThat(metadata.hasLocation()).isTrue();
+		assertThat(metadata.takenAt()).isEqualTo(Instant.parse("2026-10-29T03:30:00Z"));
+	}
+
+	@Test
+	void IEND의_CRC가_빠진_PNG도_받는다() throws IOException {
+		// 끝 표시(IEND)의 CRC 4바이트가 없는 PNG. 자바는 이런 사진도 받아서, 고치기 전에도 올라가던 사진이다
+		byte[] png = TestImages.rgbPng(100, 100);
+
+		assertSize(processor.process(upload(Arrays.copyOf(png, png.length - 4))).main(), 100, 100);
+	}
+
+	@Test
+	void 조각의_길이가_파일_끝을_넘는_PNG는_INVALID_IMAGE로_거절한다() {
+		// 길이를 1,000,000으로 적었지만 뒤에 그만큼의 바이트가 없는 조각
+		byte[] broken = TestImages.insertAfterHeader(TestImages.rgbPng(100, 100),
+				ByteBuffer.allocate(8).putInt(1_000_000).put("tEXt".getBytes(StandardCharsets.US_ASCII)).array());
+
+		assertThatThrownBy(() -> processor.process(upload(broken)))
+				.isInstanceOf(BusinessException.class)
+				.extracting(e -> ((BusinessException) e).getErrorCode())
+				.isEqualTo(ErrorCode.INVALID_IMAGE);
+	}
+
 	// ---- 아주 넓은 사진을 줄여 읽는 목표 (JM-105) ----
 
 	@Test
@@ -341,5 +429,11 @@ class ImageProcessorTest {
 		BufferedImage image = read(data);
 		assertThat(image.getWidth()).isEqualTo(width);
 		assertThat(image.getHeight()).isEqualTo(height);
+	}
+
+	// 파일 안에 GPS 칸이 있는지 (앱과 같은 metadata-extractor로 읽어 본다)
+	private boolean hasGps(byte[] data) throws Exception {
+		Metadata metadata = ImageMetadataReader.readMetadata(new ByteArrayInputStream(data));
+		return metadata.getFirstDirectoryOfType(GpsDirectory.class) != null;
 	}
 }
