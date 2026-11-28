@@ -23,6 +23,7 @@ import backend.analysis.service.FoodAnalysisService;
 import backend.comment.service.CommentService;
 import backend.common.error.BusinessException;
 import backend.common.error.ErrorCode;
+import backend.common.web.AppAgent;
 import backend.common.web.PageNav;
 import backend.image.ImageProcessor;
 import backend.image.ImageStorage;
@@ -31,13 +32,18 @@ import backend.image.ProcessedImage;
 import backend.location.model.entity.PostLocation;
 import backend.location.model.repository.PostLocationRepository;
 import backend.location.model.vo.GeoPoint;
+import backend.post.model.dto.AppFeedPage;
+import backend.post.model.dto.AppPostCard;
+import backend.post.model.dto.AppPostDetail;
 import backend.post.model.dto.FeedFilter;
 import backend.post.model.dto.FeedPage;
 import backend.post.model.dto.PostCreateForm;
 import backend.post.model.dto.PostSummary;
 import backend.post.model.dto.SearchResult;
+import backend.post.model.entity.AppPostView;
 import backend.post.model.entity.Post;
 import backend.post.model.entity.PostStatus;
+import backend.post.model.repository.AppPostViewRepository;
 import backend.post.model.repository.PostFilterQuery;
 import backend.post.model.repository.PostRepository;
 import lombok.RequiredArgsConstructor;
@@ -65,6 +71,9 @@ public class PostService {
 	// 피드 필터로 글을 찾는다 (JM-83)
 	private final PostFilterQuery postFilterQuery;
 	private final PostLocationRepository postLocationRepository;
+	// 앱에서 글 상세를 연 기록과 그 하루 상한 (JM-90)
+	private final AppPostViewRepository appPostViewRepository;
+	private final AppViewDailyLimit appViewDailyLimit;
 	private final FoodAnalysisRepository foodAnalysisRepository;
 	private final FoodAnalysisService foodAnalysisService;
 	private final CommentService commentService;
@@ -241,11 +250,8 @@ public class PostService {
 
 	// 글 목록을 화면용 PostSummary 목록으로 바꾼다 (피드, 관리자 화면의 검토할 사진)
 	private List<PostSummary> summariesOf(List<Post> pagePosts) {
-		// 이번 화면의 글들의 분석 기록을 한 번에 읽어 온다. 글마다 따로 읽으면 글 20개에 쿼리가 20번 더 나간다 (N+1 문제).
-		// toMap: 글 번호로 바로 찾을 수 있게 "글 번호 → 분석 기록" 지도로 만든다.
 		List<Long> postIds = pagePosts.stream().map(Post::getId).toList();
-		Map<Long, FoodAnalysis> analyses = foodAnalysisRepository.findAllById(postIds).stream()
-				.collect(Collectors.toMap(FoodAnalysis::getPostId, Function.identity()));
+		Map<Long, FoodAnalysis> analyses = analysesOf(postIds);
 		// 댓글 수도 글 20개 치를 쿼리 한 번으로 (댓글이 없는 글은 지도에 없으므로 0으로 본다)
 		Map<Long, Long> commentCounts = commentService.countByPostIds(postIds);
 
@@ -253,6 +259,13 @@ public class PostService {
 		return pagePosts.stream()
 				.map(post -> PostSummary.from(post, analyses.get(post.getId()), commentCounts.getOrDefault(post.getId(), 0L)))
 				.toList();
+	}
+
+	// 이번 화면의 글들의 분석 기록을 한 번에 읽어 온다. 글마다 따로 읽으면 글 20개에 쿼리가 20번 더 나간다 (N+1 문제).
+	// toMap: 글 번호로 바로 찾을 수 있게 "글 번호 → 분석 기록" 지도로 만든다. (웹 피드와 앱 피드가 같이 쓴다)
+	private Map<Long, FoodAnalysis> analysesOf(List<Long> postIds) {
+		return foodAnalysisRepository.findAllById(postIds).stream()
+				.collect(Collectors.toMap(FoodAnalysis::getPostId, Function.identity()));
 	}
 
 	// 최신 글(번호 큰 순)부터 PAGE_SIZE개. Page로 받으면 전체 글 수도 세어 와서 전체 쪽 수를 알 수 있다 (쿼리 2번: 목록 + 개수)
@@ -272,6 +285,38 @@ public class PostService {
 		}
 		// 분석 기록도 넘겨서 사진을 가릴 글인지(JM-80) 정한다. 화면의 분석 결과 칸은 Controller가 따로 받는다
 		return PostSummary.from(findActivePost(id), foodAnalysisRepository.findById(id).orElse(null), 0);
+	}
+
+	// ---- 앱 (JM-90, 기획서 19.2, 19.3) ----
+
+	// 앱의 피드 한 쪽: 웹 피드(getFeed)와 같은 글, 같은 순서다 (ACTIVE만, 최신순 24개씩. loadPage를 같이 쓴다).
+	// 웹과 다른 점 하나: 범위를 넘는 쪽이면 마지막 쪽을 다시 읽지 않고 빈 목록을 준다. 앱은 빈 목록을 보고 그만 받는다.
+	// 0이나 음수는 웹처럼 1쪽, 아주 큰 쪽 번호는 DB가 읽을 수 있는 가장 큰 쪽으로 본다 (PageNav.readablePage, 그런 쪽은 빈 목록)
+	@Transactional(readOnly = true)
+	public AppFeedPage getAppFeed(int requestedPage) {
+		Page<Post> page = loadPage(PageNav.readablePage(requestedPage, PAGE_SIZE));
+		List<Post> posts = page.getContent();
+		Map<Long, FoodAnalysis> analyses = analysesOf(posts.stream().map(Post::getId).toList());
+		List<AppPostCard> cards = posts.stream().map(post -> AppPostCard.from(post, analyses.get(post.getId()))).toList();
+		return new AppFeedPage(cards, page.getNumber() + 1, page.getTotalPages());
+	}
+
+	// 앱의 글 상세: 웹 상세 화면과 같은 글(ACTIVE만)과 같은 분석 결과. 없거나 지운 글이면 POST_NOT_FOUND (404)
+	// 웹 조회수는 올리지 않는다. 앱에서 연 것은 앱이 따로 recordAppView를 불러 센다 (기획서 19.3)
+	@Transactional(readOnly = true)
+	public AppPostDetail getAppDetail(Long id) {
+		return AppPostDetail.from(findActivePost(id), foodAnalysisService.getView(id));
+	}
+
+	// 앱에서 글 상세를 한 번 연 기록을 한 줄 남긴다 (app_post_views). 없거나 지운 글이면 POST_NOT_FOUND (404)
+	// 오늘 받을 수 있는 기록 수를 다 썼으면 남기지 않는다 (AppViewDailyLimit). 앱이 할 일은 없으므로 응답은 그대로 둔다
+	// agent: 앱 이름표에서 읽은 플랫폼, 빌드, 앱 버전 (모양은 Controller가 먼저 확인한다)
+	@Transactional
+	public void recordAppView(Long id, AppAgent agent) {
+		findActivePost(id);
+		if (appViewDailyLimit.tryCount()) {
+			appPostViewRepository.save(new AppPostView(id, agent));
+		}
 	}
 
 	// 좋아요 1 올리고, 올린 뒤의 수를 돌려준다 (JM-59).

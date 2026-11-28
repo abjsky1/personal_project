@@ -76,6 +76,10 @@ public enum ErrorCode {
 	// 404: notices.json에 없는 공지 번호
 	NOTICE_NOT_FOUND(HttpStatus.NOT_FOUND, "공지를 찾을 수 없습니다."),
 
+	// ---- 앱 (JM-90) ----
+	// 400: 앱 조회 기록(POST /api/posts/{id}/app-view)에 앱 이름표(User-Agent)가 없거나 모양이 다름 (AppAgent, 기획서 19.3)
+	INVALID_APP_AGENT(HttpStatus.BAD_REQUEST, "앱 정보(User-Agent)가 올바르지 않습니다."),
+
 	// ---- 운영자 API ----
 	// 401: X-Admin-Token 헤더가 없거나 서버의 토큰과 다름
 	ADMIN_UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "운영자 인증에 실패했습니다."),
