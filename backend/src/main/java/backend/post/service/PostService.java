@@ -71,8 +71,9 @@ public class PostService {
 	// 피드 필터로 글을 찾는다 (JM-83)
 	private final PostFilterQuery postFilterQuery;
 	private final PostLocationRepository postLocationRepository;
-	// 앱에서 글 상세를 연 기록 (JM-90)
+	// 앱에서 글 상세를 연 기록과 그 하루 상한 (JM-90)
 	private final AppPostViewRepository appPostViewRepository;
+	private final AppViewDailyLimit appViewDailyLimit;
 	private final FoodAnalysisRepository foodAnalysisRepository;
 	private final FoodAnalysisService foodAnalysisService;
 	private final CommentService commentService;
@@ -308,11 +309,14 @@ public class PostService {
 	}
 
 	// 앱에서 글 상세를 한 번 연 기록을 한 줄 남긴다 (app_post_views). 없거나 지운 글이면 POST_NOT_FOUND (404)
+	// 오늘 받을 수 있는 기록 수를 다 썼으면 남기지 않는다 (AppViewDailyLimit). 앱이 할 일은 없으므로 응답은 그대로 둔다
 	// agent: 앱 이름표에서 읽은 플랫폼, 빌드, 앱 버전 (모양은 Controller가 먼저 확인한다)
 	@Transactional
 	public void recordAppView(Long id, AppAgent agent) {
 		findActivePost(id);
-		appPostViewRepository.save(new AppPostView(id, agent));
+		if (appViewDailyLimit.tryCount()) {
+			appPostViewRepository.save(new AppPostView(id, agent));
+		}
 	}
 
 	// 좋아요 1 올리고, 올린 뒤의 수를 돌려준다 (JM-59).

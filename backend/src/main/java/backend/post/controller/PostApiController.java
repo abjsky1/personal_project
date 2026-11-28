@@ -40,9 +40,10 @@ public class PostApiController {
 	}
 
 	// 앱에서 글 상세를 한 번 열었다는 기록. 앱은 상세 화면을 처음 열 때만 부른다 (새로 고침은 세지 않는다)
-	// 응답 내용은 없다(204). 앱 이름표(User-Agent)가 없거나 모양이 다르면 400 INVALID_APP_AGENT, 없거나 지운 글이면 404
-	// 횟수 제한은 두지 않는다: 사용자에게 보이는 숫자가 아니라 운영자가 참고하는 기록이고(이름표는 누구나 흉내 낼 수 있다),
-	// 한 줄이 작아서 부풀려도 표가 빨리 커지지 않는다 (웹의 사용자 흐름 기록과 같은 수준). 실제로 부풀려지면 좋아요처럼 글마다 제한한다
+	// 응답 내용은 없다(204). 이름표를 먼저 본다: 앱 이름표(User-Agent)가 없거나 모양이 다르면 글이 없어도 400 INVALID_APP_AGENT,
+	// 이름표가 맞고 없거나 지운 글이면 404
+	// 하루에 받는 기록 수에 상한이 있다 (AppViewDailyLimit, 사용자 흐름 기록과 같은 방식). 넘은 기록은 남기지 않고 응답은 그대로 204다.
+	// 글마다의 횟수 제한(좋아요의 LikeRateLimiter)은 두지 않는다: 사용자에게 보이는 숫자가 아니라 운영자가 참고하는 기록이다
 	@PostMapping("/api/posts/{id}/app-view")
 	public ResponseEntity<Void> appView(@PathVariable Long id,
 			@RequestHeader(value = HttpHeaders.USER_AGENT, required = false) String userAgent) {

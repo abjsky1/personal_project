@@ -8,6 +8,7 @@ import backend.analysis.model.dto.FoodAnalysisView;
 import backend.analysis.model.dto.FoodAnalysisView.FoodRow;
 import backend.analysis.model.dto.FoodAnalysisView.Totals;
 import backend.analysis.model.entity.AnalysisStatus;
+import backend.analysis.model.entity.ConfirmMode;
 import backend.post.model.entity.Post;
 
 // 앱의 글 상세 (GET /api/posts/{id}, JM-90, 기획서 19.2). 웹 상세 화면에 보이는 값 가운데 앱의 첫 조각이 쓰는 것을 JSON으로 보낸다
@@ -29,6 +30,8 @@ public record AppPostDetail(
 	// 분석 결과: 웹 상세 화면과 같은 값이다 (FoodAnalysisService.getView). 확정 칸의 재료(후보, 직접 적기를 쓸 수 있는지)는
 	// 앱의 첫 조각이 읽기만 해서 넣지 않는다
 	// status: 분석 상태
+	// confirmMode: 올릴 때 고른 칼로리 확정 방식 (AUTO: AI가 바로 확정, USER: 내가 보고 확정, JM-74)
+	//   웹은 USER 글에만 REAL 줄을 그리고, 아직 확정하지 않았으면 그 자리에 "확정 전"을 둔다. 앱도 이 값으로 같게 그린다
 	// aiTotals: AI의 첫 답의 합계 (웹의 AI 줄). 분석이 끝난 글에만 있고, 그 밖에는 null
 	// confirmedTotals: 확정한 합계 (웹의 REAL 줄). 확정하지 않았으면 null
 	// foods: 음식 표의 줄. 음식마다 AI의 답(ai), 확정한 값(confirmed), 어떻게 했는지(change: NONE 확정 전, SAME AI와 같음,
@@ -37,6 +40,7 @@ public record AppPostDetail(
 	// comment: AI의 설명
 	public record Analysis(
 			AnalysisStatus status,
+			ConfirmMode confirmMode,
 			Totals aiTotals,
 			Totals confirmedTotals,
 			List<FoodRow> foods,
@@ -46,7 +50,10 @@ public record AppPostDetail(
 		static Analysis of(FoodAnalysisView view) {
 			// 분석이 끝나지 않은 글도 웹의 분석 결과에는 빈 합계(값이 모두 null)가 들어 있다. 앱에는 합계가 없다는 뜻으로 null을 보낸다
 			Totals aiTotals = view.aiTotals() == null || view.aiTotals().kcal() == null ? null : view.aiTotals();
-			return new Analysis(view.status(), aiTotals, view.confirmedTotals(), view.rows(), view.confidenceLabel(), view.comment());
+			// 확정 방식을 고르기 전(JM-74 전)에 올린 글은 AUTO로 본다 (웹과 같다: FoodAnalysisView.userMode)
+			ConfirmMode confirmMode = view.userMode() ? ConfirmMode.USER : ConfirmMode.AUTO;
+			return new Analysis(view.status(), confirmMode, aiTotals, view.confirmedTotals(), view.rows(), view.confidenceLabel(),
+					view.comment());
 		}
 	}
 

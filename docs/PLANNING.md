@@ -633,9 +633,9 @@ GitHub (main push) → GitHub Actions → 테스트 → Docker 이미지 빌드 
 |---|---|---|
 | GET | `/api/posts/{id}/analysis` | 분석 상태 `{"status":"PENDING"}`. 상세 화면의 JavaScript가 2초마다 최대 60초 확인하고, 끝나면 화면을 새로 연다. 없는 글, 삭제된 글, 분석 기록이 없는 글은 404 |
 | POST | `/api/posts/{id}/like` | 좋아요 1 올리기 (2026-11-11, JM-59). 응답 `{"likeCount":3}`, 상세 화면의 버튼이 부른다. 취소는 없다. 없는 글, 삭제된 글은 404, 한 글에 짧은 시간 동안 너무 많이 눌리면 429 `TOO_MANY_LIKES` |
-| GET | `/api/posts?page=1` | 앱의 피드 한 쪽 (2026-11-28, JM-90, 19.2). 웹 피드(`/`)와 같은 글, 같은 순서(ACTIVE만, 최신순 24개씩). 응답 `{"posts":[...],"page":1,"totalPages":9}`. 카드는 `id`, `nickname`, `thumbnailPath`(`/images/...`), `photoHeld`, `analysisStatus`, `totalKcal`(웹 카드와 같은 값: 확정했으면 확정 값, 아니면 AI의 첫 답), `createdAt`(UTC의 ISO-8601, 초까지). 마지막 쪽 뒤의 번호는 빈 목록(웹처럼 마지막 쪽으로 보내지 않는다), 0과 음수는 1쪽, 숫자가 아니면 400 |
-| GET | `/api/posts/{id}` | 앱의 글 상세 (2026-11-28, JM-90). `id`, `nickname`, `memo`, `imagePath`, `photoHeld`, `createdAt`, `viewCount`(웹 조회수), `analysis`. analysis는 `status`, `aiTotals`(AI 줄, 분석이 끝난 글만), `confirmedTotals`(REAL 줄, 확정한 글만), 음식 표 `foods`(음식마다 `ai`, `confirmed`, `change`: NONE, SAME, CHANGED, REMOVED), `confidenceLabel`(높음, 보통, 낮음), `comment`이고, 분석 기록이 없는 옛날 글은 null. 사진을 가린 글(JM-80)은 사진 경로가 null이고 `photoHeld`가 true. 웹 조회수를 올리지 않는다. 없는 글, 지운 글은 404 `POST_NOT_FOUND` |
-| POST | `/api/posts/{id}/app-view` | 앱에서 글 상세를 한 번 연 기록 (2026-11-28, JM-90, 19.3). 본문 없음, 응답 204. `app_post_views`에 한 줄(글 번호, 플랫폼, 빌드, 앱 버전, 시각). 앱 이름표(User-Agent)가 없거나 모양이 다르면 400 `INVALID_APP_AGENT`, 없는 글, 지운 글은 404 |
+| GET | `/api/posts?page=1` | 앱의 피드 한 쪽 (2026-11-28, JM-90, 19.2). 웹 피드(`/`)와 같은 글, 같은 순서(ACTIVE만, 최신순 24개씩). 응답 `{"posts":[...],"page":1,"totalPages":9}`. 카드는 `id`, `nickname`, `thumbnailPath`(`/images/...`), `photoHeld`, `analysisStatus`, `totalKcal`(웹 카드와 같은 값: 확정했으면 확정 값, 아니면 AI의 첫 답), `createdAt`(UTC의 ISO-8601, 초까지). 마지막 쪽 뒤의 번호는 빈 목록(웹처럼 마지막 쪽으로 보내지 않는다), 0과 음수는 1쪽, DB가 읽을 수 없을 만큼 큰 번호는 읽을 수 있는 가장 큰 번호로 줄여 빈 목록(`?page=2147483647`이면 `"page":89478485`, JM-107), 숫자가 아니면 400 |
+| GET | `/api/posts/{id}` | 앱의 글 상세 (2026-11-28, JM-90). `id`, `nickname`, `memo`, `imagePath`, `photoHeld`, `createdAt`, `viewCount`(웹 조회수), `analysis`. analysis는 `status`, `confirmMode`(AUTO, USER), `aiTotals`(AI 줄, 분석이 끝난 글만), `confirmedTotals`(REAL 줄, 확정한 글만), 음식 표 `foods`(음식마다 `ai`, `confirmed`, `change`: NONE, SAME, CHANGED, REMOVED. REMOVED는 `confirmed`가 null), `confidenceLabel`(높음, 보통, 낮음), `comment`이고, 분석 기록이 없는 옛날 글은 null. 합계 두 줄의 칸은 `kcal`, `carbsG`, `proteinG`, `fatG`, 음식 하나(`ai`, `confirmed`)의 칸은 `name`, `amountG`, `kcal`, `carbsG`, `proteinG`, `fatG`. 웹처럼 USER 글에만 REAL 줄을 그리고, USER인데 `confirmedTotals`가 null이면 "확정 전"이다. 사진을 가린 글(JM-80)은 사진 경로가 null이고 `photoHeld`가 true. 웹 조회수를 올리지 않는다. 없는 글, 지운 글은 404 `POST_NOT_FOUND` |
+| POST | `/api/posts/{id}/app-view` | 앱에서 글 상세를 한 번 연 기록 (2026-11-28, JM-90, 19.3). 본문 없음, 응답 204. `app_post_views`에 한 줄(글 번호, 플랫폼, 빌드, 앱 버전, 시각). 이름표를 먼저 본다: 앱 이름표(User-Agent)가 없거나 모양이 다르면 글이 없어도 400 `INVALID_APP_AGENT`, 이름표가 맞고 없는 글, 지운 글이면 404. 하루에 받는 기록은 5,000줄까지(`app.app-view.daily-limit`, 한국 날짜). 넘은 기록은 남기지 않고 응답은 그대로 204 |
 
 **댓글 (S3-1)** — 따로 화면이 없고 상세 화면에 붙어 있어서, 처리한 뒤 항상 그 글의 상세로 돌아간다
 
@@ -1002,7 +1002,8 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 - 앱에서 글을 본 것은 처음부터 따로 센다 (운영자 결정): 새 표 `app_post_views`에 상세 화면을 열 때마다 한 줄. 남기는 값은 글 번호, 플랫폼(IOS, ANDROID), 빌드(DEBUG, RELEASE), 앱 버전, 시각이다. IP와 기기 번호는 남기지 않는다. 앱은 화면을 처음 열 때만 부르므로 새로 고침은 세지 않는다
 - 운영자의 개발 시험은 DEBUG 빌드라 빼고 셀 수 있다. 지인에게 나눠 준 날짜는 SPRINTS와 Jira에 남긴다. 웹 조회수와 합쳐 보여 줄지는 지인 배포 때 정한다
 - 앱 이름표: 앱은 모든 요청에 User-Agent `JjikmukApp/{앱 버전} ({IOS 또는 ANDROID} {OS 버전}; {DEBUG 또는 RELEASE})`를 붙인다. 서버는 앱 조회 기록에 이 값을 쓰고, nginx와 CloudWatch 기록(JM-91)에서도 앱 요청만 따로 셀 수 있다. 이름표는 누구나 흉내 낼 수 있어서 웹 조회수처럼 참고하는 숫자로 쓴다
-- 앱 조회 기록에는 횟수 제한을 두지 않는다 (2026-11-28): 사용자에게 보이는 숫자가 아니라 운영자가 참고하는 기록이고, 한 줄이 작아서 부풀려도 표가 빨리 커지지 않는다 (웹의 사용자 흐름 기록과 같은 수준). 실제로 부풀려지면 좋아요(JM-59)처럼 글마다 제한한다
+- 앱 조회 기록의 하루 상한 (2026-11-28): 기록은 지우지 않고 모두 보관하고 이름표는 누구나 흉내 낼 수 있어서, 스크립트가 표를 끝없이 늘리지 못하게 하루(한국 날짜)에 5,000줄까지만 받는다 (`app.app-view.daily-limit`). 사용자 흐름 기록의 하루 상한(2만 줄)과 같은 까닭, 같은 방식이다: 넘은 기록은 버리고 1분에 한 번 경고 로그를 남긴다. 지금은 하루 수십 번이고, 한 줄이 색인까지 100바이트쯤이라 상한까지 차도 하루 0.5MB다. 글마다의 횟수 제한(좋아요, JM-59)은 두지 않는다: 사용자에게 보이는 숫자가 아니라 운영자가 참고하는 기록이다
+  - 처음에는 상한 없이 쓰고 "사용자 흐름 기록과 같은 수준"이라고 적었는데, 사용자 흐름에는 하루 상한이 있어서 까닭이 틀렸다. PR 전 검토가 찾았다 (상한이 없으면 한 클라이언트가 1초에 300번만 불러도 하루 2.6GB쯤 늘어, 남은 19.5GB가 일주일쯤에 찬다는 어림)
 
 ### 19.4 앱 코드, 식별자, 계정
 
@@ -1023,7 +1024,7 @@ S2-2 실제 확인 (2026-11-02): 개발 서버와 Docker 배포 구성 모두에
 
 ## 변경 이력
 
-- 2026-11-28 — 앱 API 셋 (JM-90): `GET /api/posts`, `GET /api/posts/{id}`, `POST /api/posts/{id}/app-view`와 앱 조회 기록 표 `app_post_views`. 앱 조회 기록에는 횟수 제한을 두지 않는다. 13절, 19.2절, 19.3절
+- 2026-11-28 — 앱 API 셋 (JM-90): `GET /api/posts`, `GET /api/posts/{id}`, `POST /api/posts/{id}/app-view`와 앱 조회 기록 표 `app_post_views`. 앱 조회 기록은 하루 5,000줄까지 (사용자 흐름과 같은 방식). 13절, 19.2절, 19.3절
 - 2026-11-27 — 앱 (JM-87, JM-90): 플러터로 아이폰과 안드로이드를 같이 만든다. 첫 조각은 피드와 글 상세 읽기, 피드 API는 웹과 같은 쪽 번호, 앱에서 본 것은 따로 기록, 식별자와 스토어 계정, CI에서 앱만 바뀐 PR 건너뛰기. 4.2절, 18절, 19절
 - 2026-11-27 — 맥북의 서버 접속은 맥북용 키 (JM-88): 비밀 키를 옮기지 않고 서버에 따로 등록했다. 16절
 - 2026-11-27 — 촬영 시각은 1988-01-01부터 지금 더하기 1일 사이만 받는다 (JM-112, JM-111 검토에서 찾은 문제): 밖이면 시각만 버리고 위치는 그대로 저장한다. 6.2절
