@@ -107,6 +107,10 @@ class VisitCountTest {
 		assertThat(interceptors("GET", "/admin/stats")).noneMatch(VisitCountInterceptor.class::isInstance);
 		assertThat(interceptors("GET", "/api/admin/stats")).noneMatch(VisitCountInterceptor.class::isInstance);
 		assertThat(interceptors("GET", "/api/posts/1/analysis")).noneMatch(VisitCountInterceptor.class::isInstance);
+		// 앱이 부르는 글 API (JM-90, 기획서 19.3). isNotEmpty: 그 주소가 있는지도 본다 (없는 주소는 걸린 것이 없어 저절로 통과한다)
+		assertThat(interceptors("GET", "/api/posts")).isNotEmpty().noneMatch(VisitCountInterceptor.class::isInstance);
+		assertThat(interceptors("GET", "/api/posts/1")).isNotEmpty().noneMatch(VisitCountInterceptor.class::isInstance);
+		assertThat(interceptors("POST", "/api/posts/1/app-view")).isNotEmpty().noneMatch(VisitCountInterceptor.class::isInstance);
 	}
 
 	private long hits(String metric) {
